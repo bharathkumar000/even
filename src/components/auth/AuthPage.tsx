@@ -39,13 +39,6 @@ export default function AuthPage({ isSignUp = false }: { isSignUp?: boolean }) {
     return () => clearInterval(timer);
   }, [resendCooldown]);
 
-  // Verified pre-seeded demo accounts in Supabase
-  const DEMO_ACCOUNTS: Record<string, { email: string; pass: string; portal: string }> = {
-    admin: { email: "admin@ivc.com", pass: "Password@123", portal: "/admin" },
-    judge: { email: "judge.arvind@ivc.pulse", pass: "Password@123", portal: "/judge" },
-    ops: { email: "staff.aman@ivc.pulse", pass: "Password@123", portal: "/ops/scanner" },
-    team: { email: "lead.team1@ivc.pulse", pass: "Password@123", portal: "/team" },
-  };
 
   // Robust sign-in execution
   const executeSignIn = async (userEmail: string, userPass: string, preferredPortal?: string) => {
@@ -93,13 +86,7 @@ export default function AuthPage({ isSignUp = false }: { isSignUp?: boolean }) {
     }
   };
 
-  const handleDemoClick = async (roleKey: "admin" | "judge" | "ops" | "team") => {
-    const acc = DEMO_ACCOUNTS[roleKey];
-    if (!acc) return;
-    setEmail(acc.email);
-    setPassword(acc.pass);
-    await executeSignIn(acc.email, acc.pass, acc.portal);
-  };
+
 
   const handleCredentialsSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -140,32 +127,17 @@ export default function AuthPage({ isSignUp = false }: { isSignUp?: boolean }) {
         setResendCooldown(60);
       } else {
         // Resolve role aliases or direct emails
-        const rawInput = email.trim().toLowerCase();
+
         let targetEmail = email.trim();
         let targetPass = password.trim() || "Password@123";
-        let targetPortal: string | undefined = undefined;
 
-        if (rawInput === "admin" || rawInput === "admin@demo.com") {
-          targetEmail = DEMO_ACCOUNTS.admin.email;
-          targetPass = password.trim() || DEMO_ACCOUNTS.admin.pass;
-          targetPortal = DEMO_ACCOUNTS.admin.portal;
-        } else if (rawInput === "judge" || rawInput === "judge@demo.com") {
-          targetEmail = DEMO_ACCOUNTS.judge.email;
-          targetPass = password.trim() || DEMO_ACCOUNTS.judge.pass;
-          targetPortal = DEMO_ACCOUNTS.judge.portal;
-        } else if (rawInput === "ops" || rawInput === "staff" || rawInput === "ops@demo.com") {
-          targetEmail = DEMO_ACCOUNTS.ops.email;
-          targetPass = password.trim() || DEMO_ACCOUNTS.ops.pass;
-          targetPortal = DEMO_ACCOUNTS.ops.portal;
-        } else if (rawInput === "team" || rawInput === "leader" || rawInput === "team@demo.com") {
-          targetEmail = DEMO_ACCOUNTS.team.email;
-          targetPass = password.trim() || DEMO_ACCOUNTS.team.pass;
-          targetPortal = DEMO_ACCOUNTS.team.portal;
-        } else if (!targetEmail.includes("@")) {
+
+        // Resolve direct email or username
+        if (!targetEmail.includes("@")) {
           targetEmail = `${targetEmail}@ivc.pulse`;
         }
 
-        await executeSignIn(targetEmail, targetPass, targetPortal);
+        await executeSignIn(targetEmail, targetPass);
       }
     } catch (err: unknown) {
       setErrorMsg(err instanceof Error ? err.message : "Authentication failed");
@@ -429,47 +401,7 @@ export default function AuthPage({ isSignUp = false }: { isSignUp?: boolean }) {
                <ArrowRight size={14} />
              </button>
 
-{!isSignUp && (
-  <div className="mt-5 pt-3 border-t border-border-color/40">
-    <p className="text-xs text-center text-text-secondary font-tech uppercase tracking-widest mb-3 font-semibold">
-      Demo Login (One-click)
-    </p>
-    <div className="grid grid-cols-4 gap-2">
-      <button
-        type="button"
-        disabled={loading}
-        onClick={() => handleDemoClick("admin")}
-        className="py-2.5 px-2 bg-gradient-to-r from-accent-secondary to-accent-primary hover:brightness-110 active:scale-95 disabled:opacity-50 text-white font-tech font-bold uppercase tracking-wider text-xs rounded transition-all shadow-md flex items-center justify-center border border-accent-primary/40 hover:border-accent-primary"
-      >
-        ADMIN
-      </button>
-      <button
-        type="button"
-        disabled={loading}
-        onClick={() => handleDemoClick("judge")}
-        className="py-2.5 px-2 bg-gradient-to-r from-accent-secondary to-accent-primary hover:brightness-110 active:scale-95 disabled:opacity-50 text-white font-tech font-bold uppercase tracking-wider text-xs rounded transition-all shadow-md flex items-center justify-center border border-accent-primary/40 hover:border-accent-primary"
-      >
-        JUDGE
-      </button>
-      <button
-        type="button"
-        disabled={loading}
-        onClick={() => handleDemoClick("ops")}
-        className="py-2.5 px-2 bg-gradient-to-r from-accent-secondary to-accent-primary hover:brightness-110 active:scale-95 disabled:opacity-50 text-white font-tech font-bold uppercase tracking-wider text-xs rounded transition-all shadow-md flex items-center justify-center border border-accent-primary/40 hover:border-accent-primary"
-      >
-        OPS
-      </button>
-      <button
-        type="button"
-        disabled={loading}
-        onClick={() => handleDemoClick("team")}
-        className="py-2.5 px-2 bg-gradient-to-r from-accent-secondary to-accent-primary hover:brightness-110 active:scale-95 disabled:opacity-50 text-white font-tech font-bold uppercase tracking-wider text-xs rounded transition-all shadow-md flex items-center justify-center border border-accent-primary/40 hover:border-accent-primary"
-      >
-        TEAM
-      </button>
-    </div>
-  </div>
-)}
+
           </form>
         )}
 

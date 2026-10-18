@@ -22,6 +22,7 @@ import {
   ExternalLink,
   Camera,
 } from "lucide-react";
+import Image from "next/image";
 import {
   SpocItem,
   SpocTeamOption,
@@ -510,11 +511,13 @@ export default function SpocClientView({
                       {/* Avatar preview */}
                       <div className="relative shrink-0 w-10 h-10 rounded-full overflow-hidden border border-border-color bg-surface-color-light flex items-center justify-center">
                         {s.avatar_url ? (
-                          <img
-                            src={s.avatar_url}
-                            alt={s.name}
-                            className="w-full h-full object-cover"
-                          />
+                            <Image
+                              src={s.avatar_url}
+                              alt={s.name}
+                              width={40}
+                              height={40}
+                              className="w-full h-full object-cover"
+                            />
                         ) : (
                           <span className="font-heading text-sm text-accent-secondary uppercase font-bold">
                             {s.name.slice(0, 2)}
@@ -600,11 +603,13 @@ export default function SpocClientView({
                 <div className="flex items-center gap-3.5">
                   <div className="w-12 h-12 rounded-full overflow-hidden border-2 border-accent-secondary/60 bg-surface-color-light flex items-center justify-center shrink-0 shadow-[0_0_15px_rgba(255,0,127,0.2)]">
                     {activeSpoc.avatar_url ? (
-                      <img
-                        src={activeSpoc.avatar_url}
-                        alt={activeSpoc.name}
-                        className="w-full h-full object-cover"
-                      />
+                        <Image
+                          src={activeSpoc.avatar_url}
+                          alt={activeSpoc.name}
+                          width={48}
+                          height={48}
+                          className="w-full h-full object-cover"
+                        />
                     ) : (
                       <span className="font-heading text-lg text-accent-secondary uppercase font-bold">
                         {activeSpoc.name.slice(0, 2)}
@@ -916,11 +921,13 @@ export default function SpocClientView({
                 <div className="flex items-center gap-3">
                   <div className="relative w-14 h-14 rounded-full overflow-hidden border border-border-color bg-surface-color-light flex items-center justify-center shrink-0">
                     {formData.avatar_url ? (
-                      <img
-                        src={formData.avatar_url}
-                        alt="Preview"
-                        className="w-full h-full object-cover"
-                      />
+                        <Image
+                          src={formData.avatar_url}
+                          alt="Preview"
+                          width={56}
+                          height={56}
+                          className="w-full h-full object-cover"
+                        />
                     ) : (
                       <Camera size={22} className="text-text-secondary/60" />
                     )}

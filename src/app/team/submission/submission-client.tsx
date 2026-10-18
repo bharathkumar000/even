@@ -37,12 +37,14 @@ export default function TeamSubmissionClientView({
   currentSubmission,
   isLocked,
   isLeader,
+  finalHoursOpen,
 }: {
   teamId: string;
   activeRound: ActiveRoundInfo | null;
   currentSubmission: CurrentSubmissionInfo | null;
   isLocked: boolean;
   isLeader: boolean;
+  finalHoursOpen: boolean;
 }) {
   const [problemStatement, setProblemStatement] = useState(currentSubmission?.problem_statement || "");
   const [problemDescription, setProblemDescription] = useState(currentSubmission?.problem_description || "");
@@ -142,6 +144,14 @@ export default function TeamSubmissionClientView({
 
   return (
     <div className="space-y-6">
+      {/* Final Hours locked notice */}
+      {!finalHoursOpen && (
+        <div className="p-4 bg-status-warning/15 border border-status-warning text-status-warning font-tech text-sm rounded">
+          <h2 className="text-2xl font-heading text-status-warning mb-2">Project Submission Is Not Open Yet</h2>
+          <p>Final project submission will become available when the event administrator opens the Final Hours window.</p>
+        </div>
+      )}
+
       {/* Round & Lock Status Header */}
       <div className="glass-panel p-4 border border-border-color flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>

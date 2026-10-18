@@ -26,7 +26,10 @@ import { getActiveAnnouncements } from "@/app/actions/announcements";
 import AnnouncementBanner from "@/components/AnnouncementBanner";
 import { getTeamRegistrationByEmail } from "@/lib/googleSheet";
 
+import Image from "next/image";
+
 export const dynamic = "force-dynamic";
+
 
 export default async function TeamDashboardPage() {
   const { teamId, user, role } = await requireAuthenticatedTeamUser();
@@ -103,6 +106,14 @@ export default async function TeamDashboardPage() {
           track: reg["SELECTED DOMAIN"] ?? "",
           leader_name: reg["Team Leader"] ?? user.email?.split("@")[0],
         };
+        // Build a simple members array for roster counts based on registration fields
+        const memberNames = [
+          reg["Team Leader"],
+          reg["Member 1 Name"],
+          reg["Member 2 Name"],
+          reg["Member 3 Name"]
+        ].filter(Boolean);
+        members = memberNames.map((name) => ({ name }));
       }
     }
     if (membersRes.data) members = membersRes.data;
@@ -266,9 +277,11 @@ export default async function TeamDashboardPage() {
           <div className="flex items-center gap-4">
             <div className="relative w-16 h-16 rounded-full overflow-hidden border-2 border-accent-secondary bg-surface-color-light flex items-center justify-center shrink-0 shadow-[0_0_15px_rgba(255,0,127,0.25)]">
               {assignedSpoc.avatar_url ? (
-                <img
+                <Image
                   src={assignedSpoc.avatar_url}
                   alt={assignedSpoc.name}
+                  width={64}
+                  height={64}
                   className="w-full h-full object-cover"
                 />
               ) : (

@@ -35,7 +35,14 @@ export default async function TeamSubmissionPage() {
     console.error("Failed to load team submission context:", err);
   }
 
-  const isLocked = activeRound?.status === "closed" || activeRound?.status === "locked";
+  // Load event settings to determine Final Hours gate
+  const { data: settings } = await supabaseAdmin
+    .from('event_settings')
+    .select('final_hours_open')
+    .maybeSingle();
+  const finalHoursOpen = settings?.final_hours_open ?? false;
+
+  const isLocked = (!finalHoursOpen) || activeRound?.status === "closed" || activeRound?.status === "locked";
   const isLeader = role === "leader" || !teamId;
 
   return (
@@ -52,13 +59,14 @@ export default async function TeamSubmissionPage() {
         </p>
       </div>
 
-      <TeamSubmissionClientView
-        teamId={effectiveTeamId}
-        activeRound={activeRound}
-        currentSubmission={currentSubmission}
-        isLocked={isLocked}
-        isLeader={isLeader}
-      />
+        <TeamSubmissionClientView
+          teamId={effectiveTeamId}
+          activeRound={activeRound}
+          currentSubmission={currentSubmission}
+          isLocked={isLocked}
+          isLeader={isLeader}
+          finalHoursOpen={finalHoursOpen}
+        />
     </div>
   );
 }

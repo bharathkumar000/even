@@ -14,7 +14,7 @@ export async function upsertTeamSubmission(data: TeamSubmissionInput) {
   // 2. Validate input format
   const validated = TeamSubmissionSchema.parse(data);
 
-  // 3. Verify target round is active and not closed/locked
+  // 3. Verify target round is active and not closed/locked, and that final hours stage is open
   const { data: round, error: roundError } = await supabaseAdmin
     .from("evaluation_rounds")
     .select("id, title, status")
@@ -31,7 +31,18 @@ export async function upsertTeamSubmission(data: TeamSubmissionInput) {
     );
   }
 
-  // 4. Upsert into team_submissions table
+  // 4. Verify Final Hours stage is open
+  const { data: settings, error: settingsError } = await supabaseAdmin
+    .from('event_settings')
+    .select('final_hours_open')
+    .maybeSingle();
+  if (settingsError) {
+    throw new Error('Unable to verify event stage configuration.');
+  }
+  if (!settings?.final_hours_open) {
+    throw new Error('Final Hours stage is not open yet. Submissions are locked.');
+  }
+
   const { data: submission, error: subError } = await supabaseAdmin
     .from("team_submissions")
     .upsert(

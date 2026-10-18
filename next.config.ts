@@ -17,14 +17,27 @@ const currentPort = getPort();
 
 const nextConfig: NextConfig = {
   distDir: currentPort ? `.next_${currentPort}` : ".next",
-  eslint: {
-    ignoreDuringBuilds: true,
+
+  images: {
+    remotePatterns: [
+      {
+        protocol: "https",
+        hostname: "**",
+      },
+    ],
   },
-  webpack: (config) => {
-    config.infrastructureLogging = {
-      level: "error",
-    };
-    return config;
+  async headers() {
+    return [
+      {
+        source: '/:all*',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'public, max-age=31536000, immutable',
+          },
+        ],
+      },
+    ];
   },
 };
 

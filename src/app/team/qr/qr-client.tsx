@@ -16,6 +16,7 @@ import {
   Radio,
 } from "lucide-react";
 import { getTeamScanStatus } from "@/app/actions/operations";
+import Image from "next/image";
 import { createClient } from "@/lib/supabase/client";
 
 interface TeamQrClientViewProps {
@@ -258,11 +259,13 @@ export default function TeamQrClientView({
           >
             {qrUrl ? (
               /* eslint-disable-next-line @next/next/no-img-element */
-              <img
-                src={qrUrl}
-                alt="Team Official QR Code"
-                className="w-56 h-56 object-contain"
-              />
+                <Image
+                  src={qrUrl}
+                  alt="Team Official QR Code"
+                  width={224}
+                  height={224}
+                  className="w-56 h-56 object-contain"
+                />
             ) : (
               <div className="w-56 h-56 flex items-center justify-center text-black text-xs">
                 Generating QR...
