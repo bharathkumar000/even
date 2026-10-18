@@ -4,7 +4,7 @@ const http = require('http');
 const SUPABASE_URL = 'https://koluhnkobgagsfvokkbz.supabase.co';
 const ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtvbHVobmtvYmdhZ3Nmdm9ra2J6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTEyMTUxNjQsImV4cCI6MjEwNjc5MTE2NH0.N-xF0mOVy8_MKNm3ywJZj7w1NqM_gOQ8gIYIp6S_2FA';
 const SERVICE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtvbHVobmtvYmdhZ3Nmdm9ra2J6Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc5MTIxNTE2NCwiZXhwIjoyMTA2NzkxMTY0fQ._9xDTVPPHr0D-ZsPRx2ial9qvGK1YfErp2T8YT7umVw';
-const BASE_URL = 'http://localhost:3002';
+const BASE_URL = process.env.TEST_BASE_URL || 'http://localhost:3000';
 
 const supabaseAdmin = createClient(SUPABASE_URL, SERVICE_KEY, { auth: { persistSession: false } });
 const supabaseAnon = createClient(SUPABASE_URL, ANON_KEY, { auth: { persistSession: false } });
@@ -124,11 +124,11 @@ async function runTestSuite() {
   // Find accounts for each role
   const { data: allProfiles } = await supabaseAdmin.from('profiles').select('id, email, role, full_name');
   const roleAccounts = {
-    admin: allProfiles.find(p => p.role === 'admin')?.email || 'admin@ivc.com',
-    judge: allProfiles.find(p => p.role === 'judge')?.email || 'judge.arvind@ivc.pulse',
-    staff: allProfiles.find(p => p.role === 'staff' || p.role === 'organizer')?.email || 'staff.aman@ivc.pulse',
-    leader: allProfiles.find(p => p.role === 'leader')?.email || 'lead.team1@ivc.pulse',
-    participant: allProfiles.find(p => p.role === 'participant')?.email || 'member1.team1@ivc.pulse',
+    admin: 'admin@ivc.com',
+    judge: 'judge.arvind@ivc.pulse',
+    staff: 'staff.aman@ivc.pulse',
+    leader: 'lead.team1@ivc.pulse',
+    participant: 'member1.team1@ivc.pulse',
   };
 
   console.log('  Identified Role Credentials:');
@@ -137,7 +137,7 @@ async function runTestSuite() {
   }
 
   const roleSessions = {};
-  const passwordsToTry = ['Password@123', 'Password123!', '2026VICEVERSE@IVC'];
+  const passwordsToTry = ['Password@123', 'Password123!', '123'];
 
   for (const [role, email] of Object.entries(roleAccounts)) {
     let session = null;

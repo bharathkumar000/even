@@ -24,6 +24,7 @@ import { requireAuthenticatedTeamUser } from "@/lib/auth/team";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { getActiveAnnouncements } from "@/app/actions/announcements";
 import AnnouncementBanner from "@/components/AnnouncementBanner";
+import { getTeamRegistrationByEmail } from "@/lib/googleSheet";
 
 export const dynamic = "force-dynamic";
 
@@ -93,6 +94,17 @@ export default async function TeamDashboardPage() {
       ]);
 
     if (teamRes.data) teamInfo = teamRes.data;
+    // Fallback to Google Sheet registration data when Supabase returns no team.
+    if (!teamInfo && user?.email) {
+      const reg = await getTeamRegistrationByEmail(user.email);
+      if (reg) {
+        teamInfo = {
+          name: reg["Team Name"] ?? "",
+          track: reg["SELECTED DOMAIN"] ?? "",
+          leader_name: reg["Team Leader"] ?? user.email?.split("@")[0],
+        };
+      }
+    }
     if (membersRes.data) members = membersRes.data;
     if (logsRes.data) activityLogs = logsRes.data;
     if (subRes.data) currentSubmission = subRes.data;

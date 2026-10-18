@@ -249,10 +249,10 @@ export default function UsersClientView({
   const handleDownloadSampleTemplate = () => {
     const headers = ["Full Name", "Email", "Role", "Password", "Team Name", "Team Code", "Track"];
     const sampleRows = [
-      ['"Dr. Rajesh Sharma"', '"judge.rajesh@ivc.pulse"', '"judge"', '"Password@123"', '""', '""', '""'],
-      ['"Ananya Rao"', '"lead.team21@ivc.pulse"', '"leader"', '"Password@123"', '"Team CyberViper"', '"CV-21"', '"Artificial Intelligence"'],
-      ['"Rohan Verma"', '"member1.team21@ivc.pulse"', '"participant"', '"Password@123"', '"Team CyberViper"', '"CV-21"', '"Artificial Intelligence"'],
-      ['"Kavita Patil"', '"spoc.kavita@ivc.pulse"', '"staff"', '"Password@123"', '""', '""', '""'],
+      ['"Dr. Rajesh Sharma"', '"judge.rajesh@ivc.pulse"', '"judge"', '"123"', '""', '""', '""'],
+      ['"Ananya Rao"', '"lead.team21@ivc.pulse"', '"leader"', '"123"', '"Team CyberViper"', '"CV-21"', '"Artificial Intelligence"'],
+      ['"Rohan Verma"', '"member1.team21@ivc.pulse"', '"participant"', '"123"', '"Team CyberViper"', '"CV-21"', '"Artificial Intelligence"'],
+      ['"Kavita Patil"', '"spoc.kavita@ivc.pulse"', '"staff"', '"123"', '""', '""', '""'],
     ];
 
     const csvContent = "data:text/csv;charset=utf-8," + [headers.join(","), ...sampleRows.map((e) => e.join(","))].join("\n");
@@ -1152,7 +1152,7 @@ export default function UsersClientView({
                 </button>
               </div>
               <p className="text-text-secondary text-[11px] leading-relaxed m-0">
-                Columns supported: <code className="text-accent-tertiary font-mono">Full Name</code>, <code className="text-accent-tertiary font-mono">Email</code>, <code className="text-accent-tertiary font-mono">Role</code> (judge / leader / participant / staff / admin), <code className="text-accent-tertiary font-mono">Password</code> (optional, defaults to Password@123), <code className="text-accent-tertiary font-mono">Team Name</code>, <code className="text-accent-tertiary font-mono">Team Code</code>, <code className="text-accent-tertiary font-mono">Track</code>.
+                Columns supported: <code className="text-accent-tertiary font-mono">Full Name</code>, <code className="text-accent-tertiary font-mono">Email</code>, <code className="text-accent-tertiary font-mono">Role</code> (judge / leader / participant / staff / admin), <code className="text-accent-tertiary font-mono">Password</code> (optional, defaults to 123), <code className="text-accent-tertiary font-mono">Team Name</code>, <code className="text-accent-tertiary font-mono">Team Code</code>, <code className="text-accent-tertiary font-mono">Track</code>.
               </p>
               <p className="text-[10px] text-text-secondary/70 m-0">
                 Tip: In Google Sheets, click <em>File → Download → Comma Separated Values (.csv)</em> and upload it below.

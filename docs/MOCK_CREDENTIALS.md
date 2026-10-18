@@ -1,6 +1,6 @@
 # IVC PULSE — Portal Access & Mock Credentials Reference
 
-All mock accounts use the standardized password: **`Password@123`**
+All mock accounts use the standardized password: **`123`**
 
 ---
 
@@ -25,11 +25,11 @@ Assigned to evaluate teams across 5 distinct competition tracks.
 
 | Name | Email | Password | Assigned Track |
 | :--- | :--- | :--- | :--- |
-| **Dr. Arvind Raman** | `judge.arvind@ivc.pulse` | `Password@123` | Artificial Intelligence (Teams 1–4) |
-| **Prof. Neha Deshmukh** | `judge.neha@ivc.pulse` | `Password@123` | Web3 & FinTech (Teams 5–8) |
-| **Vikramaditya Roy** | `judge.vikram@ivc.pulse` | `Password@123` | Healthcare & BioTech (Teams 9–12) |
-| **Dr. Shreya Sengupta** | `judge.shreya@ivc.pulse` | `Password@123` | CleanTech & Green Energy (Teams 13–16) |
-| **Karthik Venkatesh** | `judge.karthik@ivc.pulse` | `Password@123` | Robotics & IoT (Teams 17–20) |
+| **Dr. Arvind Raman** | `judge.arvind@ivc.pulse` | `123` | Artificial Intelligence (Teams 1–4) |
+| **Prof. Neha Deshmukh** | `judge.neha@ivc.pulse` | `123` | Web3 & FinTech (Teams 5–8) |
+| **Vikramaditya Roy** | `judge.vikram@ivc.pulse` | `123` | Healthcare & BioTech (Teams 9–12) |
+| **Dr. Shreya Sengupta** | `judge.shreya@ivc.pulse` | `123` | CleanTech & Green Energy (Teams 13–16) |
+| **Karthik Venkatesh** | `judge.karthik@ivc.pulse` | `123` | Robotics & IoT (Teams 17–20) |
 
 ---
 
@@ -51,16 +51,16 @@ Have access to the `/ops/scanner` portal for live event check-ins, kit distribut
 
 | Name | Email | Password | Role |
 | :--- | :--- | :--- | :--- |
-| **Aman Verma** | `staff.aman@ivc.pulse` | `Password@123` | Operational Staff / Organizer |
-| **Pooja Hegde** | `staff.pooja@ivc.pulse` | `Password@123` | Operational Staff / Organizer |
-| **Rohan Kulkarni** | `staff.rohan@ivc.pulse` | `Password@123` | Operational Staff / Organizer |
-| **Tanvi Mathur** | `staff.tanvi@ivc.pulse` | `Password@123` | Operational Staff / Organizer |
-| **Siddharth Rao** | `staff.siddharth@ivc.pulse` | `Password@123` | Operational Staff / Organizer |
+| **Aman Verma** | `staff.aman@ivc.pulse` | `123` | Operational Staff / Organizer |
+| **Pooja Hegde** | `staff.pooja@ivc.pulse` | `123` | Operational Staff / Organizer |
+| **Rohan Kulkarni** | `staff.rohan@ivc.pulse` | `123` | Operational Staff / Organizer |
+| **Tanvi Mathur** | `staff.tanvi@ivc.pulse` | `123` | Operational Staff / Organizer |
+| **Siddharth Rao** | `staff.siddharth@ivc.pulse` | `123` | Operational Staff / Organizer |
 
 ---
 
 ### D. Teams (20 Teams · 3 Members Each = 60 Participants)
-Each team includes 1 designated Team Leader and 2 Squad Members. All passwords are `Password@123`.
+Each team includes 1 designated Team Leader and 2 Squad Members. All passwords are `123`.
 
 | # | Team Name | Code | Track | Team Leader (`leader`) | Member 1 (`participant`) | Member 2 (`participant`) |
 | :-: | :--- | :--- | :--- | :--- | :--- | :--- |

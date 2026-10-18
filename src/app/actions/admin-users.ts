@@ -439,7 +439,7 @@ export async function seedMockDataServerAction() {
     assignments: 0,
   };
 
-  const DEFAULT_PASSWORD = "Password@123";
+  const DEFAULT_PASSWORD = "123";
 
   // 1. Create or ensure 5 Judges
   const mockJudges = [
@@ -582,7 +582,41 @@ export async function seedMockDataServerAction() {
     }
   }
 
-  // 4. Create 20 Teams (3 members each: 1 team lead + 2 members = 60 participants)
+  // 4. Create simple demo accounts for quick login (admin, judge, ops, team)
+  const demoAccounts = [
+    { name: "Demo Admin", email: "admin@demo.com", role: "admin" },
+    { name: "Demo Judge", email: "judge@demo.com", role: "judge" },
+    { name: "Demo Ops", email: "ops@demo.com", role: "staff" },
+    { name: "Demo Team", email: "team@demo.com", role: "participant" },
+  ];
+
+  for (const d of demoAccounts) {
+    try {
+      const { data: userRes } = await supabaseAdmin.auth.admin.createUser({
+        email: d.email,
+        password: DEFAULT_PASSWORD,
+        email_confirm: true,
+        user_metadata: { full_name: d.name, role: d.role },
+      });
+      const uid = userRes?.user?.id;
+      if (uid) {
+        await supabaseAdmin.from("profiles").upsert({
+          id: uid,
+          email: d.email,
+          full_name: d.name,
+          role: d.role,
+        });
+        // Count demo users as appropriate category
+
+        if (d.role === "judge") results.judges++;
+        if (d.role === "staff") results.staff++;
+        if (d.role === "participant") results.participants++;
+      }
+    } catch (e) {
+      console.warn("Demo account seed note:", e);
+    }
+  }
+
   const tracks = ["Artificial Intelligence", "Web3 & FinTech", "Healthcare & BioTech", "CleanTech & Green Energy", "Robotics & IoT"];
 
   const teamSpecs = [
@@ -849,7 +883,7 @@ export async function bulkImportUsers(records: BulkImportUserRecord[]) {
     errors: [] as string[],
   };
 
-  const DEFAULT_PASSWORD = "Password@123";
+  const DEFAULT_PASSWORD = "123";
 
   for (const item of records) {
     const email = item.email?.trim().toLowerCase();

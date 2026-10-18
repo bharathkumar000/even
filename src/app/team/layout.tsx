@@ -1,9 +1,9 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
-import TeamSidebar from "@/components/team/Sidebar";
+import { getTeamRegistrationByEmail } from "@/lib/googleSheet";
 
-export const dynamic = "force-dynamic";
+import TeamSidebar from "@/components/team/Sidebar";
 
 export default async function TeamLayout({
   children,
@@ -38,14 +38,28 @@ export default async function TeamLayout({
     .limit(1)
     .maybeSingle();
 
+  // Attempt to fetch registration data from Google Sheet as a fallback when Supabase has no entry.
+  let googleTeam: any = null;
+  if (!memberRow && user.email) {
+    const reg = await getTeamRegistrationByEmail(user.email);
+    if (reg) {
+      googleTeam = {
+        name: reg["Team Name"] ?? "",
+        track: reg["SELECTED DOMAIN"] ?? "",
+        leader_name: reg["Team Leader"] ?? user.email?.split("@")[0],
+      };
+    }
+  }
+
   const isLeader =
     userRole === "leader" ||
     (memberRow as { role?: string } | null)?.role === "leader";
 
   const teamData = (memberRow as any)?.teams;
-  const teamName = teamData?.name || "Innovation Team";
-  const track = teamData?.track || "Innovation";
-  const leaderName = teamData?.leader_name || user.email?.split("@")[0] || "Leader";
+  const effectiveTeam = teamData ?? googleTeam;
+  const teamName = effectiveTeam?.name || "Innovation Team";
+  const track = effectiveTeam?.track || "Innovation";
+  const leaderName = effectiveTeam?.leader_name || user.email?.split("@")[0] || "Leader";
 
   return (
     <div className="flex flex-col md:flex-row min-h-screen md:h-screen md:overflow-hidden bg-[#050508] text-text-primary">

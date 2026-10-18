@@ -1,9 +1,10 @@
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { requireAuthenticatedTeamUser } from "@/lib/auth/team";
+import { getTeamRegistrationByTeamId } from "@/lib/googleSheet";
+
 import { Trophy, Calendar } from "lucide-react";
 
 export const dynamic = "force-dynamic";
-
 interface TeamBasicInfo {
   id: string;
   name: string;
@@ -39,6 +40,17 @@ export default async function TeamResultsPage() {
     ]);
 
     if (teamRes.data) teamInfo = teamRes.data;
+    // Fallback to Google Sheet using the team ID when Supabase has no entry.
+    if (!teamInfo) {
+      const reg = await getTeamRegistrationByTeamId(effectiveTeamId);
+      if (reg) {
+        teamInfo = {
+          id: effectiveTeamId,
+          name: reg["Team Name"] ?? "",
+          track: reg["SELECTED DOMAIN"] ?? "",
+        };
+      }
+    }
     if (resultRes.data) publishedResult = resultRes.data;
   } catch (err) {
     console.error("Failed to load team result:", err);
