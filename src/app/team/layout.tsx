@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import TeamSidebar from "@/components/team/Sidebar";
+import PortalAccessDenied from "@/components/navigation/PortalAccessDenied";
 
 export const dynamic = "force-dynamic";
 
@@ -21,13 +22,29 @@ export default async function TeamLayout({
 
   const { data: profile } = await supabaseAdmin
     .from("profiles")
-    .select("role")
+    .select("role, full_name")
     .eq("id", user.id)
     .maybeSingle();
 
-  const userRole = (profile as { role?: string })?.role || (user.user_metadata?.role as string | undefined);
-  if (!profile || (userRole !== "participant" && userRole !== "leader" && userRole !== "admin")) {
-    redirect("/login");
+  const userRole =
+    profile?.role ||
+    (user.user_metadata?.role as string | undefined) ||
+    (user.app_metadata?.role as string | undefined);
+
+  if (userRole !== "participant" && userRole !== "leader" && userRole !== "admin") {
+    return (
+      <PortalAccessDenied
+        portalTitle="TEAM_LEADER & Participant Console"
+        requiredRoleLabel="Team Leader / Participant"
+        accentColor="pink"
+        currentUser={{
+          id: user.id,
+          email: user.email,
+          role: userRole || "judge",
+          fullName: profile?.full_name || (user.user_metadata?.full_name as string | undefined),
+        }}
+      />
+    );
   }
 
   // Find team details

@@ -9,7 +9,10 @@ import {
   Award,
   Layers,
   ArrowLeft,
+  ArrowRight,
+  Home,
   CheckCircle2,
+  ScanLine,
 } from "lucide-react";
 import SignOutButton from "@/components/SignOutButton";
 
@@ -132,6 +135,38 @@ export default function JudgeSidebar() {
               </Link>
             );
           })}
+        </div>
+
+        {/* Cross-Portal Switcher */}
+        <div className="py-3 px-4 border-t border-border-color/60 flex flex-col gap-1.5">
+          <p className="font-tech text-[10px] uppercase tracking-[2px] text-text-secondary mb-1 pl-3 font-bold flex items-center justify-between">
+            <span>Switch Portal</span>
+            <span className="text-[9px] text-accent-primary font-mono">PORTALS</span>
+          </p>
+
+          <Link
+            href="/"
+            className="flex items-center gap-2 py-2 px-3 text-xs font-tech font-bold uppercase tracking-[1px] text-text-secondary hover:text-accent-primary transition-colors border border-border-color hover:border-accent-primary/40 rounded bg-surface-color/50"
+          >
+            <Home size={14} className="text-accent-primary" />
+            <span>Central Gateway</span>
+          </Link>
+
+          <Link
+            href="/ops/scanner"
+            className="flex items-center gap-2 py-2 px-3 text-xs font-tech font-bold uppercase tracking-[1px] text-text-secondary hover:text-accent-tertiary transition-colors border border-border-color hover:border-accent-tertiary/40 rounded bg-surface-color/50"
+          >
+            <ScanLine size={14} className="text-accent-tertiary" />
+            <span>Club Member Ops</span>
+          </Link>
+
+          <Link
+            href="/team"
+            className="flex items-center gap-2 py-2 px-3 text-xs font-tech font-bold uppercase tracking-[1px] text-text-secondary hover:text-accent-secondary transition-colors border border-border-color hover:border-accent-secondary/40 rounded bg-surface-color/50"
+          >
+            <Users size={14} className="text-accent-secondary" />
+            <span>TEAM_LEADER Console</span>
+          </Link>
         </div>
       </div>
 
