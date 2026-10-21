@@ -64,6 +64,37 @@ export default function ScoringSlider({
           className="w-20 bg-surface-color border border-border-color text-text-primary font-sans tracking-normal font-bold text-sm text-center py-1.5 focus:border-accent-secondary outline-none"
         />
       </div>
+
+      {!disabled && (
+        <div className="flex items-center gap-2 pt-1">
+          <span className="font-tech text-[10px] text-text-secondary uppercase">Quick:</span>
+          {[0.25, 0.5, 0.75, 1.0].map((pct) => {
+            const presetVal = Math.round(maxMarks * pct);
+            const isSelected = value === presetVal;
+            return (
+              <button
+                key={pct}
+                type="button"
+                onClick={() => onChange(criterionId, presetVal, maxMarks)}
+                className={`font-tech text-[10px] px-2 py-0.5 border rounded transition-colors ${
+                  isSelected
+                    ? "border-accent-secondary bg-accent-secondary/20 text-accent-secondary font-bold"
+                    : "border-border-color text-text-secondary hover:text-text-primary hover:border-text-secondary"
+                }`}
+              >
+                {Math.round(pct * 100)}% ({presetVal})
+              </button>
+            );
+          })}
+          <button
+            type="button"
+            onClick={() => onChange(criterionId, 0, maxMarks)}
+            className="font-tech text-[10px] px-2 py-0.5 border border-border-color text-text-secondary hover:text-status-error hover:border-status-error/40 rounded transition-colors ml-auto"
+          >
+            Clear (0)
+          </button>
+        </div>
+      )}
     </div>
   );
 }
