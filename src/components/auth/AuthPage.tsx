@@ -69,17 +69,14 @@ export default function AuthPage({ isSignUp = false }: { isSignUp?: boolean }) {
 
       if (error) throw error;
 
-      if (data?.user) {
-        setSuccessMsg("Authenticated! Entering portal...");
-        const redirectUrl = preferredPortal || (await getRoleRedirectUrl(data.user));
-        router.push(redirectUrl);
-        router.refresh();
-        setTimeout(() => {
+        if (data?.user) {
+          setSuccessMsg("Authenticated! Entering portal...");
+          const redirectUrl = preferredPortal || (await getRoleRedirectUrl(data.user));
+          // Direct navigation to ensure it works on all devices (mobile, tablet, etc.)
           window.location.href = redirectUrl;
-        }, 500);
-      } else {
-        throw new Error("No user record returned from authentication service.");
-      }
+        } else {
+          throw new Error("No user record returned from authentication service.");
+        }
     } catch (err: unknown) {
       setErrorMsg(err instanceof Error ? err.message : "Authentication failed");
       setLoading(false);
