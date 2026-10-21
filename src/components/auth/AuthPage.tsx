@@ -207,8 +207,7 @@ export default function AuthPage({ isSignUp = false }: { isSignUp?: boolean }) {
 
   const handleDemoClick = async (demoEmail: string) => {
     // Demo accounts use the default password "123" (mapped to "Password@123")
-    const portal = getPreferredPortal(demoEmail);
-    await executeSignIn(demoEmail, "123", portal);
+    await executeSignIn(demoEmail, "123");
   };
 
   const handleResendOtp = async () => {
