@@ -4,6 +4,7 @@ import { supabaseAdmin } from "@/lib/supabase/admin";
 import { getTeamRegistrationByEmail } from "@/lib/googleSheet";
 
 import TeamSidebar from "@/components/team/Sidebar";
+import TeamMobileNav from "@/components/team/MobileNavDrawer";
 
 export default async function TeamLayout({
   children,
@@ -63,12 +64,17 @@ export default async function TeamLayout({
 
   return (
     <div className="flex flex-col md:flex-row min-h-screen md:h-screen md:overflow-hidden bg-[#050508] text-text-primary">
-      <TeamSidebar
-        teamName={teamName}
-        leaderName={leaderName}
-        track={track}
-        isLeader={isLeader}
-      />
+      <div className="hidden md:block">
+        <TeamSidebar
+          teamName={teamName}
+          leaderName={leaderName}
+          track={track}
+          isLeader={isLeader}
+        />
+      </div>
+      <div className="md:hidden">
+        <TeamMobileNav />
+      </div>
       <main
         className="flex-1 p-6 md:p-10 md:overflow-y-auto overscroll-contain h-full"
         style={{

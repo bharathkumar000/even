@@ -427,16 +427,18 @@ export default function ScannerClientView() {
         </select>
       </div>
       
-      {/* Scanner & Manual Lookup Controls */}
-      <ScannerDesk
-        scanning={scanning}
-        manualId={manualId}
-        loading={loading}
-        onStartScanner={startScanner}
-        onStopScanner={stopScanner}
-        onManualIdChange={setManualId}
-        onLookup={(id) => handleDetectedCode(id)}
-      />
+       {/* Scanner & Manual Lookup Controls */}
+       <div suppressHydrationWarning>
+         <ScannerDesk
+           scanning={scanning}
+           manualId={manualId}
+           loading={loading}
+           onStartScanner={startScanner}
+           onStopScanner={stopScanner}
+           onManualIdChange={setManualId}
+           onLookup={(id) => handleDetectedCode(id)}
+         />
+       </div>
 
       {/* Scanned Team Roster Panel */}
       {teamData && (
