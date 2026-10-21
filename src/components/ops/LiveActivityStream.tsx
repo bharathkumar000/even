@@ -85,16 +85,9 @@ export default function LiveActivityStream({
         day: "numeric",
       });
 
-      // Relative calculation
-      const diffSecs = Math.max(0, Math.floor((Date.now() - date.getTime()) / 1000));
-      let relativeStr = "just now";
-      if (diffSecs >= 60 && diffSecs < 3600) {
-        relativeStr = `${Math.floor(diffSecs / 60)}m ago`;
-      } else if (diffSecs >= 3600) {
-        relativeStr = `${Math.floor(diffSecs / 3600)}h ago`;
-      } else if (diffSecs >= 5) {
-        relativeStr = `${diffSecs}s ago`;
-      }
+       // No relative time calculation to avoid hydration mismatch; leave empty
+       const relativeStr = "";
+
 
       return { timeStr, dateStr, relativeStr };
     } catch {
