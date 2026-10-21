@@ -208,10 +208,10 @@ export default function TeamQrClientView({
       )}
 
       {/* Main 2-Column Responsive Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 sm:gap-8 items-start">
         {/* LEFT COLUMN: Official QR Card (lg:col-span-5) */}
-        <div className="lg:col-span-5">
-          <div className="glass-panel p-6 sm:p-8 border border-accent-secondary/40 space-y-6 text-center shadow-2xl relative overflow-hidden font-tech rounded-xl">
+        <div className="lg:col-span-5 w-full">
+          <div className="glass-panel p-4 sm:p-6 md:p-8 border border-accent-secondary/40 space-y-5 sm:space-y-6 text-center shadow-2xl relative overflow-hidden font-tech rounded-xl">
             {/* Anti-Fraud Rotating Watermark Banner */}
             <div className="flex items-center justify-between border-b border-border-color pb-3">
               <span className="flex items-center gap-1.5 text-[10px] text-status-success font-bold uppercase tracking-wider">
@@ -256,7 +256,7 @@ export default function TeamQrClientView({
             {/* QR Render with dynamic border */}
             <div className="flex justify-center my-3 relative">
               <div
-                className={`p-4 bg-white rounded-xl shadow-2xl inline-block border-4 transition-all duration-300 relative ${
+                className={`p-3 sm:p-4 bg-white rounded-xl shadow-2xl inline-block border-4 transition-all duration-300 relative max-w-full ${
                   hasGoodies ? "border-status-success shadow-status-success/20" : "border-accent-primary"
                 }`}
               >
@@ -267,10 +267,10 @@ export default function TeamQrClientView({
                     alt="Team Official QR Code"
                     width={224}
                     height={224}
-                    className="w-56 h-56 object-contain"
+                    className="w-48 h-48 sm:w-56 sm:h-56 object-contain max-w-full"
                   />
                 ) : (
-                  <div className="w-56 h-56 flex items-center justify-center text-black text-xs font-mono">
+                  <div className="w-48 h-48 sm:w-56 sm:h-56 flex items-center justify-center text-black text-xs font-mono">
                     Generating QR...
                   </div>
                 )}
@@ -302,17 +302,17 @@ export default function TeamQrClientView({
         </div>
 
         {/* RIGHT COLUMN: Live Perks & Logistics Status (lg:col-span-7) */}
-        <div className="lg:col-span-7">
-          <div className="glass-panel p-6 sm:p-7 border border-border-color space-y-4 font-tech rounded-xl shadow-xl">
+        <div className="lg:col-span-7 w-full">
+          <div className="glass-panel p-4 sm:p-6 md:p-7 border border-border-color space-y-4 font-tech rounded-xl shadow-xl">
             {/* Header */}
-            <div className="flex items-center justify-between border-b border-border-color pb-3">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-border-color pb-3 gap-2">
               <div className="flex items-center gap-2">
-                <ShieldCheck size={18} className="text-accent-secondary" />
-                <h3 className="font-heading text-lg text-text-primary uppercase m-0 tracking-wide">
+                <ShieldCheck size={18} className="text-accent-secondary shrink-0" />
+                <h3 className="font-heading text-base sm:text-lg text-text-primary uppercase m-0 tracking-wide">
                   Live Perk & Logistics Status
                 </h3>
               </div>
-              <span className="text-xs text-accent-secondary font-mono font-bold px-2.5 py-0.5 rounded bg-accent-secondary/15 border border-accent-secondary/30">
+              <span className="text-xs text-accent-secondary font-mono font-bold px-2.5 py-0.5 rounded bg-accent-secondary/15 border border-accent-secondary/30 self-start sm:self-auto">
                 {claimedCount}/{perksList.length} Claimed
               </span>
             </div>
@@ -326,34 +326,34 @@ export default function TeamQrClientView({
                 return (
                   <div
                     key={perk.id}
-                    className={`p-4 border transition-all rounded-lg ${
+                    className={`p-3 sm:p-4 border transition-all rounded-lg ${
                       isClaimed
                         ? "bg-status-success/10 border-status-success/60 text-text-primary shadow-[0_0_15px_rgba(0,255,136,0.06)]"
                         : "bg-surface-color/50 border-border-color text-text-secondary"
                     }`}
                   >
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="flex items-center gap-3">
+                    <div className="flex items-start sm:items-center justify-between gap-2.5 sm:gap-3">
+                      <div className="flex items-start sm:items-center gap-2.5 sm:gap-3 min-w-0">
                         <div
-                          className={`p-2 rounded-md border shrink-0 ${
+                          className={`p-2 rounded-md border shrink-0 mt-0.5 sm:mt-0 ${
                             isClaimed
                               ? "bg-status-success/20 border-status-success text-status-success"
                               : "bg-surface-color-light border-border-color text-text-secondary"
                           }`}
                         >
-                          <Icon size={18} />
+                          <Icon size={16} className="sm:w-[18px] sm:h-[18px]" />
                         </div>
 
-                        <div>
-                          <p className="font-heading text-sm uppercase m-0 font-bold text-text-primary tracking-wide">
+                        <div className="min-w-0">
+                          <p className="font-heading text-xs sm:text-sm uppercase m-0 font-bold text-text-primary tracking-wide truncate">
                             {perk.label}
                           </p>
                           {perk.isPerMember ? (
-                            <p className="text-[11px] text-text-secondary m-0 font-mono mt-0.5">
-                              Per Member Scan • 3 Members Required
+                            <p className="text-[10px] sm:text-[11px] text-text-secondary m-0 font-mono mt-0.5">
+                              Per Member Scan • 3 Members
                             </p>
                           ) : (
-                            <p className="text-[11px] text-text-secondary m-0 font-mono mt-0.5">
+                            <p className="text-[10px] sm:text-[11px] text-text-secondary m-0 font-mono mt-0.5">
                               Team-Level Verification
                             </p>
                           )}
@@ -361,7 +361,7 @@ export default function TeamQrClientView({
                       </div>
 
                       <span
-                        className={`text-[10px] uppercase font-bold px-2.5 py-1 rounded border tracking-wider shrink-0 ${
+                        className={`text-[9px] sm:text-[10px] uppercase font-bold px-2 py-0.5 sm:px-2.5 sm:py-1 rounded border tracking-wider shrink-0 ${
                           isClaimed
                             ? "bg-status-success/20 text-status-success border-status-success"
                             : "bg-surface-color-light text-text-secondary border-border-color"

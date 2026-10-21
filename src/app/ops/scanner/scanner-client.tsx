@@ -411,19 +411,19 @@ export default function ScannerClientView() {
       )}
 
       {/* Operation Selector */}
-      <div className="flex items-center gap-2 mb-4">
-        <label htmlFor="operation-select" className="font-bold uppercase text-xs text-text-secondary">Select Operation</label>
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 mb-4 bg-surface-color/60 border border-border-color p-3 rounded">
+        <label htmlFor="operation-select" className="font-bold uppercase text-xs text-text-secondary shrink-0">Select Active Desk / Operation</label>
         <select
           id="operation-select"
           value={selectedOperation}
           onChange={(e) => setSelectedOperation(e.target.value)}
-          className="bg-surface-color border border-border-color p-2 text-xs"
+          className="bg-surface-color border border-border-color p-2 text-xs font-tech text-text-primary outline-none focus:border-accent-secondary rounded w-full sm:w-auto"
         >
-          <option value="registration">Registration / Check‑In</option>
-          <option value="goodies">Goodies</option>
-          <option value="lunch">Lunch</option>
-          <option value="snacks">Snacks</option>
-          <option value="feedback">Feedback</option>
+          <option value="registration">Registration / Check‑In Desk</option>
+          <option value="goodies">Goodies / Swag Kit Desk</option>
+          <option value="lunch">Lunch Token Desk</option>
+          <option value="snacks">Snacks / Refreshments Desk</option>
+          <option value="feedback">Feedback Desk</option>
         </select>
       </div>
       

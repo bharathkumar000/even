@@ -29,12 +29,12 @@ export default function TeamMobileNav() {
   return (
     <>
       {/* Mobile Header */}
-       <header className="flex items-center justify-between px-4 py-2 bg-[#0c0c14] border-b border-border-color md:hidden z-10">
-        <div className="flex items-center gap-2">
-          <Image src="/ivc-gear-logo.png" alt="IVC" width={36} height={36} className="object-contain" />
-          <h1 className="text-sm font-heading uppercase text-text-primary">{title}</h1>
+      <header className="flex items-center justify-between px-4 py-3 bg-[#0c0c14]/95 backdrop-blur-md border-b border-border-color md:hidden w-full">
+        <div className="flex items-center gap-2.5">
+          <Image src="/ivc-gear-logo.png" alt="IVC" width={32} height={32} className="object-contain shrink-0" />
+          <h1 className="text-xs sm:text-sm font-heading uppercase text-text-primary tracking-wider m-0 truncate max-w-[200px]">{title}</h1>
         </div>
-        <button onClick={() => setOpen(true)} aria-label="Open menu" className="p-2">
+        <button onClick={() => setOpen(true)} aria-label="Open menu" className="p-1.5 text-text-primary hover:text-accent-secondary transition-colors">
           <Menu size={24} className="text-text-primary" />
         </button>
       </header>

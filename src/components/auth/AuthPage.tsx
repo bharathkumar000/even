@@ -231,8 +231,8 @@ export default function AuthPage({ isSignUp = false }: { isSignUp?: boolean }) {
     }
   };
   return (
-    <div className="min-h-[80vh] flex items-center justify-center p-4">
-      <div className="glass-panel max-w-md w-full p-8 border border-border-color shadow-2xl relative space-y-6">
+    <div className="min-h-[80vh] flex items-center justify-center p-3 sm:p-4 w-full">
+      <div className="glass-panel max-w-md w-full p-5 sm:p-8 border border-border-color shadow-2xl relative space-y-6">
         {/* Neon accent top bar */}
         <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-accent-secondary via-accent-primary to-accent-tertiary" />
 
@@ -280,18 +280,18 @@ export default function AuthPage({ isSignUp = false }: { isSignUp?: boolean }) {
         {/* Demo login buttons (only on login, not sign‑up) */}
         {!isSignUp && step === "credentials" && (
           <div className="mb-4">
-            <p className="text-xs text-text-secondary mb-2 font-tech">Demo Login (One‑click)</p>
-            <div className="flex flex-wrap gap-2 justify-center">
-              <button type="button" onClick={() => handleDemoClick('admin@demo.com')} className="px-3 py-2 bg-gradient-to-r from-accent-primary to-accent-secondary text-black font-tech font-semibold rounded">
+            <p className="text-xs text-text-secondary mb-2 font-tech text-center sm:text-left">Demo Login (One‑click)</p>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              <button type="button" onClick={() => handleDemoClick('admin@demo.com')} className="px-2.5 py-2 bg-gradient-to-r from-accent-primary to-accent-secondary text-black font-tech font-semibold text-xs rounded truncate">
                 Demo Admin
               </button>
-              <button type="button" onClick={() => handleDemoClick('judge@demo.com')} className="px-3 py-2 bg-gradient-to-r from-accent-secondary to-accent-primary text-black font-tech font-semibold rounded">
+              <button type="button" onClick={() => handleDemoClick('judge@demo.com')} className="px-2.5 py-2 bg-gradient-to-r from-accent-secondary to-accent-primary text-black font-tech font-semibold text-xs rounded truncate">
                 Demo Judge
               </button>
-              <button type="button" onClick={() => handleDemoClick('ops@demo.com')} className="px-3 py-2 bg-gradient-to-r from-accent-tertiary to-accent-primary text-black font-tech font-semibold rounded">
+              <button type="button" onClick={() => handleDemoClick('ops@demo.com')} className="px-2.5 py-2 bg-gradient-to-r from-accent-tertiary to-accent-primary text-black font-tech font-semibold text-xs rounded truncate">
                 Demo Ops
               </button>
-              <button type="button" onClick={() => handleDemoClick('team@demo.com')} className="px-3 py-2 bg-gradient-to-r from-accent-secondary to-accent-tertiary text-black font-tech font-semibold rounded">
+              <button type="button" onClick={() => handleDemoClick('team@demo.com')} className="px-2.5 py-2 bg-gradient-to-r from-accent-secondary to-accent-tertiary text-black font-tech font-semibold text-xs rounded truncate">
                 Demo Team
               </button>
             </div>

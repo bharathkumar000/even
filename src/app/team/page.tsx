@@ -273,9 +273,9 @@ export default async function TeamDashboardPage() {
 
       {/* Dedicated SPOC Coordinator Card */}
       {assignedSpoc && (
-        <div className="glass-panel p-5 border border-accent-secondary/40 bg-gradient-to-r from-accent-secondary/[0.07] via-surface-color/60 to-surface-color flex flex-col md:flex-row md:items-center justify-between gap-5 rounded-lg shadow-[0_0_20px_rgba(255,0,127,0.1)]">
-          <div className="flex items-center gap-4">
-            <div className="relative w-16 h-16 rounded-full overflow-hidden border-2 border-accent-secondary bg-surface-color-light flex items-center justify-center shrink-0 shadow-[0_0_15px_rgba(255,0,127,0.25)]">
+        <div className="glass-panel p-4 sm:p-5 border border-accent-secondary/40 bg-gradient-to-r from-accent-secondary/[0.07] via-surface-color/60 to-surface-color flex flex-col md:flex-row md:items-center justify-between gap-4 sm:gap-5 rounded-lg shadow-[0_0_20px_rgba(255,0,127,0.1)]">
+          <div className="flex items-center gap-3.5 sm:gap-4 min-w-0">
+            <div className="relative w-14 h-14 sm:w-16 sm:h-16 rounded-full overflow-hidden border-2 border-accent-secondary bg-surface-color-light flex items-center justify-center shrink-0 shadow-[0_0_15px_rgba(255,0,127,0.25)]">
               {assignedSpoc.avatar_url ? (
                 <Image
                   src={assignedSpoc.avatar_url}
@@ -291,35 +291,35 @@ export default async function TeamDashboardPage() {
               )}
             </div>
 
-            <div className="space-y-1">
+            <div className="space-y-1 min-w-0">
               <div className="flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full bg-status-success animate-pulse" />
+                <span className="w-2 h-2 rounded-full bg-status-success animate-pulse shrink-0" />
                 <span className="text-[10px] uppercase tracking-[2px] text-accent-secondary font-bold">
                   Your Dedicated Event SPOC
                 </span>
               </div>
-              <h3 className="font-heading text-xl text-text-primary uppercase m-0 flex items-center gap-2">
-                {assignedSpoc.name}
+              <h3 className="font-heading text-lg sm:text-xl text-text-primary uppercase m-0 flex flex-wrap items-center gap-1.5 sm:gap-2 leading-tight">
+                <span>{assignedSpoc.name}</span>
                 {assignedSpoc.department && (
                   <span className="text-xs font-mono text-accent-primary normal-case">
                     [{assignedSpoc.department}]
                   </span>
                 )}
               </h3>
-              <p className="text-xs text-text-secondary m-0 font-mono">
+              <p className="text-[11px] sm:text-xs text-text-secondary m-0 font-mono">
                 Assigned coordinator for team queries, schedule assistance & live logistics.
               </p>
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2.5 pt-3 md:pt-0 border-t md:border-t-0 border-border-color/40">
+          <div className="flex flex-wrap items-center gap-2 pt-3 md:pt-0 border-t md:border-t-0 border-border-color/40 w-full md:w-auto">
             {assignedSpoc.phone && (
               <a
                 href={`tel:${assignedSpoc.phone}`}
-                className="px-3 py-2 bg-surface-color border border-border-color hover:border-accent-primary text-text-primary text-xs uppercase font-bold tracking-wider rounded transition-colors flex items-center gap-2"
+                className="flex-1 sm:flex-none px-3 py-2 bg-surface-color border border-border-color hover:border-accent-primary text-text-primary text-xs uppercase font-bold tracking-wider rounded transition-colors flex items-center justify-center gap-1.5"
               >
-                <Phone size={14} className="text-accent-primary" />
-                <span>Call ({assignedSpoc.phone})</span>
+                <Phone size={14} className="text-accent-primary shrink-0" />
+                <span>Call</span>
               </a>
             )}
 
@@ -330,11 +330,11 @@ export default async function TeamDashboardPage() {
                 )}`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="px-4 py-2 bg-[#25D366] text-black text-xs uppercase font-bold tracking-wider rounded hover:bg-[#20ba59] transition-all flex items-center gap-2 shadow-[0_0_15px_rgba(37,211,102,0.3)] cursor-pointer"
+                className="flex-1 sm:flex-none px-3.5 py-2 bg-[#25D366] text-black text-xs uppercase font-bold tracking-wider rounded hover:bg-[#20ba59] transition-all flex items-center justify-center gap-1.5 shadow-[0_0_15px_rgba(37,211,102,0.3)] cursor-pointer"
               >
-                <MessageCircle size={15} className="stroke-[2.5]" />
-                <span>WhatsApp SPOC</span>
-                <ExternalLink size={12} />
+                <MessageCircle size={15} className="stroke-[2.5] shrink-0" />
+                <span>WhatsApp</span>
+                <ExternalLink size={12} className="shrink-0" />
               </a>
             )}
 
@@ -460,78 +460,78 @@ export default async function TeamDashboardPage() {
           {/* Action 1: Upload Deliverables */}
           <Link
             href="/team/submission"
-            className="group glass-panel p-4 border border-border-color hover:border-accent-secondary transition-all flex items-center justify-between"
+            className="group glass-panel p-3.5 sm:p-4 border border-border-color hover:border-accent-secondary transition-all flex items-center justify-between gap-3"
           >
-            <div className="flex items-center gap-3.5">
-              <div className="p-3 bg-accent-secondary/10 border border-accent-secondary/40 text-accent-secondary rounded group-hover:scale-105 transition-transform">
-                <FileUp size={22} />
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="p-2.5 sm:p-3 bg-accent-secondary/10 border border-accent-secondary/40 text-accent-secondary rounded group-hover:scale-105 transition-transform shrink-0">
+                <FileUp size={20} className="sm:w-[22px] sm:h-[22px]" />
               </div>
-              <div>
-                <p className="font-heading text-base text-text-primary uppercase m-0 group-hover:text-accent-secondary transition-colors">
+              <div className="min-w-0">
+                <p className="font-heading text-sm sm:text-base text-text-primary uppercase m-0 group-hover:text-accent-secondary transition-colors truncate">
                   Submit Deliverables
                 </p>
-                <p className="text-xs text-text-secondary m-0 mt-0.5">
+                <p className="text-[11px] sm:text-xs text-text-secondary m-0 mt-0.5 truncate">
                   Upload Problem/Solution Statement & Presentation File
                 </p>
               </div>
             </div>
-            <div className="flex items-center gap-2">
-              <span className="text-[10px] px-2 py-0.5 bg-accent-secondary/15 border border-accent-secondary/40 text-accent-secondary font-bold uppercase">
+            <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+              <span className="text-[9px] sm:text-[10px] px-2 py-0.5 bg-accent-secondary/15 border border-accent-secondary/40 text-accent-secondary font-bold uppercase">
                 {hasSubmitted ? "Updated" : "Primary"}
               </span>
-              <ArrowRight size={16} className="text-text-secondary group-hover:text-accent-secondary group-hover:translate-x-1 transition-all" />
+              <ArrowRight size={15} className="text-text-secondary group-hover:text-accent-secondary group-hover:translate-x-1 transition-all" />
             </div>
           </Link>
 
           {/* Action 2: Show QR Code */}
           <Link
             href="/team/qr"
-            className="group glass-panel p-4 border border-border-color hover:border-accent-tertiary transition-all flex items-center justify-between"
+            className="group glass-panel p-3.5 sm:p-4 border border-border-color hover:border-accent-tertiary transition-all flex items-center justify-between gap-3"
           >
-            <div className="flex items-center gap-3.5">
-              <div className="p-3 bg-accent-tertiary/10 border border-accent-tertiary/40 text-accent-tertiary rounded group-hover:scale-105 transition-transform">
-                <QrCode size={22} />
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="p-2.5 sm:p-3 bg-accent-tertiary/10 border border-accent-tertiary/40 text-accent-tertiary rounded group-hover:scale-105 transition-transform shrink-0">
+                <QrCode size={20} className="sm:w-[22px] sm:h-[22px]" />
               </div>
-              <div>
-                <p className="font-heading text-base text-text-primary uppercase m-0 group-hover:text-accent-tertiary transition-colors">
+              <div className="min-w-0">
+                <p className="font-heading text-sm sm:text-base text-text-primary uppercase m-0 group-hover:text-accent-tertiary transition-colors truncate">
                   Show Team QR Pass
                 </p>
-                <p className="text-xs text-text-secondary m-0 mt-0.5">
+                <p className="text-[11px] sm:text-xs text-text-secondary m-0 mt-0.5 truncate">
                   Present QR badge to Operations Desk for check-in & tokens
                 </p>
               </div>
             </div>
-            <div className="flex items-center gap-2">
-              <span className="text-[10px] px-2 py-0.5 bg-surface-color border border-border-color text-text-secondary font-bold uppercase">
+            <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+              <span className="text-[9px] sm:text-[10px] px-2 py-0.5 bg-surface-color border border-border-color text-text-secondary font-bold uppercase">
                 Pass
               </span>
-              <ArrowRight size={16} className="text-text-secondary group-hover:text-accent-tertiary group-hover:translate-x-1 transition-all" />
+              <ArrowRight size={15} className="text-text-secondary group-hover:text-accent-tertiary group-hover:translate-x-1 transition-all" />
             </div>
           </Link>
 
           {/* Action 3: Team Standings */}
           <Link
             href="/team/results"
-            className="group glass-panel p-4 border border-border-color hover:border-accent-primary transition-all flex items-center justify-between"
+            className="group glass-panel p-3.5 sm:p-4 border border-border-color hover:border-accent-primary transition-all flex items-center justify-between gap-3"
           >
-            <div className="flex items-center gap-3.5">
-              <div className="p-3 bg-accent-primary/10 border border-accent-primary/40 text-accent-primary rounded group-hover:scale-105 transition-transform">
-                <Trophy size={22} />
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="p-2.5 sm:p-3 bg-accent-primary/10 border border-accent-primary/40 text-accent-primary rounded group-hover:scale-105 transition-transform shrink-0">
+                <Trophy size={20} className="sm:w-[22px] sm:h-[22px]" />
               </div>
-              <div>
-                <p className="font-heading text-base text-text-primary uppercase m-0 group-hover:text-accent-primary transition-colors">
+              <div className="min-w-0">
+                <p className="font-heading text-sm sm:text-base text-text-primary uppercase m-0 group-hover:text-accent-primary transition-colors truncate">
                   Scorecard & Results
                 </p>
-                <p className="text-xs text-text-secondary m-0 mt-0.5">
+                <p className="text-[11px] sm:text-xs text-text-secondary m-0 mt-0.5 truncate">
                   Check certified judging scores and event standings
                 </p>
               </div>
             </div>
-            <div className="flex items-center gap-2">
-              <span className="text-[10px] px-2 py-0.5 bg-surface-color border border-border-color text-text-secondary font-bold uppercase">
+            <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+              <span className="text-[9px] sm:text-[10px] px-2 py-0.5 bg-surface-color border border-border-color text-text-secondary font-bold uppercase">
                 Certified
               </span>
-              <ArrowRight size={16} className="text-text-secondary group-hover:text-accent-primary group-hover:translate-x-1 transition-all" />
+              <ArrowRight size={15} className="text-text-secondary group-hover:text-accent-primary group-hover:translate-x-1 transition-all" />
             </div>
           </Link>
 

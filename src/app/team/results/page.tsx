@@ -84,13 +84,13 @@ export default async function TeamResultsPage() {
         </div>
       ) : (
         <div className="space-y-6">
-          <div className="glass-panel p-8 border border-status-success/40 bg-gradient-to-r from-status-success/5 to-transparent space-y-6">
+          <div className="glass-panel p-4 sm:p-8 border border-status-success/40 bg-gradient-to-r from-status-success/5 to-transparent space-y-6">
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-border-color pb-4">
               <div>
                 <span className="font-tech text-[10px] text-status-success uppercase font-bold tracking-wider px-2 py-0.5 bg-status-success/15 border border-status-success">
                   OFFICIALLY PUBLISHED
                 </span>
-                <h2 className="font-heading text-2xl text-text-primary uppercase m-0 mt-2">
+                <h2 className="font-heading text-xl sm:text-2xl text-text-primary uppercase m-0 mt-2">
                   {teamInfo?.name || "Team Evaluation Scorecard"}
                 </h2>
                 <p className="font-tech text-xs text-text-secondary m-0 mt-0.5">
@@ -99,11 +99,11 @@ export default async function TeamResultsPage() {
               </div>
 
               {publishedResult.rank && (
-                <div className="text-right">
+                <div className="text-left sm:text-right">
                   <span className="font-tech text-xs text-text-secondary uppercase block">
                     Official Standing
                   </span>
-                  <span className="font-heading text-3xl text-accent-primary font-bold">
+                  <span className="font-heading text-2xl sm:text-3xl text-accent-primary font-bold">
                     Rank #{publishedResult.rank}
                   </span>
                 </div>
