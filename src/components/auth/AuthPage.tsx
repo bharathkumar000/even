@@ -54,7 +54,7 @@ export default function AuthPage({ isSignUp = false }: { isSignUp?: boolean }) {
         password: effectivePass,
       });
 
-      // Backward-compatible fallback for password variant if needed
+      // Backward‑compatible fallback for password variant if needed
       if (error && error.message.toLowerCase().includes("invalid login credentials")) {
         const altPass = userPass === "Password@123" ? "Password123!" : "Password@123";
         const retry = await supabase.auth.signInWithPassword({
@@ -69,14 +69,15 @@ export default function AuthPage({ isSignUp = false }: { isSignUp?: boolean }) {
 
       if (error) throw error;
 
-        if (data?.user) {
-          setSuccessMsg("Authenticated! Entering portal...");
-          const redirectUrl = preferredPortal || (await getRoleRedirectUrl(data.user));
-          // Direct navigation to ensure it works on all devices (mobile, tablet, etc.)
-          window.location.href = redirectUrl;
-        } else {
-          throw new Error("No user record returned from authentication service.");
-        }
+      if (data?.user) {
+        setSuccessMsg("Authenticated! Entering portal...");
+        const redirectUrl = preferredPortal || (await getRoleRedirectUrl(data.user));
+        // Use Next router first (works on mobile) then force a full reload as a safety net
+        if (router) router.push(redirectUrl);
+        window.location.href = redirectUrl;
+      } else {
+        throw new Error("No user record returned from authentication service.");
+      }
     } catch (err: unknown) {
       setErrorMsg(err instanceof Error ? err.message : "Authentication failed");
       setLoading(false);
