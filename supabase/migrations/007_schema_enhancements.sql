@@ -3,6 +3,19 @@
 -- Migration: 007_schema_enhancements.sql
 -- ==============================================================================
 
+-- 0. DEFINE HAS_ROLE HELPER (SAFE TYPE CASTING)
+CREATE OR REPLACE FUNCTION public.has_role(user_id UUID, required_role TEXT)
+RETURNS BOOLEAN
+LANGUAGE sql
+SECURITY DEFINER
+STABLE
+AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM public.profiles
+    WHERE id = user_id AND role::text = required_role
+  );
+$$;
+
 -- 1. ADD UPDATED_AT TO EVALUATION_ROUNDS
 ALTER TABLE IF EXISTS public.evaluation_rounds
   ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT now();
@@ -52,14 +65,30 @@ DROP POLICY IF EXISTS "Admins can manage judge conflicts" ON public.judge_confli
 CREATE POLICY "Admins can manage judge conflicts"
   ON public.judge_conflicts FOR ALL
   TO authenticated
-  USING (public.is_admin())
-  WITH CHECK (public.is_admin());
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.profiles
+      WHERE id = auth.uid() AND role::text = 'admin'
+    )
+  )
+  WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM public.profiles
+      WHERE id = auth.uid() AND role::text = 'admin'
+    )
+  );
 
 DROP POLICY IF EXISTS "Judges can view own conflicts" ON public.judge_conflicts;
 CREATE POLICY "Judges can view own conflicts"
   ON public.judge_conflicts FOR SELECT
   TO authenticated
-  USING (judge_id = auth.uid() OR public.is_admin());
+  USING (
+    judge_id = auth.uid()
+    OR EXISTS (
+      SELECT 1 FROM public.profiles
+      WHERE id = auth.uid() AND role::text = 'admin'
+    )
+  );
 
 -- 5. SUBMISSION VERSION HISTORY (REVISIONS) TABLE
 CREATE TABLE IF NOT EXISTS public.submission_revisions (
@@ -86,9 +115,10 @@ CREATE POLICY "Teams can view own submission revisions"
     team_id IN (
       SELECT team_id FROM public.team_members WHERE user_id = auth.uid()
     )
-    OR public.has_role(auth.uid(), 'judge')
-    OR public.has_role(auth.uid(), 'admin')
-    OR public.has_role(auth.uid(), 'staff')
+    OR EXISTS (
+      SELECT 1 FROM public.profiles
+      WHERE id = auth.uid() AND role::text IN ('judge', 'admin', 'staff', 'organizer')
+    )
   );
 
 DROP POLICY IF EXISTS "Teams can insert own submission revisions" ON public.submission_revisions;
