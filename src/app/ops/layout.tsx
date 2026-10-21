@@ -18,7 +18,7 @@ export default async function OpsLayout({
 
   return (
     <div className="flex flex-col md:flex-row min-h-screen md:h-screen md:overflow-hidden bg-[#050508] text-text-primary">
-      <div className="hidden md:block"><OpsSidebar /></div>
+      <div className="hidden md:block flex-shrink-0"><OpsSidebar /></div>
       <div className="md:hidden"><OpsMobileNav /></div>
         <main
           className="flex-1 p-6 md:p-10 md:overflow-y-auto overscroll-contain h-full mt-14 md:mt-0"

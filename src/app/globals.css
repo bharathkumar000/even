@@ -1,5 +1,21 @@
 @import url('https://fonts.googleapis.com/css2?family=Fredoka+One&family=Fredoka:wght@300;400;500;600;700&display=swap');
 
+@font-face {
+  font-family: 'Fredoka One';
+  src: url('/fonts/FredokaOne.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Fredoka';
+  src: url('/fonts/Fredoka-Bold.woff2') format('woff2');
+  font-weight: 300 700;
+  font-style: normal;
+  font-display: swap;
+}
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -21,7 +37,7 @@
   --status-warning: #FBC815;
   --status-error: #FF007F;
 
-  --font-family-fredoka: var(--font-fredoka), 'Fredoka', 'Fredoka One', cursive, sans-serif;
+  --font-family-fredoka: 'Fredoka One', 'Fredoka', cursive, sans-serif;
   --font-family-body: var(--font-family-fredoka);
   --font-family-heading: var(--font-family-fredoka);
   --font-family-tech: var(--font-family-fredoka);
@@ -121,10 +137,9 @@
 /* Typography Overrides */
 h1, h2, h3, h4, h5, h6 {
   margin-bottom: 0.5em;
-  font-family: var(--font-family-heading);
-  letter-spacing: 2px;
-  line-height: 1.1;
-  text-transform: uppercase;
+  font-family: 'Fredoka One', 'Fredoka', cursive, sans-serif !important;
+  letter-spacing: 0.5px;
+  line-height: 1.15;
   text-shadow: 2px 2px 0px rgba(0,0,0,0.8), 0 0 10px rgba(251, 200, 21, 0.2);
 }
 

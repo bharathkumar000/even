@@ -49,7 +49,7 @@ export default function OpsSidebar() {
   ];
 
   return (
-    <aside className="w-full md:w-[280px] md:shrink-0 bg-[#0c0c14] md:border-r border-b md:border-b-0 border-border-color flex flex-col justify-between py-6 md:h-screen z-20 font-tech md:overflow-y-auto overscroll-contain custom-scrollbar">
+    <aside className="w-[280px] flex-shrink-0 bg-[#0c0c14] md:border-r border-b md:border-b-0 border-border-color flex flex-col justify-between py-6 md:h-screen z-20 font-tech md:overflow-y-auto overscroll-contain custom-scrollbar">
       {/* Brand Header */}
       <div className="shrink-0">
         <div className="px-6 pb-6 border-b border-border-color flex flex-col items-center text-center">
