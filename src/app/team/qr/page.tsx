@@ -62,7 +62,7 @@ export default async function TeamQrPage() {
   const initialStatus = await getTeamScanStatus(effectiveTeamId);
 
   return (
-    <div className="space-y-8 animate-fade-in max-w-xl mx-auto">
+    <div className="space-y-8 animate-fade-in max-w-6xl mx-auto w-full">
       <div className="border-b border-border-color pb-6 text-center">
         <p className="font-tech text-xs uppercase tracking-[3px] text-accent-secondary font-bold mb-1">
           Team Identity // Official Access Pass

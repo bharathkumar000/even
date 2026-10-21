@@ -395,7 +395,7 @@ export default function ScannerClientView() {
   }, []);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6" suppressHydrationWarning>
       {/* Alert Banners */}
       {successMsg && (
         <div className="p-4 bg-status-success/15 border border-status-success text-status-success font-tech text-xs flex items-center gap-2 animate-fade-in">

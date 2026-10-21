@@ -41,50 +41,52 @@ export default function AuthPage({ isSignUp = false }: { isSignUp?: boolean }) {
 
 
   // Robust sign-in execution
-  const executeSignIn = async (userEmail: string, userPass: string, preferredPortal?: string) => {
-    setLoading(true);
-    setErrorMsg(null);
-    setSuccessMsg(null);
+    const executeSignIn = async (userEmail: string, userPass: string, preferredPortal?: string) => {
+      setLoading(true);
+      setErrorMsg(null);
+      setSuccessMsg(null);
 
-    const effectivePass = (!userPass || userPass === "123") ? "Password@123" : userPass;
-    const supabase = createClient();
-    try {
-      let { data, error } = await supabase.auth.signInWithPassword({
-        email: userEmail.trim().toLowerCase(),
-        password: effectivePass,
-      });
-
-      // Backward‑compatible fallback for password variant if needed
-      if (error && error.message.toLowerCase().includes("invalid login credentials")) {
-        const altPass = userPass === "Password@123" ? "Password123!" : "Password@123";
-        const retry = await supabase.auth.signInWithPassword({
+      const effectivePass = (!userPass || userPass === "123") ? "Password@123" : userPass;
+      const supabase = createClient();
+      try {
+        let { data, error } = await supabase.auth.signInWithPassword({
           email: userEmail.trim().toLowerCase(),
-          password: altPass,
+          password: effectivePass,
         });
-        if (retry.data?.user) {
-          data = retry.data;
-          error = null;
+
+        // Backward‑compatible fallback for password variant if needed
+        if (error && error.message.toLowerCase().includes("invalid login credentials")) {
+          const altPass = userPass === "Password@123" ? "Password123!" : "Password@123";
+          const retry = await supabase.auth.signInWithPassword({
+            email: userEmail.trim().toLowerCase(),
+            password: altPass,
+          });
+          if (retry.data?.user) {
+            data = retry.data;
+            error = null;
+          }
         }
-      }
 
-      if (error) throw error;
+        if (error) throw error;
 
-      if (data?.user) {
-        setSuccessMsg("Authenticated! Entering portal...");
-        const redirectUrl = preferredPortal || (await getRoleRedirectUrl(data.user));
-        // Delay navigation briefly to let Supabase persist the auth session cookie before full reload
-        setTimeout(() => {
-          // Full reload ensures the next page sees the auth state
-          window.location.href = redirectUrl;
-        }, 2000);
-      } else {
-        throw new Error("No user record returned from authentication service.");
+        if (data?.user) {
+          setSuccessMsg("Authenticated! Entering portal...");
+          const redirectUrl = preferredPortal || (await getRoleRedirectUrl(data.user));
+          // Immediate client navigation to update UI
+          router.push(redirectUrl);
+          router.refresh();
+          // Full reload after a short delay to ensure supabase session is persisted
+          setTimeout(() => {
+            window.location.assign(redirectUrl);
+          }, 3000);
+        } else {
+          throw new Error("No user record returned from authentication service.");
+        }
+      } catch (err: unknown) {
+        setErrorMsg(err instanceof Error ? err.message : "Authentication failed");
+        setLoading(false);
       }
-    } catch (err: unknown) {
-      setErrorMsg(err instanceof Error ? err.message : "Authentication failed");
-      setLoading(false);
-    }
-  };
+    };
 
 
 
@@ -117,8 +119,8 @@ export default function AuthPage({ isSignUp = false }: { isSignUp?: boolean }) {
           router.push(redirectUrl);
           router.refresh();
         setTimeout(() => {
-          window.location.href = redirectUrl;
-        }, 2000);
+            window.location.assign(redirectUrl);
+        }, 3000);
 
           return;
         }
@@ -175,14 +177,14 @@ export default function AuthPage({ isSignUp = false }: { isSignUp?: boolean }) {
         router.push(redirectUrl);
         router.refresh();
         setTimeout(() => {
-          window.location.href = redirectUrl;
-        }, 2000);
+            window.location.assign(redirectUrl);
+        }, 3000);
       } else {
-        router.push("/participants");
-        router.refresh();
-        setTimeout(() => {
-          window.location.href = "/participants";
-        }, 2000);
+          router.push("/participants");
+          router.refresh();
+          setTimeout(() => {
+              window.location.assign("/participants");
+          }, 3000);
       }
     } catch (err: unknown) {
       setErrorMsg(
@@ -199,20 +201,10 @@ export default function AuthPage({ isSignUp = false }: { isSignUp?: boolean }) {
   };
 
   // Determine the correct portal URL for demo accounts based on email prefix
-  const getPreferredPortal = (demoEmail: string): string => {
-    const host = window.location.hostname;
-    const protocol = window.location.protocol;
-    if (demoEmail.includes('judge')) return `${protocol}//${host}:3001`;
-    if (demoEmail.includes('ops')) return `${protocol}//${host}:3003`;
-    if (demoEmail.includes('team')) return `${protocol}//${host}:3002`;
-    // admin (or fallback) runs on the default port (3000)
-    return `${protocol}//${host}:3000`;
-  };
 
-  const handleDemoClick = async (demoEmail: string) => {
-    // Demo accounts use the default password "123" (mapped to "Password@123")
-    await executeSignIn(demoEmail, "123");
-  };
+    const handleDemoClick = async (demoEmail: string) => {
+      await executeSignIn(demoEmail, "123");
+    };
 
   const handleResendOtp = async () => {
     if (resendCooldown > 0 || resendLoading) return;

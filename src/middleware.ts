@@ -78,14 +78,18 @@ export async function middleware(request: NextRequest) {
     if (pathname.startsWith("/admin") || pathname.startsWith("/judge") || pathname.startsWith("/team")) {
       return NextResponse.redirect(new URL("/ops/scanner", request.url));
     }
-  } else if (pathname === "/") {
-    // Default Port 3000 Role Routing
+  } else if (pathname === "/" || pathname === "/login") {
+    // Default Port 3000 Role Routing + redirect authenticated users away from /login
     const {
       data: { user },
     } = await supabase.auth.getUser();
 
     if (!user) {
-      return NextResponse.redirect(new URL("/login", request.url));
+      if (pathname === "/") {
+        return NextResponse.redirect(new URL("/login", request.url));
+      }
+      // Already on /login and not authenticated — let them through
+      return response;
     }
 
     const role = (user.user_metadata?.role as string | undefined) || (user.app_metadata?.role as string | undefined);
