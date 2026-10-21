@@ -39,39 +39,18 @@ export default function TeamMobileNav() {
         </button>
       </header>
 
-      {/* Drawer */}
-      <div
-        className={`fixed inset-0 z-50 transform ${open ? "translate-x-0 pointer-events-auto" : "-translate-x-full pointer-events-none"} transition-transform duration-300 ease-in-out md:hidden`}
-        aria-hidden={!open}
-      >
-        {/* Overlay */}
-        <div
-          className="absolute inset-0 bg-black/70 backdrop-blur-sm cursor-pointer"
-          onClick={() => setOpen(false)}
-        />
-        {/* Panel */}
-        <aside className="relative w-72 max-w-[85vw] h-full bg-[#0c0c14] border-r border-border-color overflow-y-auto p-5 custom-scrollbar flex flex-col justify-between shadow-2xl z-10">
-          <div>
-            {/* Header with Title and Close Button */}
-            <div className="flex items-center justify-between pb-4 mb-5 border-b border-border-color">
-              <div className="flex items-center gap-2.5 min-w-0">
-                <Image src="/ivc-gear-logo.png" alt="IVC" width={34} height={34} className="object-contain shrink-0" />
-                <h2 className="font-heading text-base uppercase text-text-primary m-0 tracking-wider truncate">
-                  Team Portal
-                </h2>
-              </div>
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setOpen(false);
-                }}
-                aria-label="Close menu"
-                className="p-2 text-text-secondary hover:text-white rounded-lg hover:bg-surface-color-light/60 transition-colors cursor-pointer shrink-0"
-              >
-                <X size={22} className="text-text-primary" />
-              </button>
-            </div>
+       {/* Drawer */}
+       <div
+         className={`fixed inset-0 z-40 transform ${open ? "translate-x-0" : "-translate-x-full"} transition-transform duration-300 ease-in-out md:hidden`}
+         aria-hidden={!open}
+       >
+         {/* Overlay */}
+         <div className="absolute inset-0 bg-black/50" onClick={() => setOpen(false)} />
+         {/* Panel */}
+         <aside className="relative w-64 h-full bg-[#0c0c14] overflow-y-auto p-6 custom-scrollbar">
+            <button onClick={() => setOpen(false)} aria-label="Close menu" className="absolute top-4 right-4 p-1 z-10" type="button">
+              <X size={24} className="text-text-primary" />
+            </button>
 
             <nav className="flex flex-col gap-2">
             {navItems.map(item => {
@@ -89,7 +68,6 @@ export default function TeamMobileNav() {
               );
             })}
             </nav>
-          </div>
 
           {/* Footer */}
           <div className="mt-8">
