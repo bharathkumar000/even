@@ -3,8 +3,9 @@ import './globals.css'
 import { DataProvider } from '@/components/DataContext'
 
 export const metadata: Metadata = {
-  title: 'Vice Verse Admin',
-  description: 'Central command center for Vice Verse 1.0 2026',
+  title: 'IVC-EVENTRA | Central Hackathon Portal',
+  description: 'Enterprise Event Management & Realtime Jury Evaluation Portal',
+  manifest: '/manifest.json',
   icons: {
     icon: [
       { url: '/favicon.png', type: 'image/png' },
