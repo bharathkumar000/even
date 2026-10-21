@@ -32,7 +32,6 @@ import {
   updateSpocTeams,
   uploadSpocAvatar,
 } from "@/app/actions/admin-spoc";
-import CustomSelect from "@/components/ui/CustomSelect";
 
 interface SpocClientProps {
   initialSpocs: SpocItem[];
@@ -727,20 +726,18 @@ export default function SpocClientView({
                 </div>
 
                 {/* Track Filter */}
-                <CustomSelect
+                <select
                   value={trackFilter}
-                  onChange={(val) => setTrackFilter(val)}
-                  options={[
-                    { value: "all", label: "All Tracks" },
-                    ...tracks.map((tr) => ({
-                      value: tr,
-                      label: `Track: ${tr}`,
-                    })),
-                  ]}
-                  colorVariant="yellow"
-                  size="sm"
-                  containerClassName="w-full sm:w-48 shrink-0"
-                />
+                  onChange={(e) => setTrackFilter(e.target.value)}
+                  className="bg-surface-color border border-border-color rounded text-xs text-text-primary px-3 py-2 font-mono outline-none focus:border-accent-primary uppercase"
+                >
+                  <option value="all">All Tracks</option>
+                  {tracks.map((tr) => (
+                    <option key={tr} value={tr}>
+                      Track: {tr}
+                    </option>
+                  ))}
+                </select>
 
                 {/* Show All Toggle */}
                 <label className="flex items-center gap-2 cursor-pointer select-none text-xs text-text-secondary hover:text-text-primary shrink-0 px-2 py-1 bg-surface-color/40 border border-border-color rounded">

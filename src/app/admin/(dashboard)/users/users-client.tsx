@@ -40,7 +40,6 @@ import {
   bulkImportUsers,
   BulkImportUserRecord,
 } from "@/app/actions/admin-users";
-import CustomSelect from "@/components/ui/CustomSelect";
 
 interface UsersClientProps {
   initialUsers: UserProfileItem[];
@@ -908,23 +907,21 @@ export default function UsersClientView({
                       <td className="p-4 text-right">
                         <div className="inline-flex items-center gap-2">
                           {/* Role Select Dropdown */}
-                          <CustomSelect
+                          <select
                             disabled={isPending || isSelf}
                             value={user.role}
-                            onChange={(val) =>
-                              handleRoleChange(user.id, val as AllowedUserRole)
+                            onChange={(e) =>
+                              handleRoleChange(user.id, e.target.value as AllowedUserRole)
                             }
-                            options={[
-                              { value: "participant", label: "Participant" },
-                              { value: "leader", label: "Team Leader" },
-                              { value: "judge", label: "Judge" },
-                              { value: "staff", label: "Staff / Club Member" },
-                              { value: "admin", label: "Admin" },
-                            ]}
-                            size="sm"
-                            containerClassName="w-36 text-left"
+                            className="bg-surface-color border border-border-color hover:border-accent-primary py-1 px-2 text-[11px] font-tech text-text-primary uppercase tracking-wider outline-none focus:border-accent-secondary disabled:opacity-40 cursor-pointer"
                             title={isSelf ? "You cannot modify your own role" : "Elevate or alter role"}
-                          />
+                          >
+                            <option value="participant">Participant</option>
+                            <option value="leader">Team Leader</option>
+                            <option value="judge">Judge</option>
+                            <option value="staff">Staff / Club Member</option>
+                            <option value="admin">Admin</option>
+                          </select>
 
                           {/* Delete Button */}
                           <button
@@ -1029,24 +1026,22 @@ export default function UsersClientView({
                 <label className="block text-xs uppercase text-text-secondary font-bold">
                   Initial Role Assignment
                 </label>
-                <CustomSelect
+                <select
                   value={newUserData.role}
-                  onChange={(val) =>
+                  onChange={(e) =>
                     setNewUserData((p) => ({
                       ...p,
-                      role: val as AllowedUserRole,
+                      role: e.target.value as AllowedUserRole,
                     }))
                   }
-                  options={[
-                    { value: "participant", label: "Participant" },
-                    { value: "leader", label: "Team Leader" },
-                    { value: "judge", label: "Judge" },
-                    { value: "staff", label: "Staff / Club Member" },
-                    { value: "admin", label: "Administrator" },
-                  ]}
-                  colorVariant="pink"
-                  size="md"
-                />
+                  className="w-full bg-surface-color border border-border-color py-2 px-3 text-xs text-text-primary focus:border-accent-secondary outline-none uppercase font-bold"
+                >
+                  <option value="participant">Participant</option>
+                  <option value="leader">Team Leader</option>
+                  <option value="judge">Judge</option>
+                  <option value="staff">Staff / Club Member</option>
+                  <option value="admin">Administrator</option>
+                </select>
               </div>
 
               <div className="pt-2 flex items-center justify-end gap-3">
@@ -1366,23 +1361,21 @@ export default function UsersClientView({
                     <label className="text-[10px] text-text-secondary uppercase font-bold block mb-1">
                       Assigned Role (Admin Locked)
                     </label>
-                    <CustomSelect
+                    <select
                       value={editRowData.role}
-                      onChange={(val) =>
+                      onChange={(e) =>
                         setEditRowData({
                           ...editRowData,
-                          role: val as AllowedUserRole,
+                          role: e.target.value as AllowedUserRole,
                         })
                       }
-                      options={[
-                        { value: "participant", label: "Participant" },
-                        { value: "leader", label: "Team Leader" },
-                        { value: "judge", label: "Judge" },
-                        { value: "staff", label: "Staff / Club Member" },
-                      ]}
-                      colorVariant="cyan"
-                      size="md"
-                    />
+                      className="w-full bg-surface-color-light border border-border-color p-2 rounded text-xs text-text-primary outline-none focus:border-accent-tertiary font-mono uppercase"
+                    >
+                      <option value="participant">Participant</option>
+                      <option value="leader">Team Leader</option>
+                      <option value="judge">Judge</option>
+                      <option value="staff">Staff / Club Member</option>
+                    </select>
                   </div>
 
                   <div>

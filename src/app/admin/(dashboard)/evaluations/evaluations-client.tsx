@@ -3,7 +3,6 @@
 import { useState } from "react";
 import { Filter, AlertTriangle, ShieldCheck, CheckCircle2 } from "lucide-react";
 import { overrideEvaluationStatus } from "@/app/actions/admin-evaluations";
-import CustomSelect from "@/components/ui/CustomSelect";
 
 export interface EvaluationItem {
   id: string;
@@ -119,35 +118,30 @@ export default function EvaluationsClientView({
             <span className="uppercase font-bold">Filters:</span>
           </div>
 
-          <div className="w-44 shrink-0">
-            <CustomSelect
-              value={roundFilter}
-              onChange={setRoundFilter}
-              options={[
-                { value: "all", label: "ALL ROUNDS" },
-                ...rounds.map((r) => ({
-                  value: r.id,
-                  label: r.title,
-                })),
-              ]}
-              size="sm"
-            />
-          </div>
+          <select
+            value={roundFilter}
+            onChange={(e) => setRoundFilter(e.target.value)}
+            className="bg-surface-color border border-border-color text-text-primary text-xs font-tech px-3 py-1.5 focus:border-accent-secondary outline-none uppercase font-semibold"
+          >
+            <option value="all">ALL ROUNDS</option>
+            {rounds.map((r) => (
+              <option key={r.id} value={r.id}>
+                {r.title}
+              </option>
+            ))}
+          </select>
 
-          <div className="w-44 shrink-0">
-            <CustomSelect
-              value={statusFilter}
-              onChange={setStatusFilter}
-              options={[
-                { value: "all", label: "ALL STATUSES" },
-                { value: "draft", label: "DRAFT", badge: "DRAFT", badgeColor: "bg-surface-color-light text-text-secondary border-border-color" },
-                { value: "submitted", label: "SUBMITTED", badge: "SUBMIT", badgeColor: "bg-status-success/20 text-status-success border-status-success/40" },
-                { value: "locked", label: "LOCKED", badge: "LOCK", badgeColor: "bg-red-500/20 text-red-400 border-red-500/40" },
-                { value: "reopened", label: "REOPENED", badge: "REOPEN", badgeColor: "bg-accent-tertiary/20 text-accent-tertiary border-accent-tertiary/40" },
-              ]}
-              size="sm"
-            />
-          </div>
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            className="bg-surface-color border border-border-color text-text-primary text-xs font-tech px-3 py-1.5 focus:border-accent-secondary outline-none uppercase font-semibold"
+          >
+            <option value="all">ALL STATUSES</option>
+            <option value="draft">DRAFT</option>
+            <option value="submitted">SUBMITTED</option>
+            <option value="locked">LOCKED</option>
+            <option value="reopened">REOPENED</option>
+          </select>
         </div>
 
         <input
@@ -236,22 +230,20 @@ export default function EvaluationsClientView({
                 <label className="block text-xs uppercase text-text-secondary mb-1">
                   Target Status
                 </label>
-                <CustomSelect
+                <select
                   value={targetStatus}
-                  onChange={(val) =>
+                  onChange={(e) =>
                     setTargetStatus(
-                      val as "draft" | "submitted" | "locked" | "reopened"
+                      e.target.value as "draft" | "submitted" | "locked" | "reopened"
                     )
                   }
-                  options={[
-                    { value: "reopened", label: "REOPEN (Allow Judge Edit)" },
-                    { value: "locked", label: "LOCK (Freeze Scoring)" },
-                    { value: "submitted", label: "FORCE SUBMIT" },
-                    { value: "draft", label: "REVERT TO DRAFT" },
-                  ]}
-                  colorVariant="yellow"
-                  size="md"
-                />
+                  className="w-full bg-surface-color border border-border-color p-2 text-text-primary text-sm focus:border-accent-secondary outline-none uppercase font-semibold"
+                >
+                  <option value="reopened">REOPEN (Allow Judge Edit)</option>
+                  <option value="locked">LOCK (Freeze Scoring)</option>
+                  <option value="submitted">FORCE SUBMIT</option>
+                  <option value="draft">REVERT TO DRAFT</option>
+                </select>
               </div>
 
               <div>

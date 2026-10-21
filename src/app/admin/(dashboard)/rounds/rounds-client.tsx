@@ -28,15 +28,6 @@ import {
   deleteCriterion,
   type RoundStatus,
 } from "@/app/actions/admin-rounds";
-import CustomSelect from "@/components/ui/CustomSelect";
-
-const ROUND_STATUS_OPTIONS = [
-  { value: "draft", label: "DRAFT", badge: "DRAFT", badgeColor: "bg-surface-color-light text-text-secondary border-border-color" },
-  { value: "open", label: "OPEN (ACTIVE)", badge: "ACTIVE", badgeColor: "bg-accent-secondary/20 text-accent-secondary border-accent-secondary/40" },
-  { value: "closed", label: "CLOSED", badge: "CLOSED", badgeColor: "bg-amber-500/20 text-amber-400 border-amber-500/40" },
-  { value: "locked", label: "LOCKED", badge: "LOCKED", badgeColor: "bg-red-500/20 text-red-400 border-red-500/40" },
-  { value: "reopened", label: "REOPENED", badge: "REOPEN", badgeColor: "bg-cyan-500/20 text-cyan-400 border-cyan-500/40" },
-];
 
 export interface AdminRoundItem {
   id: string;
@@ -545,17 +536,20 @@ export default function RoundsClientView({
                       </div>
 
                       {/* Status Dropdown */}
-                      <div className="w-36 shrink-0" onClick={(e) => e.stopPropagation()}>
-                        <CustomSelect
-                          value={round.status}
-                          onChange={(val) =>
-                            handleStatusChange(round.id, val as RoundStatus)
-                          }
-                          options={ROUND_STATUS_OPTIONS}
-                          size="sm"
-                          className="text-[10px] py-0.5 px-2 font-mono"
-                        />
-                      </div>
+                      <select
+                        value={round.status}
+                        onClick={(e) => e.stopPropagation()}
+                        onChange={(e) =>
+                          handleStatusChange(round.id, e.target.value as RoundStatus)
+                        }
+                        className={`text-[10px] font-mono uppercase font-bold px-2 py-1 border rounded outline-none cursor-pointer bg-surface-color ${statusMeta.border} ${statusMeta.text}`}
+                      >
+                        <option value="draft">DRAFT</option>
+                        <option value="open">OPEN (ACTIVE)</option>
+                        <option value="closed">CLOSED</option>
+                        <option value="locked">LOCKED</option>
+                        <option value="reopened">REOPENED</option>
+                      </select>
                     </div>
 
                     {/* Stats & Actions Row */}
@@ -779,13 +773,17 @@ export default function RoundsClientView({
                   <label className="block text-xs uppercase tracking-wider text-text-secondary mb-1">
                     Progression Status
                   </label>
-                  <CustomSelect
+                  <select
                     value={roundStatus}
-                    onChange={(val) => setRoundStatus(val as RoundStatus)}
-                    options={ROUND_STATUS_OPTIONS}
-                    size="md"
-                    className="bg-surface-color-light"
-                  />
+                    onChange={(e) => setRoundStatus(e.target.value as RoundStatus)}
+                    className="w-full px-3 py-2 bg-surface-color-light border border-border-color rounded text-xs text-text-primary focus:border-accent-secondary outline-none font-mono uppercase"
+                  >
+                    <option value="draft">DRAFT</option>
+                    <option value="open">OPEN (ACTIVE)</option>
+                    <option value="closed">CLOSED</option>
+                    <option value="locked">LOCKED</option>
+                    <option value="reopened">REOPENED</option>
+                  </select>
                 </div>
               </div>
 

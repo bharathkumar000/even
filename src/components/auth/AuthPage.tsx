@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { getRoleRedirectUrl } from "@/lib/auth/redirect";
-import { signInToPortal } from "@/app/actions/portal-login";
 import {
   Lock,
   Mail,
@@ -20,7 +19,7 @@ import {
 
 export default function AuthPage({ isSignUp = false }: { isSignUp?: boolean }) {
   const router = useRouter();
-  const [username, setUsername] = useState("");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [fullName, setFullName] = useState("");
   const [otp, setOtp] = useState("");
@@ -99,7 +98,7 @@ export default function AuthPage({ isSignUp = false }: { isSignUp?: boolean }) {
 
     try {
       if (isSignUp) {
-        const normalizedEmail = username.includes("@") ? username.trim() : `${username.trim()}@ivc.pulse`;
+        const normalizedEmail = email.includes("@") ? email.trim() : `${email.trim()}@ivc.pulse`;
         const { data, error } = await supabase.auth.signUp({
           email: normalizedEmail,
           password,
@@ -124,20 +123,21 @@ export default function AuthPage({ isSignUp = false }: { isSignUp?: boolean }) {
         }
 
         setStep("otp");
-        setSuccessMsg(`A 6-digit verification code was dispatched to ${username}.`);
+        setSuccessMsg(`A 6-digit verification code was dispatched to ${email}.`);
         setResendCooldown(60);
       } else {
-        const result = await signInToPortal(username, password);
-        if (!result.success) {
-          throw new Error(result.error);
+        // Resolve role aliases or direct emails
+
+        let targetEmail = email.trim();
+        let targetPass = password.trim() || "Password@123";
+
+
+        // Resolve direct email or username
+        if (!targetEmail.includes("@")) {
+          targetEmail = `${targetEmail}@ivc.pulse`;
         }
 
-        setSuccessMsg("Authenticated! Entering portal...");
-        router.push(result.redirectUrl);
-        router.refresh();
-        setTimeout(() => {
-          window.location.href = result.redirectUrl;
-        }, 500);
+        await executeSignIn(targetEmail, targetPass);
       }
     } catch (err: unknown) {
       setErrorMsg(err instanceof Error ? err.message : "Authentication failed");
@@ -158,7 +158,7 @@ export default function AuthPage({ isSignUp = false }: { isSignUp?: boolean }) {
     setErrorMsg(null);
 
     const supabase = createClient();
-    const normalizedEmail = username.includes("@") ? username : `${username}@demo.com`;
+    const normalizedEmail = email.includes("@") ? email : `${email}@demo.com`;
 
     try {
           const { data, error } = await supabase.auth.verifyOtp({
@@ -177,10 +177,10 @@ export default function AuthPage({ isSignUp = false }: { isSignUp?: boolean }) {
           window.location.href = redirectUrl;
         }, 800);
       } else {
-        router.push("/team");
+        router.push("/participants");
         router.refresh();
         setTimeout(() => {
-          window.location.href = "/team";
+          window.location.href = "/participants";
         }, 800);
       }
     } catch (err: unknown) {
@@ -208,7 +208,7 @@ export default function AuthPage({ isSignUp = false }: { isSignUp?: boolean }) {
     setErrorMsg(null);
 
     const supabase = createClient();
-    const normalizedEmail = username.includes("@") ? username : `${username}@demo.com`;
+    const normalizedEmail = email.includes("@") ? email : `${email}@demo.com`;
 
     try {
         const { error } = await supabase.auth.resend({
@@ -218,7 +218,7 @@ export default function AuthPage({ isSignUp = false }: { isSignUp?: boolean }) {
 
       if (error) throw error;
 
-        setSuccessMsg(`A new 6-digit verification code has been dispatched to ${username}`);
+      setSuccessMsg(`A new 6-digit verification code has been dispatched to ${email}`);
       setResendCooldown(60);
     } catch (err: unknown) {
       setErrorMsg(err instanceof Error ? err.message : "Failed to resend code");
@@ -245,7 +245,7 @@ export default function AuthPage({ isSignUp = false }: { isSignUp?: boolean }) {
               Enter the 6-digit verification code sent to your email
             </p>
             <p className="font-sans text-xs text-accent-tertiary font-medium">
-               {username}
+              {email}
             </p>
           </div>
         ) : (
@@ -378,16 +378,16 @@ export default function AuthPage({ isSignUp = false }: { isSignUp?: boolean }) {
 
             <div className="space-y-1">
               <label className="block text-xs uppercase text-text-secondary font-tech font-bold tracking-wider">
-                  Username
+                 Username or Email
               </label>
               <div className="relative">
                 <Mail size={15} className="absolute left-3 top-3 text-text-secondary" />
                 <input
                    type="text"
                   required
-                   value={username}
-                  onChange={(e) => setUsername(e.target.value)}
-                    placeholder="username"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                   placeholder="username or email"
                   className="w-full bg-surface-color border border-border-color p-2.5 pl-9 text-text-primary text-xs font-sans tracking-normal focus:border-accent-secondary outline-none"
                 />
               </div>

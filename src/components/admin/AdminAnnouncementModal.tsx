@@ -4,8 +4,6 @@ import { useState } from "react";
 import { Radio, Send, Plus, CheckCircle2, AlertCircle } from "lucide-react";
 import { createAnnouncement } from "@/app/actions/announcements";
 
-import CustomSelect from "@/components/ui/CustomSelect";
-
 export default function AdminAnnouncementModal() {
   const [isOpen, setIsOpen] = useState(false);
   const [title, setTitle] = useState("");
@@ -111,34 +109,31 @@ export default function AdminAnnouncementModal() {
                   <label className="block text-[11px] uppercase text-text-secondary font-bold mb-1">
                     Priority Level
                   </label>
-                  <CustomSelect
+                  <select
                     value={priority}
-                    onChange={(val) => setPriority(val as "normal" | "important" | "urgent")}
-                    size="sm"
-                    variant={priority === "urgent" ? "pink" : priority === "important" ? "yellow" : "cyan"}
-                    options={[
-                      { value: "normal", label: "Normal (Info)", badge: "INFO", badgeColor: "bg-accent-tertiary/15 text-accent-tertiary border-accent-tertiary/40" },
-                      { value: "important", label: "Important (Warning)", badge: "WARN", badgeColor: "bg-accent-primary/15 text-accent-primary border-accent-primary/40" },
-                      { value: "urgent", label: "Urgent (Critical)", badge: "CRIT", badgeColor: "bg-accent-secondary/15 text-accent-secondary border-accent-secondary/40" },
-                    ]}
-                  />
+                    onChange={(e: any) => setPriority(e.target.value)}
+                    className="w-full bg-surface-color border border-border-color p-2.5 text-text-primary text-xs focus:border-accent-secondary outline-none"
+                  >
+                    <option value="normal">Normal (Info)</option>
+                    <option value="important">Important (Warning)</option>
+                    <option value="urgent">Urgent (Critical)</option>
+                  </select>
                 </div>
 
                 <div>
                   <label className="block text-[11px] uppercase text-text-secondary font-bold mb-1">
                     Target Audience
                   </label>
-                  <CustomSelect
+                  <select
                     value={targetAudience}
-                    onChange={(val) => setTargetAudience(val as "all" | "teams" | "judges" | "ops")}
-                    size="sm"
-                    options={[
-                      { value: "all", label: "All Portals (Global)" },
-                      { value: "teams", label: "Teams Only" },
-                      { value: "judges", label: "Judges Only" },
-                      { value: "ops", label: "Operations Desks Only" },
-                    ]}
-                  />
+                    onChange={(e: any) => setTargetAudience(e.target.value)}
+                    className="w-full bg-surface-color border border-border-color p-2.5 text-text-primary text-xs focus:border-accent-secondary outline-none"
+                  >
+                    <option value="all">All Portals (Global)</option>
+                    <option value="teams">Teams Only</option>
+                    <option value="judges">Judges Only</option>
+                    <option value="ops">Operations Desks Only</option>
+                  </select>
                 </div>
               </div>
 
