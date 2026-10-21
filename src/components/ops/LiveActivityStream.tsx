@@ -251,10 +251,10 @@ export default function LiveActivityStream({
                         <Clock size={12} className="text-accent-tertiary" />
                         <span>{timeStr}</span>
                       </div>
-                      <div className="text-[10px] text-text-secondary mt-0.5 flex items-center gap-1 font-mono">
-                        <span>{dateStr}</span>
-                        <span className="text-accent-tertiary font-bold">({relativeStr})</span>
-                      </div>
+          <div className="text-[10px] text-text-secondary mt-0.5 flex items-center gap-1 font-mono">
+            <span>{dateStr}</span>
+            {relativeStr && <span className="text-accent-tertiary font-bold">({relativeStr})</span>}
+          </div>
                     </td>
 
                     {/* Club Member / Scanner */}
