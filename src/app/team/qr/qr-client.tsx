@@ -259,13 +259,14 @@ export default function TeamQrClientView({
           >
             {qrUrl ? (
               /* eslint-disable-next-line @next/next/no-img-element */
-                <Image
-                  src={qrUrl}
-                  alt="Team Official QR Code"
-                  width={224}
-                  height={224}
-                  className="w-56 h-56 object-contain"
-                />
+<Image
+                      key={qrUrl}
+                      src={qrUrl}
+                      alt="Team Official QR Code"
+                      width={224}
+                      height={224}
+                      className="w-56 h-56 object-contain"
+                    />
             ) : (
               <div className="w-56 h-56 flex items-center justify-center text-black text-xs">
                 Generating QR...
@@ -281,9 +282,9 @@ export default function TeamQrClientView({
 
         {/* Security & Verification Metadata */}
         <div className="space-y-1 text-xs text-text-secondary">
-          <p className="font-mono text-[11px] text-text-primary m-0">
-            UUID: {teamId}
-          </p>
+            <p className="font-mono text-[11px] text-text-primary m-0">
+              Team ID: {teamId} | Team Name: {teamName}
+            </p>
           <p className="text-[11px] text-text-secondary m-0">
             Dynamic QR automatically updates upon each scan to prevent fraud. Screenshots of previous states are void.
           </p>
