@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   FileText,
   Github,
@@ -11,10 +11,13 @@ import {
   Save,
   Send,
   ArrowLeft,
+  RotateCcw,
+  Sparkles,
 } from "lucide-react";
 import Link from "next/link";
 import { saveOrSubmitEvaluation } from "@/app/actions/judge-evaluation";
 import ScoringSlider from "@/components/judge/ScoringSlider";
+import PitchTimer from "@/components/judge/PitchTimer";
 
 export interface TeamDetail {
   id: string;
@@ -93,8 +96,60 @@ export default function EvaluateClientView({
   const [loading, setLoading] = useState(false);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [draftRestoredMsg, setDraftRestoredMsg] = useState<string | null>(null);
 
   const isLocked = existingEvaluation?.status === "locked";
+  const draftKey = `ivc_draft_${activeRound?.id || "noround"}_${teamId}`;
+
+  // Check localStorage for unsaved drafts on mount if not already submitted
+  useEffect(() => {
+    if (typeof window === "undefined" || isLocked || existingEvaluation?.status === "submitted") return;
+    try {
+      const saved = localStorage.getItem(draftKey);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed.scores && Object.keys(parsed.scores).length > 0) {
+          setScores(parsed.scores);
+          if (parsed.feedback) setFeedback(parsed.feedback);
+          const timeAgo = Math.round((Date.now() - (parsed.savedAt || Date.now())) / 60000);
+          setDraftRestoredMsg(`Recovered unsaved draft (${timeAgo < 1 ? "just now" : `${timeAgo}m ago`})`);
+        }
+      }
+    } catch {
+      // LocalStorage error fallback
+    }
+  }, [draftKey, isLocked, existingEvaluation?.status]);
+
+  // Auto-save in-progress draft to localStorage
+  useEffect(() => {
+    if (typeof window === "undefined" || isLocked || existingEvaluation?.status === "submitted") return;
+    try {
+      const hasScores = Object.values(scores).some((val) => val > 0);
+      if (hasScores || feedback.trim().length > 0) {
+        localStorage.setItem(
+          draftKey,
+          JSON.stringify({
+            scores,
+            feedback,
+            savedAt: Date.now(),
+          })
+        );
+      }
+    } catch {
+      // Quota exceeded or private browsing
+    }
+  }, [scores, feedback, draftKey, isLocked, existingEvaluation?.status]);
+
+  const clearLocalDraft = () => {
+    try {
+      localStorage.removeItem(draftKey);
+      setScores(initialScores);
+      setFeedback(existingEvaluation?.feedback || "");
+      setDraftRestoredMsg(null);
+    } catch {
+      // ignore
+    }
+  };
 
   const totalScore = criteria.reduce((sum, c) => sum + (scores[c.id] || 0), 0);
   const maxPossibleScore = criteria.reduce((sum, c) => sum + (c.max_marks || 0), 0);
@@ -131,9 +186,16 @@ export default function EvaluateClientView({
         is_draft: isDraft,
       });
 
+      if (!isDraft) {
+        try {
+          localStorage.removeItem(draftKey);
+          setDraftRestoredMsg(null);
+        } catch {}
+      }
+
       setSuccessMsg(
         isDraft
-          ? "Draft saved successfully."
+          ? "Draft saved successfully to cloud."
           : "Evaluation officially submitted and recorded!"
       );
     } catch (err: unknown) {
@@ -181,6 +243,22 @@ export default function EvaluateClientView({
       </div>
 
       {/* Notifications */}
+      {draftRestoredMsg && (
+        <div className="p-3 bg-accent-secondary/15 border border-accent-secondary text-accent-secondary font-tech text-xs flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <Sparkles size={16} />
+            <span>{draftRestoredMsg}</span>
+          </div>
+          <button
+            onClick={clearLocalDraft}
+            className="flex items-center gap-1 text-[11px] uppercase underline hover:text-text-primary transition-colors"
+          >
+            <RotateCcw size={12} />
+            <span>Discard Draft</span>
+          </button>
+        </div>
+      )}
+
       {successMsg && (
         <div className="p-4 bg-status-success/15 border border-status-success text-status-success font-tech text-xs flex items-center gap-2">
           <CheckCircle2 size={18} />
@@ -193,6 +271,9 @@ export default function EvaluateClientView({
           <span>{errorMsg}</span>
         </div>
       )}
+
+      {/* Presentation & Q&A Pitch Timekeeper */}
+      <PitchTimer initialSeconds={300} />
 
       {/* Submission Assets Panel */}
       <div className="glass-panel p-6 border border-border-color space-y-6">
