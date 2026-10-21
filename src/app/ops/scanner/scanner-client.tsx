@@ -216,6 +216,19 @@ export default function ScannerClientView() {
 
   const handleDetectedCode = async (rawCode: string) => {
     let teamId = rawCode.trim();
+
+    // If the scanned text is a URL (legacy Website 1 QR codes), extract teamId
+    try {
+      const url = new URL(teamId);
+      const teamIdParam = url.searchParams.get("teamId");
+      if (teamIdParam) {
+        teamId = teamIdParam;
+      }
+    } catch {
+      // Not a URL – use as-is
+    }
+
+    // If it's JSON, parse it
     if (teamId.startsWith("{")) {
       try {
         const parsed = JSON.parse(teamId);

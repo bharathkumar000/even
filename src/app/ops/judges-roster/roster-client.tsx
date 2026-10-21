@@ -3,6 +3,7 @@
 import React, { useState, useMemo } from "react";
 import { Search, Gavel, Users, Shield, CheckCircle2, ChevronRight, Layers, Mail } from "lucide-react";
 import { JudgeAssignmentsData, JudgeOption, TeamOption } from "@/app/actions/admin-assignments";
+import CustomSelect from "@/components/ui/CustomSelect";
 
 interface Props {
   initialData: JudgeAssignmentsData;
@@ -194,18 +195,20 @@ export default function ClubJudgesRosterClient({ initialData }: Props) {
                 </div>
 
                 {/* Track Filter */}
-                <select
+                <CustomSelect
                   value={trackFilter}
-                  onChange={(e) => setTrackFilter(e.target.value)}
-                  className="bg-surface-color border border-border-color rounded text-xs text-text-primary px-3 py-1.5 font-mono outline-none focus:border-accent-tertiary uppercase cursor-pointer"
-                >
-                  <option value="all">All Tracks</option>
-                  {tracks.map((tr) => (
-                    <option key={tr} value={tr}>
-                      {tr}
-                    </option>
-                  ))}
-                </select>
+                  onChange={(val) => setTrackFilter(val)}
+                  options={[
+                    { value: "all", label: "All Tracks" },
+                    ...tracks.map((tr) => ({
+                      value: tr,
+                      label: tr,
+                    })),
+                  ]}
+                  colorVariant="cyan"
+                  size="sm"
+                  containerClassName="w-full sm:w-44 shrink-0"
+                />
               </div>
 
               {/* Allotted Teams Header */}

@@ -53,10 +53,14 @@ function parseCsv(csv: string): Record<string, string>[] {
   return rows;
 }
 
-/** Fetch the raw CSV data from the Google Sheet. */
+/** Cache TTL: 3 seconds to avoid spamming Google during a single request while keeping data fresh. */
+const CACHE_TTL_MS = 3000;
+let lastFetchTime = 0;
+
+/** Fetch the raw CSV data from the Google Sheet without stale HTTP caching. */
 async function fetchCsv(): Promise<string> {
   const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=csv`;
-  const res = await fetch(url);
+  const res = await fetch(url, { cache: "no-store" });
   if (!res.ok) {
     console.error("Failed to fetch Google Sheet CSV", res.status);
     throw new Error(`Unable to fetch sheet CSV (status ${res.status})`);
@@ -64,11 +68,15 @@ async function fetchCsv(): Promise<string> {
   return await res.text();
 }
 
-/** Retrieve all team registration rows, cached after the first successful fetch. */
-export async function fetchTeamRegistrations(): Promise<Record<string, string>[]> {
-  if (cachedRows) return cachedRows;
+/** Retrieve all team registration rows, auto-expiring after 3 seconds. */
+export async function fetchTeamRegistrations(forceRefresh = false): Promise<Record<string, string>[]> {
+  const now = Date.now();
+  if (!forceRefresh && cachedRows && now - lastFetchTime < CACHE_TTL_MS) {
+    return cachedRows;
+  }
   const csv = await fetchCsv();
   cachedRows = parseCsv(csv);
+  lastFetchTime = now;
   return cachedRows;
 }
 

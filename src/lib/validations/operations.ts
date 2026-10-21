@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const ActionTypeEnum = z.enum(["registration", "goodies", "lunch", "snacks"]);
+export const ActionTypeEnum = z.enum(["registration", "goodies", "lunch", "snacks", "feedback"]);
 
 export const ScanActionSchema = z.object({
   team_id: z.string().uuid("Invalid Team ID"),

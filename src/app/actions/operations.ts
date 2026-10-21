@@ -217,15 +217,30 @@ export async function fetchTeamMembersForScan(teamId: string) {
     throw new Error("A valid team identifier is required");
   }
 
-  // 1. Fetch team details
-  const { data: team, error: teamError } = await supabaseAdmin
+  // 1. Fetch team details – try by id first, then by code (legacy QR codes use team code)
+  const { data: teamDataInitial, error: teamError } = await supabaseAdmin
     .from("teams")
     .select("id, name, track, leader_name, code, qr_token, last_scanned_at")
     .eq("id", teamId)
     .maybeSingle();
 
-  if (teamError || !team) {
-    throw new Error(`Team not found: ${teamError?.message || "Invalid team ID"}`);
+  let teamData = teamDataInitial;
+
+  if (teamError || !teamData) {
+    // Fallback: look up by human-readable team code
+    const { data: teamByCode, error: codeError } = await supabaseAdmin
+      .from("teams")
+      .select("id, name, track, leader_name, code, qr_token, last_scanned_at")
+      .eq("code", teamId)
+      .maybeSingle();
+
+    if (codeError || !teamByCode) {
+      throw new Error(
+        `Team not found: ${teamError?.message || "Invalid team ID or team code"}`
+      );
+    }
+    // Use the code-matched result for downstream queries
+    teamData = teamByCode;
   }
 
   // 2. Fetch team participants/members with profiles join
@@ -241,7 +256,7 @@ export async function fetchTeamMembersForScan(teamId: string) {
         email
       )
     `)
-    .eq("team_id", teamId);
+    .eq("team_id", teamData.id);
 
   if (membersError) {
     console.warn("Notice: Falling back to direct team_members query:", membersError.message);
@@ -268,7 +283,7 @@ export async function fetchTeamMembersForScan(teamId: string) {
   const { data: rawLogs, error: logsError } = await supabaseAdmin
     .from("event_activity_logs")
     .select("id, participant_id, action_type, created_at, scanned_by")
-    .eq("team_id", teamId);
+    .eq("team_id", teamData.id);
 
   if (logsError) {
     console.warn("Activity logs query notice:", logsError.message);
@@ -308,7 +323,7 @@ export async function fetchTeamMembersForScan(teamId: string) {
   }));
 
   return {
-    team,
+    team: teamData,
     members: members || [],
     activityLogs: enrichedLogs,
   };
@@ -425,6 +440,11 @@ export async function getTeamScanStatus(teamId: string) {
     .eq("id", teamId)
     .maybeSingle();
 
+  const { data: members } = await supabaseAdmin
+    .from("team_members")
+    .select("user_id")
+    .eq("team_id", teamId);
+
   const { data: logs } = await supabaseAdmin
     .from("event_activity_logs")
     .select("id, action_type, created_at, scanned_by, participant_id")
@@ -449,10 +469,23 @@ export async function getTeamScanStatus(teamId: string) {
     id: l.id,
     action_type: l.action_type,
     created_at: l.created_at,
+    participant_id: l.participant_id,
     scanner_name: l.scanned_by ? scannerMap[l.scanned_by] || "Club Member" : "Operations Desk",
   }));
 
   const claimedActions = Array.from(new Set((logs || []).map((l) => l.action_type)));
+
+  // Count unique participants who completed each action
+  const actionMemberCounts: Record<string, number> = {};
+  for (const actionType of claimedActions) {
+    const uniqueParticipants = new Set(
+      (logs || [])
+        .filter((l) => l.action_type === actionType)
+        .map((l) => l.participant_id)
+        .filter(Boolean)
+    );
+    actionMemberCounts[actionType] = uniqueParticipants.size;
+  }
 
   // Generate dynamic token based on claims count and timestamp
   const dynamicToken =
@@ -464,5 +497,7 @@ export async function getTeamScanStatus(teamId: string) {
     logs: enriched,
     lastUpdated: team?.last_scanned_at || new Date().toISOString(),
     qrToken: dynamicToken,
+    actionMemberCounts,
+    totalMembers: members ? members.length : 0,
   };
 }

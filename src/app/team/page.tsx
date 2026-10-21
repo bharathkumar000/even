@@ -483,7 +483,7 @@ export default async function TeamDashboardPage() {
             </div>
           </Link>
 
-          {/* Action 2: Show QR Code */}
+          {/* Action 2: Show QR Code (Team QR Pass) */}
           <Link
             href="/team/qr"
             className="group glass-panel p-4 border border-border-color hover:border-accent-tertiary transition-all flex items-center justify-between"
@@ -506,6 +506,31 @@ export default async function TeamDashboardPage() {
                 Pass
               </span>
               <ArrowRight size={16} className="text-text-secondary group-hover:text-accent-tertiary group-hover:translate-x-1 transition-all" />
+            </div>
+          </Link>
+          {/* Action 3: Show Check-In QR */}
+          <Link
+            href="/team/checkin"
+            className="group glass-panel p-4 border border-border-color hover:border-accent-primary transition-all flex items-center justify-between"
+          >
+            <div className="flex items-center gap-3.5">
+              <div className="p-3 bg-accent-primary/10 border border-accent-primary/40 text-accent-primary rounded group-hover:scale-105 transition-transform">
+                <QrCode size={22} />
+              </div>
+              <div>
+                <p className="font-heading text-base text-text-primary uppercase m-0 group-hover:text-accent-primary transition-colors">
+                  Check‑In QR Badge
+                </p>
+                <p className="text-xs text-text-secondary m-0 mt-0.5">
+                  View your official check‑in QR for event entry
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] px-2 py-0.5 bg-surface-color border border-border-color text-text-secondary font-bold uppercase">
+                Check‑In
+              </span>
+              <ArrowRight size={16} className="text-text-secondary group-hover:text-accent-primary group-hover:translate-x-1 transition-all" />
             </div>
           </Link>
 

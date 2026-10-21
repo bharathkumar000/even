@@ -33,16 +33,6 @@ export default function GlobalError({
           <p className="font-tech text-xs text-text-secondary mt-2 max-w-sm mx-auto">
             A critical anomaly occurred during execution. Safe-mode protocols have contained the error.
           </p>
-          {error.message && (
-            <div className="p-3 bg-status-error/10 border border-status-error/30 text-left my-2 rounded text-xs font-mono text-status-error break-words">
-              <strong>Cause:</strong> {error.message}
-            </div>
-          )}
-          {error.digest && (
-            <p className="font-mono text-[10px] text-text-secondary/60 mt-1">
-              Error Hash: {error.digest}
-            </p>
-          )}
         </div>
 
         <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-4">

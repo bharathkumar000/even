@@ -1,6 +1,7 @@
 "use client";
 
 import React, { createContext, useState, useEffect, ReactNode } from 'react';
+import { createClient } from '@/lib/supabase/client';
 
 // Define the shape of our data
 export type Team = {
@@ -72,6 +73,79 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
     const savedSchedule = localStorage.getItem('ideathon_schedule_v3');
     if (savedSchedule) setSchedule(JSON.parse(savedSchedule));
   }, []);
+
+  // Load data from Supabase after client init
+  useEffect(() => {
+    if (!isClient) return;
+    const supabase = createClient();
+    // Fetch teams
+    const fetchTeams = async () => {
+      const { data: teamsRes, error: teamsErr } = await supabase
+        .from('teams')
+        .select('id, name, track, leader_name')
+        .order('name', { ascending: true });
+      if (teamsErr) {
+        console.error('Failed to load teams from Supabase:', teamsErr);
+        return;
+      }
+      // Initialize map
+      const teamMap = new Map<string, any>();
+      (teamsRes || []).forEach((t: any) => {
+        teamMap.set(t.id, {
+          id: t.id,
+          name: t.name,
+          theme: '',
+          members: [],
+          judgeId: null,
+          disqualified: false,
+          disqualifyReason: '',
+          leadName: t.leader_name,
+          email: '',
+          college: '',
+          track: t.track,
+        });
+      });
+      // Fetch members for each team
+      const { data: membersRes, error: membersErr } = await supabase
+        .from('team_members')
+        .select('team_id, name, email')
+        .order('team_id', { ascending: true });
+      if (!membersErr && membersRes) {
+        (membersRes as any[]).forEach((m) => {
+          const team = teamMap.get(m.team_id);
+          if (team) {
+            const memberName = m.name?.trim() || m.email?.split('@')[0] || '';
+            if (memberName) team.members.push(memberName);
+          }
+        });
+      }
+      setTeams(Array.from(teamMap.values()));
+    };
+    // Fetch judges (profiles with role 'judge')
+    const fetchJudges = async () => {
+      const { data: profilesRes, error: profilesErr } = await supabase
+        .from('profiles')
+        .select('id, full_name, email')
+        .eq('role', 'judge');
+      if (profilesErr) {
+        console.error('Failed to load judges from Supabase:', profilesErr);
+        return;
+      }
+      const judgesList = (profilesRes || []).map((p: any) => ({
+        id: p.id,
+        name: p.full_name || '',
+        email: p.email || '',
+        initials: p.full_name?.split(' ').map((n: string) => n[0]).join('').substring(0, 2).toUpperCase() || 'JA',
+        specialization: '',
+        theme: `var(--accent-${['primary', 'secondary', 'tertiary'][Math.floor(Math.random() * 3)]})`,
+        expertise: undefined,
+      }));
+      setJudges(judgesList);
+    };
+    // Execute fetches
+    fetchTeams();
+    fetchJudges();
+  }, [isClient]);
 
   useEffect(() => {
     if (isClient) localStorage.setItem('ideathon_teams_v2', JSON.stringify(teams));

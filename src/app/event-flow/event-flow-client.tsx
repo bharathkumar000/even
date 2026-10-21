@@ -5,6 +5,7 @@ import { createPortal } from 'react-dom';
 import { Clock, MapPin, Edit3, Plus, Trash2, X } from 'lucide-react';
 import { DataContext, ScheduleItem } from '@/components/DataContext';
 import SignOutButton from '@/components/SignOutButton';
+import CustomSelect from '@/components/ui/CustomSelect';
 
 export default function EventFlow() {
   const { schedule, addScheduleItem, editScheduleItem, deleteScheduleItem } = useContext(DataContext);
@@ -135,11 +136,17 @@ export default function EventFlow() {
               </div>
               <div className="flex flex-col gap-2">
                 <label className="text-[0.9rem] text-accent-primary uppercase font-tech font-bold tracking-[2px]">Status</label>
-                <select value={formData.status} onChange={e => setFormData({...formData, status: e.target.value})} className="bg-[rgba(13,13,20,0.7)] border border-border-color text-white p-3 rounded outline-none focus:border-accent-primary transition-colors font-sans tracking-normal">
-                  <option value="upcoming">Upcoming</option>
-                  <option value="active">Active</option>
-                  <option value="completed">Completed</option>
-                </select>
+                <CustomSelect
+                  value={formData.status}
+                  onChange={(val) => setFormData({ ...formData, status: val })}
+                  options={[
+                    { value: "upcoming", label: "Upcoming" },
+                    { value: "active", label: "Active" },
+                    { value: "completed", label: "Completed" },
+                  ]}
+                  colorVariant="yellow"
+                  size="md"
+                />
               </div>
               
               <button type="submit" className="mt-4 inline-flex items-center justify-center gap-2 px-6 py-3 font-bold font-tech uppercase tracking-[1px] cursor-pointer transition-all duration-200 border-none text-base bg-accent-primary text-black hover:bg-accent-primary-hover hover:shadow-[0_0_15px_rgba(251,200,21,0.4)] animate-glow">{currentItem ? 'Update Item' : 'Add Item'}</button>
