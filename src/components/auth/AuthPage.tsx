@@ -76,7 +76,7 @@ export default function AuthPage({ isSignUp = false }: { isSignUp?: boolean }) {
         setTimeout(() => {
           // Full reload ensures the next page sees the auth state
           window.location.href = redirectUrl;
-        }, 250);
+        }, 800);
       } else {
         throw new Error("No user record returned from authentication service.");
       }
