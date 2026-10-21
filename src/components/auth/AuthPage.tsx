@@ -194,9 +194,21 @@ export default function AuthPage({ isSignUp = false }: { isSignUp?: boolean }) {
     }
   };
 
+  // Determine the correct portal URL for demo accounts based on email prefix
+  const getPreferredPortal = (demoEmail: string): string => {
+    const host = window.location.hostname;
+    const protocol = window.location.protocol;
+    if (demoEmail.includes('judge')) return `${protocol}//${host}:3001`;
+    if (demoEmail.includes('ops')) return `${protocol}//${host}:3003`;
+    if (demoEmail.includes('team')) return `${protocol}//${host}:3002`;
+    // admin (or fallback) runs on the default port (3000)
+    return `${protocol}//${host}:3000`;
+  };
+
   const handleDemoClick = async (demoEmail: string) => {
     // Demo accounts use the default password "123" (mapped to "Password@123")
-    await executeSignIn(demoEmail, "123");
+    const portal = getPreferredPortal(demoEmail);
+    await executeSignIn(demoEmail, "123", portal);
   };
 
   const handleResendOtp = async () => {
