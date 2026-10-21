@@ -13,6 +13,7 @@ import {
   ArrowLeft,
   RotateCcw,
   Sparkles,
+  Clock,
 } from "lucide-react";
 import Link from "next/link";
 import { saveOrSubmitEvaluation } from "@/app/actions/judge-evaluation";
@@ -97,9 +98,21 @@ export default function EvaluateClientView({
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [draftRestoredMsg, setDraftRestoredMsg] = useState<string | null>(null);
+  const [showTimer, setShowTimer] = useState(false);
 
   const isLocked = existingEvaluation?.status === "locked";
   const draftKey = `ivc_draft_${activeRound?.id || "noround"}_${teamId}`;
+
+  // Check localStorage for timer toggle preference on mount
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const savedTimerPref = localStorage.getItem("ivc_judge_show_timer");
+      if (savedTimerPref === "true") {
+        setShowTimer(true);
+      }
+    } catch {}
+  }, []);
 
   // Check localStorage for unsaved drafts on mount if not already submitted
   useEffect(() => {
@@ -272,8 +285,40 @@ export default function EvaluateClientView({
         </div>
       )}
 
-      {/* Presentation & Q&A Pitch Timekeeper */}
-      <PitchTimer initialSeconds={300} />
+      {/* Pitch Timekeeper Toggle Bar */}
+      <div className="flex items-center justify-between p-3.5 glass-panel border border-border-color bg-surface-color/60 rounded">
+        <div className="flex items-center gap-2.5">
+          <Clock size={16} className={showTimer ? "text-accent-secondary" : "text-text-secondary"} />
+          <span className="font-tech text-xs uppercase tracking-wider text-text-primary font-bold">
+            Live Presentation & Q&A Pitch Timekeeper
+          </span>
+          <span className={`text-[10px] font-tech uppercase px-1.5 py-0.5 rounded border font-bold ${
+            showTimer ? "border-accent-secondary/50 text-accent-secondary bg-accent-secondary/10" : "border-border-color text-text-secondary"
+          }`}>
+            {showTimer ? "Active" : "Hidden"}
+          </span>
+        </div>
+        <button
+          type="button"
+          onClick={() => {
+            const next = !showTimer;
+            setShowTimer(next);
+            try {
+              localStorage.setItem("ivc_judge_show_timer", String(next));
+            } catch {}
+          }}
+          className={`px-3 py-1 font-tech text-xs uppercase font-bold tracking-wider rounded border transition-colors ${
+            showTimer
+              ? "border-border-color bg-surface-color-light text-text-secondary hover:text-text-primary"
+              : "border-accent-secondary bg-accent-secondary/20 text-accent-secondary hover:bg-accent-secondary/30"
+          }`}
+        >
+          {showTimer ? "Hide Pitch Timer" : "Launch Pitch Timer"}
+        </button>
+      </div>
+
+      {showTimer && <PitchTimer initialSeconds={300} />}
+
 
       {/* Submission Assets Panel */}
       <div className="glass-panel p-6 border border-border-color space-y-6">
