@@ -45,11 +45,19 @@ export default async function TeamQrPage() {
           };
         }
       }
-  const { data: qrSettings } = await supabaseAdmin
+  const { data: qrSettings, error: qrError } = await supabaseAdmin
     .from('event_settings')
     .select('team_qr_enabled')
     .maybeSingle();
-  const qrEnabled = qrSettings?.team_qr_enabled ?? false;
+
+  // If the settings table or column is missing, or the value is null/undefined, fall back to enabling the QR.
+  // This prevents the "Team QR Code Not Available" placeholder from showing unintentionally.
+  let qrEnabled = true;
+  if (!qrError && qrSettings) {
+    // Use the stored flag if present, otherwise default to true.
+    qrEnabled = qrSettings.team_qr_enabled ?? true;
+  }
+
 
   const initialStatus = await getTeamScanStatus(effectiveTeamId);
 
