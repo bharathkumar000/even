@@ -76,7 +76,7 @@ export default function AuthPage({ isSignUp = false }: { isSignUp?: boolean }) {
         setTimeout(() => {
           // Full reload ensures the next page sees the auth state
           window.location.href = redirectUrl;
-        }, 800);
+        }, 2000);
       } else {
         throw new Error("No user record returned from authentication service.");
       }
@@ -116,9 +116,10 @@ export default function AuthPage({ isSignUp = false }: { isSignUp?: boolean }) {
           const redirectUrl = await getRoleRedirectUrl(data.user);
           router.push(redirectUrl);
           router.refresh();
-          setTimeout(() => {
-            window.location.href = redirectUrl;
-          }, 500);
+        setTimeout(() => {
+          window.location.href = redirectUrl;
+        }, 2000);
+
           return;
         }
 
@@ -175,13 +176,13 @@ export default function AuthPage({ isSignUp = false }: { isSignUp?: boolean }) {
         router.refresh();
         setTimeout(() => {
           window.location.href = redirectUrl;
-        }, 800);
+        }, 2000);
       } else {
         router.push("/participants");
         router.refresh();
         setTimeout(() => {
           window.location.href = "/participants";
-        }, 800);
+        }, 2000);
       }
     } catch (err: unknown) {
       setErrorMsg(
