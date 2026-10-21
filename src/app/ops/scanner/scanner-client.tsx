@@ -53,6 +53,7 @@ export default function ScannerClientView() {
   const [teamData, setTeamData] = useState<TeamScanData | null>(null);
   const [loading, setLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [selectedOperation, setSelectedOperation] = useState<string>("registration");
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [liveStreamLogs, setLiveStreamLogs] = useState<LiveActivityFeedItem[]>([]);
@@ -222,7 +223,33 @@ export default function ScannerClientView() {
         teamId = parsed.team_id || parsed.id || teamId;
       } catch {}
     }
-    loadTeamData(teamId);
+
+    // If an operation is selected, attempt bulk claim; otherwise just load team data
+    const op = selectedOperation;
+    const supportedOps = ["registration", "goodies", "lunch", "snacks"];
+    if (supportedOps.includes(op)) {
+      // Bulk claim for the selected operation
+      setActionLoading(`bulk-${op}`);
+      setErrorMsg(null);
+      try {
+        const res = await recordTeamBulkAction(teamId, op as ActionType);
+        setSuccessMsg(
+          `Bulk Claim Complete: Distributed "${op.toUpperCase()}" to ${res.claimedCount} members.`
+        );
+        broadcastScanEvent(teamId, undefined, op as ActionType);
+        fetchLiveStream();
+        loadTeamData(teamId);
+      } catch (err: unknown) {
+        setErrorMsg(err instanceof Error ? err.message : `Bulk ${op} claim failed`);
+      } finally {
+        setActionLoading(null);
+      }
+    } else if (op === "feedback") {
+      setErrorMsg("Feedback operation is not supported in Ops scanner.");
+    } else {
+      // No operation selected or unsupported, just load team roster
+      loadTeamData(teamId);
+    }
   };
 
   const loadTeamData = async (teamId: string) => {
@@ -379,6 +406,23 @@ export default function ScannerClientView() {
         </div>
       )}
 
+      {/* Operation Selector */}
+      <div className="flex items-center gap-2 mb-4">
+        <label htmlFor="operation-select" className="font-bold uppercase text-xs text-text-secondary">Select Operation</label>
+        <select
+          id="operation-select"
+          value={selectedOperation}
+          onChange={(e) => setSelectedOperation(e.target.value)}
+          className="bg-surface-color border border-border-color p-2 text-xs"
+        >
+          <option value="registration">Registration / Check‑In</option>
+          <option value="goodies">Goodies</option>
+          <option value="lunch">Lunch</option>
+          <option value="snacks">Snacks</option>
+          <option value="feedback">Feedback</option>
+        </select>
+      </div>
+      
       {/* Scanner & Manual Lookup Controls */}
       <ScannerDesk
         scanning={scanning}
@@ -387,7 +431,7 @@ export default function ScannerClientView() {
         onStartScanner={startScanner}
         onStopScanner={stopScanner}
         onManualIdChange={setManualId}
-        onLookup={loadTeamData}
+        onLookup={(id) => handleDetectedCode(id)}
       />
 
       {/* Scanned Team Roster Panel */}
