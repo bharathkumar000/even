@@ -58,7 +58,11 @@ export default function ScannerClientView() {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [liveStreamLogs, setLiveStreamLogs] = useState<LiveActivityFeedItem[]>([]);
   const [streamLoading, setStreamLoading] = useState(false);
-  const [lastSyncTime, setLastSyncTime] = useState<Date>(new Date());
+  const [lastSyncTime, setLastSyncTime] = useState<Date | null>(null);
+  // Set initial sync timestamp on client after mount to avoid SSR mismatch
+  useEffect(() => {
+    setLastSyncTime(new Date());
+  }, []);
   const html5QrCodeRef = useRef<any>(null);
 
   // Fetch live activity audit stream across all club members
@@ -673,7 +677,7 @@ export default function ScannerClientView() {
         logs={liveStreamLogs}
         loading={streamLoading}
         onRefresh={fetchLiveStream}
-        lastSyncTime={lastSyncTime}
+        lastSyncTime={lastSyncTime ?? undefined}
       />
     </div>
   );
