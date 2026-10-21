@@ -72,9 +72,11 @@ export default function AuthPage({ isSignUp = false }: { isSignUp?: boolean }) {
       if (data?.user) {
         setSuccessMsg("Authenticated! Entering portal...");
         const redirectUrl = preferredPortal || (await getRoleRedirectUrl(data.user));
-        // Use Next router first (works on mobile) then force a full reload as a safety net
-        if (router) router.push(redirectUrl);
-        window.location.href = redirectUrl;
+        // Delay navigation briefly to let Supabase persist the auth session cookie before full reload
+        setTimeout(() => {
+          // Full reload ensures the next page sees the auth state
+          window.location.href = redirectUrl;
+        }, 250);
       } else {
         throw new Error("No user record returned from authentication service.");
       }
