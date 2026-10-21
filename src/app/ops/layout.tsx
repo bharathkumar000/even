@@ -1,6 +1,8 @@
 import { redirect } from "next/navigation";
-import { requireOperationsRole } from "@/lib/auth/operations";
+import { createClient } from "@/lib/supabase/server";
+import { supabaseAdmin } from "@/lib/supabase/admin";
 import OpsSidebar from "@/components/ops/Sidebar";
+import PortalAccessDenied from "@/components/navigation/PortalAccessDenied";
 
 export const dynamic = "force-dynamic";
 
@@ -9,10 +11,40 @@ export default async function OpsLayout({
 }: {
   children: React.ReactNode;
 }) {
-  try {
-    await requireOperationsRole();
-  } catch {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
     redirect("/login");
+  }
+
+  const { data: profile } = await supabaseAdmin
+    .from("profiles")
+    .select("role, full_name")
+    .eq("id", user.id)
+    .maybeSingle();
+
+  const role =
+    profile?.role ||
+    (user.user_metadata?.role as string | undefined) ||
+    (user.app_metadata?.role as string | undefined);
+
+  if (role !== "staff" && role !== "organizer" && role !== "admin") {
+    return (
+      <PortalAccessDenied
+        portalTitle="Club Member Operations Desk"
+        requiredRoleLabel="Club Member / Operations Staff"
+        accentColor="cyan"
+        currentUser={{
+          id: user.id,
+          email: user.email,
+          role: role || "participant",
+          fullName: profile?.full_name || (user.user_metadata?.full_name as string | undefined),
+        }}
+      />
+    );
   }
 
   return (

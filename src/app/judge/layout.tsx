@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import JudgeSidebar from "@/components/judge/Sidebar";
+import PortalAccessDenied from "@/components/navigation/PortalAccessDenied";
 
 export const dynamic = "force-dynamic";
 
@@ -21,13 +22,29 @@ export default async function JudgeLayout({
 
   const { data: profile } = await supabaseAdmin
     .from("profiles")
-    .select("role")
+    .select("role, full_name")
     .eq("id", user.id)
     .maybeSingle();
 
-  const role = (profile as { role?: string })?.role || (user.user_metadata?.role as string | undefined);
-  if (!role || (role !== "judge" && role !== "admin")) {
-    redirect("/login");
+  const role =
+    profile?.role ||
+    (user.user_metadata?.role as string | undefined) ||
+    (user.app_metadata?.role as string | undefined);
+
+  if (role !== "judge" && role !== "admin") {
+    return (
+      <PortalAccessDenied
+        portalTitle="Judge Evaluation Panel"
+        requiredRoleLabel="Judge / Jury Member"
+        accentColor="yellow"
+        currentUser={{
+          id: user.id,
+          email: user.email,
+          role: role || "participant",
+          fullName: profile?.full_name || (user.user_metadata?.full_name as string | undefined),
+        }}
+      />
+    );
   }
 
   return (
