@@ -17,6 +17,8 @@ import {
   JudgeOption,
   TeamOption,
   updateJudgeTeams,
+  autoBalanceJudgeAssignments,
+  getJudgeAssignmentsData,
 } from "@/app/actions/admin-assignments";
 
 interface AssignmentsClientProps {
@@ -235,6 +237,35 @@ export default function AssignmentsClientView({
     });
   };
 
+  const handleAutoBalance = () => {
+    if (judges.length === 0) {
+      setNotification({ type: "error", message: "Please create judges before auto-balancing." });
+      return;
+    }
+
+    if (!confirm("Auto-balance teams evenly across all judges (2 judges per team)?")) {
+      return;
+    }
+
+    startTransition(async () => {
+      try {
+        const res = await autoBalanceJudgeAssignments({ judgesPerTeam: 2 });
+        const fresh = await getJudgeAssignmentsData();
+        setJudges(fresh.judges);
+        setTeams(fresh.teams);
+        setNotification({
+          type: "success",
+          message: `Auto-balance complete! Generated ${res.totalAssignments} judge-team evaluation pairs across ${res.judgesCount} judges.`,
+        });
+      } catch (err: unknown) {
+        setNotification({
+          type: "error",
+          message: err instanceof Error ? err.message : "Failed to auto-balance judge assignments.",
+        });
+      }
+    });
+  };
+
   return (
     <div className="space-y-6 animate-fade-in font-tech">
       {/* Notifications */}
@@ -274,6 +305,15 @@ export default function AssignmentsClientView({
                 Judges ({judges.length})
               </h2>
             </div>
+            <button
+              onClick={handleAutoBalance}
+              disabled={isPending}
+              title="Automatically distribute teams across judges with conflict avoidance"
+              className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-surface-color-light border border-accent-secondary/50 hover:border-accent-secondary text-accent-secondary font-tech font-bold uppercase tracking-wider text-[11px] rounded transition-all hover:bg-accent-secondary/10 cursor-pointer disabled:opacity-50"
+            >
+              <Sparkles size={12} />
+              <span>Auto-Balance</span>
+            </button>
           </div>
 
           {/* Judge Search */}
