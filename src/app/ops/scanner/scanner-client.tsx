@@ -619,7 +619,7 @@ export default function ScannerClientView() {
                         <td className="p-3 text-center">
                           <button
                             onClick={() => handleActionClick(m.id, "lunch")}
-                            disabled={Boolean(lunchLog) || actionLoading === `${m.id}-lunch`}
+                            disabled={((teamData.activityLogs?.filter(l => l.participant_id === m.id && l.action_type === "lunch").length) || 0) >= 3 || actionLoading === `${m.id}-lunch`}
                             className={`px-3 py-1 text-[11px] font-bold uppercase transition-all flex items-center justify-center gap-1 mx-auto ${
                               lunchLog
                                 ? "bg-status-success/15 text-status-success border border-status-success cursor-default"
@@ -644,7 +644,7 @@ export default function ScannerClientView() {
                         <td className="p-3 text-center">
                           <button
                             onClick={() => handleActionClick(m.id, "snacks")}
-                            disabled={Boolean(snacksLog) || actionLoading === `${m.id}-snacks`}
+                            disabled={((teamData.activityLogs?.filter(l => l.participant_id === m.id && l.action_type === "snacks").length) || 0) >= 3 || actionLoading === `${m.id}-snacks`}
                             className={`px-3 py-1 text-[11px] font-bold uppercase transition-all flex items-center justify-center gap-1 mx-auto ${
                               snacksLog
                                 ? "bg-status-success/15 text-status-success border border-status-success cursor-default"
