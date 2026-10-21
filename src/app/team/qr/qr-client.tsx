@@ -177,7 +177,7 @@ export default function TeamQrClientView({
   ];
 
   return (
-    <div className="space-y-6">
+    <div className="flex flex-col lg:flex-row gap-6">
       {/* Real-time Alert Toast when newly scanned */}
       {justClaimedAlert && (
         <div className="p-4 bg-status-success/20 border-2 border-status-success text-status-success font-tech text-xs flex items-center justify-between rounded animate-bounce">
@@ -195,6 +195,7 @@ export default function TeamQrClientView({
       )}
 
       {/* Main Official QR Card */}
+      <div className="lg:w-1/2">
       <div className="glass-panel p-8 border border-accent-secondary/40 space-y-6 text-center shadow-2xl relative overflow-hidden font-tech">
         {/* Anti-Fraud Rotating Watermark Banner */}
         <div className="flex items-center justify-between border-b border-border-color pb-3">
@@ -305,7 +306,9 @@ export default function TeamQrClientView({
         )}
       </div>
 
+      <div className="lg:w-1/2">
       {/* Live Perks & Distribution Status Breakdown */}
+
       <div className="glass-panel p-6 border border-border-color space-y-4 font-tech">
         <div className="flex items-center justify-between border-b border-border-color pb-3">
           <div className="flex items-center gap-2">
@@ -355,7 +358,8 @@ export default function TeamQrClientView({
                     >
                       {perk.claimed ? "Claimed ✓" : "Pending"}
                     </span>
-                  </div>
+      </div>
+      </div>
 
                   {perk.claimed && perk.log ? (
                     <p className="text-[10px] text-text-secondary m-0 mt-1 font-mono">
@@ -375,6 +379,7 @@ export default function TeamQrClientView({
             );
           })}
         </div>
+      </div>
       </div>
     </div>
   );
