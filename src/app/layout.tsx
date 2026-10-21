@@ -1,6 +1,14 @@
 import type { Metadata } from 'next'
+import { Fredoka } from 'next/font/google'
 import './globals.css'
 import { DataProvider } from '@/components/DataContext'
+
+const fredoka = Fredoka({
+  subsets: ['latin'],
+  weight: ['300', '400', '500', '600', '700'],
+  variable: '--font-fredoka',
+  display: 'swap',
+})
 
 export const metadata: Metadata = {
   title: 'Vice Verse Admin',
@@ -21,8 +29,8 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en">
-      <body className="antialiased">
+    <html lang="en" className={fredoka.variable}>
+      <body className={`${fredoka.className} antialiased`}>
         <DataProvider>
           {children}
         </DataProvider>
