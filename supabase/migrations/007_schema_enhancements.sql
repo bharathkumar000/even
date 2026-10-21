@@ -49,7 +49,45 @@ CREATE TRIGGER trg_set_updated_at_criteria
   FOR EACH ROW
   EXECUTE FUNCTION public.set_updated_at();
 
--- 4. JUDGE CONFLICT OF INTEREST (COI) TABLE
+-- 4. ANNOUNCEMENTS SYSTEM (ENSURE TABLE EXISTS FOR REALTIME BROADCASTS)
+CREATE TABLE IF NOT EXISTS public.announcements (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  title TEXT NOT NULL,
+  message TEXT NOT NULL,
+  priority TEXT NOT NULL DEFAULT 'normal', -- 'normal', 'urgent', 'important'
+  target_audience TEXT NOT NULL DEFAULT 'all', -- 'all', 'teams', 'judges', 'ops'
+  created_by UUID REFERENCES public.profiles(id) ON DELETE SET NULL,
+  is_active BOOLEAN NOT NULL DEFAULT true,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+ALTER TABLE public.announcements ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Anyone authenticated can view active announcements" ON public.announcements;
+CREATE POLICY "Anyone authenticated can view active announcements"
+  ON public.announcements FOR SELECT
+  TO authenticated
+  USING (is_active = true);
+
+DROP POLICY IF EXISTS "Admins and staff can manage announcements" ON public.announcements;
+CREATE POLICY "Admins and staff can manage announcements"
+  ON public.announcements FOR ALL
+  TO authenticated
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.profiles
+      WHERE id = auth.uid() AND role::text IN ('admin', 'staff', 'organizer')
+    )
+  )
+  WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM public.profiles
+      WHERE id = auth.uid() AND role::text IN ('admin', 'staff', 'organizer')
+    )
+  );
+
+-- 5. JUDGE CONFLICT OF INTEREST (COI) TABLE
 CREATE TABLE IF NOT EXISTS public.judge_conflicts (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   judge_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
@@ -90,7 +128,7 @@ CREATE POLICY "Judges can view own conflicts"
     )
   );
 
--- 5. SUBMISSION VERSION HISTORY (REVISIONS) TABLE
+-- 6. SUBMISSION VERSION HISTORY (REVISIONS) TABLE
 CREATE TABLE IF NOT EXISTS public.submission_revisions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   submission_id UUID REFERENCES public.team_submissions(id) ON DELETE CASCADE,
@@ -131,7 +169,7 @@ CREATE POLICY "Teams can insert own submission revisions"
     )
   );
 
--- 6. ENSURE REPLICA IDENTITY FULL & REALTIME PUBLICATION FOR ROUNDS & CRITERIA
+-- 7. ENSURE REPLICA IDENTITY FULL & REALTIME PUBLICATION
 ALTER TABLE IF EXISTS public.evaluation_rounds REPLICA IDENTITY FULL;
 ALTER TABLE IF EXISTS public.evaluation_criteria REPLICA IDENTITY FULL;
 ALTER TABLE IF EXISTS public.announcements REPLICA IDENTITY FULL;
