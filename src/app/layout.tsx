@@ -29,7 +29,7 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en" className={fredoka.variable}>
+    <html lang="en" className={`${fredoka.variable} ${fredoka.className}`}>
       <body className={`${fredoka.className} antialiased`}>
         <DataProvider>
           {children}
