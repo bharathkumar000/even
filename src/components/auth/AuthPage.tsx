@@ -210,6 +210,11 @@ export default function AuthPage({ isSignUp = false }: { isSignUp?: boolean }) {
 
 
 
+  const handleDemoLogin = async (demoEmail: string) => {
+    // Direct demo login with known password
+    await executeSignIn(demoEmail, "Password@123");
+  };
+
   const handleResendOtp = async () => {
     if (resendCooldown > 0 || resendLoading) return;
     setResendLoading(true);
@@ -430,7 +435,26 @@ export default function AuthPage({ isSignUp = false }: { isSignUp?: boolean }) {
           </form>
         )}
 
-        <div className="pt-4 border-t border-border-color text-center font-tech text-xs text-text-secondary">
+        {!isSignUp && (
+  <div className="mt-4 space-y-2">
+    <p className="text-center text-xs text-text-secondary mb-2">Demo Accounts</p>
+    <div className="grid grid-cols-2 gap-2">
+      <button type="button" onClick={() => handleDemoLogin('admin@demo.com')} className="w-full py-2 bg-gradient-to-r from-accent-secondary to-accent-primary text-black font-tech font-bold uppercase text-xs tracking-wider disabled:opacity-50 hover:opacity-90">
+        Admin
+      </button>
+      <button type="button" onClick={() => handleDemoLogin('judge@demo.com')} className="w-full py-2 bg-gradient-to-r from-accent-secondary to-accent-primary text-black font-tech font-bold uppercase text-xs tracking-wider disabled:opacity-50 hover:opacity-90">
+        Judge
+      </button>
+      <button type="button" onClick={() => handleDemoLogin('ops@demo.com')} className="w-full py-2 bg-gradient-to-r from-accent-secondary to-accent-primary text-black font-tech font-bold uppercase text-xs tracking-wider disabled:opacity-50 hover:opacity-90">
+        Ops
+      </button>
+      <button type="button" onClick={() => handleDemoLogin('team@demo.com')} className="w-full py-2 bg-gradient-to-r from-accent-secondary to-accent-primary text-black font-tech font-bold uppercase text-xs tracking-wider disabled:opacity-50 hover:opacity-90">
+        Leader
+      </button>
+    </div>
+  </div>
+)}
+<div className="pt-4 border-t border-border-color text-center font-tech text-xs text-text-secondary">
           {isSignUp ? (
             <p className="m-0">
               Already have an account?{" "}
