@@ -72,13 +72,12 @@ export default function AuthPage({ isSignUp = false }: { isSignUp?: boolean }) {
         if (data?.user) {
           setSuccessMsg("Authenticated! Entering portal...");
           const redirectUrl = preferredPortal || (await getRoleRedirectUrl(data.user));
-          // Immediate client navigation to update UI
+          // Fast client navigation & session sync
           router.push(redirectUrl);
           router.refresh();
-          // Full reload after a short delay to ensure supabase session is persisted
           setTimeout(() => {
             window.location.assign(redirectUrl);
-          }, 3000);
+          }, 500);
         } else {
           throw new Error("No user record returned from authentication service.");
         }
@@ -202,8 +201,12 @@ export default function AuthPage({ isSignUp = false }: { isSignUp?: boolean }) {
 
   // Determine the correct portal URL for demo accounts based on email prefix
 
-    const handleDemoClick = async (demoEmail: string) => {
-      await executeSignIn(demoEmail, "123");
+    const handleDemoClick = async (demoEmail: string, roleName: string, targetPath: string) => {
+      setEmail(demoEmail);
+      setPassword("Password@123");
+      setErrorMsg(null);
+      setSuccessMsg(`Loaded ${roleName} credentials (${demoEmail}). Entering portal...`);
+      await executeSignIn(demoEmail, "Password@123", targetPath);
     };
 
   const handleResendOtp = async () => {
@@ -279,21 +282,51 @@ export default function AuthPage({ isSignUp = false }: { isSignUp?: boolean }) {
 
         {/* Demo login buttons (only on login, not sign‑up) */}
         {!isSignUp && step === "credentials" && (
-          <div className="mb-4">
-            <p className="text-xs text-text-secondary mb-2 font-tech text-center sm:text-left">Demo Login (One‑click)</p>
+          <div className="mb-4 p-3 bg-surface-color/40 border border-border-color/70 rounded">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-[11px] font-tech font-bold uppercase tracking-wider text-text-secondary">
+                Demo Credentials (One-Click Test)
+              </span>
+              <span className="text-[10px] font-mono text-accent-secondary bg-surface-color px-2 py-0.5 rounded border border-border-color">
+                Pass: Password@123
+              </span>
+            </div>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-              <button type="button" onClick={() => handleDemoClick('admin@demo.com')} className="px-2.5 py-2 bg-gradient-to-r from-accent-primary to-accent-secondary text-black font-tech font-semibold text-xs rounded truncate">
+              <button
+                type="button"
+                onClick={() => handleDemoClick('admin@demo.com', 'Admin', '/admin')}
+                className="px-2.5 py-2 bg-gradient-to-r from-accent-primary to-accent-secondary text-black font-tech font-bold text-xs rounded hover:opacity-95 transition-opacity truncate shadow-sm cursor-pointer"
+                title="Email: admin@demo.com | Pass: Password@123"
+              >
                 Demo Admin
               </button>
-              <button type="button" onClick={() => handleDemoClick('judge@demo.com')} className="px-2.5 py-2 bg-gradient-to-r from-accent-secondary to-accent-primary text-black font-tech font-semibold text-xs rounded truncate">
+              <button
+                type="button"
+                onClick={() => handleDemoClick('judge@demo.com', 'Judge', '/judge')}
+                className="px-2.5 py-2 bg-gradient-to-r from-accent-secondary to-accent-primary text-black font-tech font-bold text-xs rounded hover:opacity-95 transition-opacity truncate shadow-sm cursor-pointer"
+                title="Email: judge@demo.com | Pass: Password@123"
+              >
                 Demo Judge
               </button>
-              <button type="button" onClick={() => handleDemoClick('ops@demo.com')} className="px-2.5 py-2 bg-gradient-to-r from-accent-tertiary to-accent-primary text-black font-tech font-semibold text-xs rounded truncate">
+              <button
+                type="button"
+                onClick={() => handleDemoClick('ops@demo.com', 'Ops', '/ops/scanner')}
+                className="px-2.5 py-2 bg-gradient-to-r from-accent-tertiary to-accent-primary text-black font-tech font-bold text-xs rounded hover:opacity-95 transition-opacity truncate shadow-sm cursor-pointer"
+                title="Email: ops@demo.com | Pass: Password@123"
+              >
                 Demo Ops
               </button>
-              <button type="button" onClick={() => handleDemoClick('team@demo.com')} className="px-2.5 py-2 bg-gradient-to-r from-accent-secondary to-accent-tertiary text-black font-tech font-semibold text-xs rounded truncate">
+              <button
+                type="button"
+                onClick={() => handleDemoClick('team@demo.com', 'Team Leader', '/team')}
+                className="px-2.5 py-2 bg-gradient-to-r from-accent-secondary to-accent-tertiary text-black font-tech font-bold text-xs rounded hover:opacity-95 transition-opacity truncate shadow-sm cursor-pointer"
+                title="Email: team@demo.com | Pass: Password@123"
+              >
                 Demo Team
               </button>
+            </div>
+            <div className="mt-2 pt-2 border-t border-border-color/40 flex items-center justify-between text-[10px] font-mono text-text-secondary/80">
+              <span>Clicking any button fills the fields &amp; enters the portal</span>
             </div>
           </div>
         )}

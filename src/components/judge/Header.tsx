@@ -30,14 +30,6 @@ export default function JudgeHeader() {
           <span>Assigned Teams</span>
         </Link>
 
-        <Link
-          href="/"
-          className="flex items-center gap-1.5 font-tech text-xs uppercase font-bold text-text-secondary hover:text-text-primary transition-colors pl-4 border-l border-border-color"
-        >
-          <ArrowLeft size={14} />
-          <span>Portal Home</span>
-        </Link>
-
         <SignOutButton variant="pill" label="Sign Out" />
       </div>
     </header>

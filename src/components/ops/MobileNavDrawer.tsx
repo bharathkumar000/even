@@ -114,14 +114,6 @@ export default function OpsMobileNav() {
 
           {/* Footer Controls */}
           <div className="pt-6 border-t border-border-color space-y-3">
-            <Link
-              href="/"
-              onClick={() => setOpen(false)}
-              className="flex items-center gap-2 py-2 px-3 text-xs text-text-secondary hover:text-accent-tertiary transition-colors"
-            >
-              <ArrowLeft size={16} />
-              <span>Exit to Home</span>
-            </Link>
             <SignOutButton variant="menu-item" label="Sign Out (Ops)" />
           </div>
         </aside>
