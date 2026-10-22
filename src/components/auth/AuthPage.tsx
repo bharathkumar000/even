@@ -22,7 +22,7 @@ export default function AuthPage({ isSignUp = false }: { isSignUp?: boolean }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [fullName, setFullName] = useState("");
-  const [role, setRole] = useState("participant");
+  const [role, setRole] = useState("leader");
   const [accessCode, setAccessCode] = useState("");
   const [otp, setOtp] = useState("");
   const [step, setStep] = useState<"credentials" | "otp">("credentials");
@@ -362,6 +362,7 @@ export default function AuthPage({ isSignUp = false }: { isSignUp?: boolean }) {
                     <option value="admin">Admin</option>
                     <option value="judge">Judge</option>
                     <option value="staff">Ops Team Lead</option>
+                    <option value="leader">Team Leader</option>
                   </select>
                 </div>
                 {/* Access code required for privileged roles */}
@@ -439,7 +440,7 @@ export default function AuthPage({ isSignUp = false }: { isSignUp?: boolean }) {
             </p>
           ) : (
             <p className="m-0">
-              New participant?{" "}
+              New account?{" "}
               <Link href="/signup" className="text-accent-tertiary font-bold hover:underline">
                 Create an account
               </Link>
