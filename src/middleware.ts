@@ -8,8 +8,15 @@ export async function middleware(request: NextRequest) {
     },
   });
 
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://placeholder-project.supabase.co";
-  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "placeholder-anon-key";
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+  if (!supabaseUrl) {
+    throw new Error("Missing env var: NEXT_PUBLIC_SUPABASE_URL. Set it in your .env file.");
+  }
+  if (!supabaseAnonKey) {
+    throw new Error("Missing env var: NEXT_PUBLIC_SUPABASE_ANON_KEY. Set it in your .env file.");
+  }
 
   const supabase = createServerClient(supabaseUrl, supabaseAnonKey, {
     cookies: {
@@ -37,9 +44,65 @@ export async function middleware(request: NextRequest) {
 
   const pathname = request.nextUrl.pathname;
 
+  const host = request.headers.get("host") || "";
+  const port = request.nextUrl.port || host.split(":")[1] || "";
+
   // Handle direct /ops root path navigation cleanly
   if (pathname === "/ops") {
     return NextResponse.redirect(new URL("/ops/scanner", request.url));
+  }
+
+  // Port-specific isolation and auto-routing
+  const isJudgePort = port === "3001" || port === "4001" || port === "3011";
+  const isTeamPort = port === "3002" || port === "4002" || port === "3012";
+  const isOpsPort = port === "3003" || port === "4003" || port === "3013";
+
+  if (isJudgePort) {
+    // Dedicated Judge Portal Port
+    if (pathname === "/") {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return NextResponse.redirect(new URL("/login", request.url));
+      return NextResponse.redirect(new URL("/judge", request.url));
+    }
+    if (pathname.startsWith("/admin") || pathname.startsWith("/team") || pathname.startsWith("/ops")) {
+      return NextResponse.redirect(new URL("/judge", request.url));
+    }
+  } else if (isTeamPort) {
+    // Dedicated Team Lead & Participant Portal Port
+    if (pathname === "/") {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return NextResponse.redirect(new URL("/login", request.url));
+      return NextResponse.redirect(new URL("/team", request.url));
+    }
+    if (pathname.startsWith("/admin") || pathname.startsWith("/judge") || pathname.startsWith("/ops")) {
+      return NextResponse.redirect(new URL("/team", request.url));
+    }
+  } else if (isOpsPort) {
+    // Dedicated Operations / Scanner Port
+    if (pathname === "/") {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return NextResponse.redirect(new URL("/login", request.url));
+      return NextResponse.redirect(new URL("/ops/scanner", request.url));
+    }
+    if (pathname.startsWith("/admin") || pathname.startsWith("/judge") || pathname.startsWith("/team")) {
+      return NextResponse.redirect(new URL("/ops/scanner", request.url));
+    }
+  } else if (pathname === "/login") {
+    // Redirect authenticated users away from /login
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (user) {
+      const role = (user.user_metadata?.role as string | undefined) || (user.app_metadata?.role as string | undefined);
+      let target = "/team";
+      if (role === "admin") target = "/admin";
+      else if (role === "judge") target = "/judge";
+      else if (role === "staff" || role === "organizer") target = "/ops/scanner";
+      else if (role === "participant" || role === "leader") target = "/team";
+
+      return NextResponse.redirect(new URL(target, request.url));
+    }
   }
 
   // Apply strict HTTP security headers

@@ -53,11 +53,16 @@ export default function ScannerClientView() {
   const [teamData, setTeamData] = useState<TeamScanData | null>(null);
   const [loading, setLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [selectedOperation, setSelectedOperation] = useState<string>("registration");
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [liveStreamLogs, setLiveStreamLogs] = useState<LiveActivityFeedItem[]>([]);
   const [streamLoading, setStreamLoading] = useState(false);
-  const [lastSyncTime, setLastSyncTime] = useState<Date>(new Date());
+  const [lastSyncTime, setLastSyncTime] = useState<Date | null>(null);
+  // Set initial sync timestamp on client after mount to avoid SSR mismatch
+  useEffect(() => {
+    setLastSyncTime(new Date());
+  }, []);
   const html5QrCodeRef = useRef<any>(null);
 
   // Fetch live activity audit stream across all club members
@@ -222,7 +227,33 @@ export default function ScannerClientView() {
         teamId = parsed.team_id || parsed.id || teamId;
       } catch {}
     }
-    loadTeamData(teamId);
+
+    // If an operation is selected, attempt bulk claim; otherwise just load team data
+    const op = selectedOperation;
+    const supportedOps = ["registration", "goodies", "lunch", "snacks"];
+    if (supportedOps.includes(op)) {
+      // Bulk claim for the selected operation
+      setActionLoading(`bulk-${op}`);
+      setErrorMsg(null);
+      try {
+        const res = await recordTeamBulkAction(teamId, op as ActionType);
+        setSuccessMsg(
+          `Bulk Claim Complete: Distributed "${op.toUpperCase()}" to ${res.claimedCount} members.`
+        );
+        broadcastScanEvent(teamId, undefined, op as ActionType);
+        fetchLiveStream();
+        loadTeamData(teamId);
+      } catch (err: unknown) {
+        setErrorMsg(err instanceof Error ? err.message : `Bulk ${op} claim failed`);
+      } finally {
+        setActionLoading(null);
+      }
+    } else if (op === "feedback") {
+      setErrorMsg("Feedback operation is not supported in Ops scanner.");
+    } else {
+      // No operation selected or unsupported, just load team roster
+      loadTeamData(teamId);
+    }
   };
 
   const loadTeamData = async (teamId: string) => {
@@ -379,16 +410,35 @@ export default function ScannerClientView() {
         </div>
       )}
 
-      {/* Scanner & Manual Lookup Controls */}
-      <ScannerDesk
-        scanning={scanning}
-        manualId={manualId}
-        loading={loading}
-        onStartScanner={startScanner}
-        onStopScanner={stopScanner}
-        onManualIdChange={setManualId}
-        onLookup={loadTeamData}
-      />
+      {/* Operation Selector */}
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 mb-4 bg-surface-color/60 border border-border-color p-3 rounded">
+        <label htmlFor="operation-select" className="font-bold uppercase text-xs text-text-secondary shrink-0">Select Active Desk / Operation</label>
+        <select
+          id="operation-select"
+          value={selectedOperation}
+          onChange={(e) => setSelectedOperation(e.target.value)}
+          className="bg-surface-color border border-border-color p-2 text-xs font-tech text-text-primary outline-none focus:border-accent-secondary rounded w-full sm:w-auto"
+        >
+          <option value="registration">Registration / Check‑In Desk</option>
+          <option value="goodies">Goodies / Swag Kit Desk</option>
+          <option value="lunch">Lunch Token Desk</option>
+          <option value="snacks">Snacks / Refreshments Desk</option>
+          <option value="feedback">Feedback Desk</option>
+        </select>
+      </div>
+      
+       {/* Scanner & Manual Lookup Controls */}
+        <div>
+         <ScannerDesk
+           scanning={scanning}
+           manualId={manualId}
+           loading={loading}
+           onStartScanner={startScanner}
+           onStopScanner={stopScanner}
+           onManualIdChange={setManualId}
+           onLookup={(id) => handleDetectedCode(id)}
+         />
+       </div>
 
       {/* Scanned Team Roster Panel */}
       {teamData && (
@@ -569,7 +619,7 @@ export default function ScannerClientView() {
                         <td className="p-3 text-center">
                           <button
                             onClick={() => handleActionClick(m.id, "lunch")}
-                            disabled={Boolean(lunchLog) || actionLoading === `${m.id}-lunch`}
+                            disabled={((teamData.activityLogs?.filter(l => l.participant_id === m.id && l.action_type === "lunch").length) || 0) >= 3 || actionLoading === `${m.id}-lunch`}
                             className={`px-3 py-1 text-[11px] font-bold uppercase transition-all flex items-center justify-center gap-1 mx-auto ${
                               lunchLog
                                 ? "bg-status-success/15 text-status-success border border-status-success cursor-default"
@@ -594,7 +644,7 @@ export default function ScannerClientView() {
                         <td className="p-3 text-center">
                           <button
                             onClick={() => handleActionClick(m.id, "snacks")}
-                            disabled={Boolean(snacksLog) || actionLoading === `${m.id}-snacks`}
+                            disabled={((teamData.activityLogs?.filter(l => l.participant_id === m.id && l.action_type === "snacks").length) || 0) >= 3 || actionLoading === `${m.id}-snacks`}
                             className={`px-3 py-1 text-[11px] font-bold uppercase transition-all flex items-center justify-center gap-1 mx-auto ${
                               snacksLog
                                 ? "bg-status-success/15 text-status-success border border-status-success cursor-default"
@@ -629,7 +679,7 @@ export default function ScannerClientView() {
         logs={liveStreamLogs}
         loading={streamLoading}
         onRefresh={fetchLiveStream}
-        lastSyncTime={lastSyncTime}
+        lastSyncTime={lastSyncTime ?? undefined}
       />
     </div>
   );

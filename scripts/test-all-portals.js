@@ -1,13 +1,26 @@
 const { createClient } = require('@supabase/supabase-js');
 const http = require('http');
 
-const SUPABASE_URL = 'https://koluhnkobgagsfvokkbz.supabase.co';
-const ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtvbHVobmtvYmdhZ3Nmdm9ra2J6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTEyMTUxNjQsImV4cCI6MjEwNjc5MTE2NH0.N-xF0mOVy8_MKNm3ywJZj7w1NqM_gOQ8gIYIp6S_2FA';
-const SERVICE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtvbHVobmtvYmdhZ3Nmdm9ra2J6Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc5MTIxNTE2NCwiZXhwIjoyMTA2NzkxMTY0fQ._9xDTVPPHr0D-ZsPRx2ial9qvGK1YfErp2T8YT7umVw';
-const BASE_URL = 'http://localhost:3002';
+// Load Supabase credentials from environment variables (do NOT commit actual keys)
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const BASE_URL = process.env.TEST_BASE_URL || 'http://localhost:3000';
+
+if (!SUPABASE_URL) {
+  throw new Error('Missing env var: NEXT_PUBLIC_SUPABASE_URL');
+}
+if (!ANON_KEY) {
+  throw new Error('Missing env var: NEXT_PUBLIC_SUPABASE_ANON_KEY');
+}
+if (!SERVICE_KEY) {
+  throw new Error('Missing env var: SUPABASE_SERVICE_ROLE_KEY');
+}
 
 const supabaseAdmin = createClient(SUPABASE_URL, SERVICE_KEY, { auth: { persistSession: false } });
 const supabaseAnon = createClient(SUPABASE_URL, ANON_KEY, { auth: { persistSession: false } });
+
+
 
 // Helper to make HTTP request to Next.js dev server with optional cookies
 function requestPage(path, cookies = []) {
@@ -51,8 +64,12 @@ function requestPage(path, cookies = []) {
 // Convert Supabase session into Next.js Supabase SSR cookie headers
 function getSessionCookies(session) {
   if (!session) return [];
-  const projectRef = 'koluhnkobgagsfvokkbz';
-  const cookieName = `sb-${projectRef}-auth-token`;
+   const projectRef = (() => {
+     const match = SUPABASE_URL && SUPABASE_URL.match(/^https:\/\/([^.]*)\.supabase\.co/);
+     return match ? match[1] : '';
+   })();
+   const cookieName = `sb-${projectRef}-auth-token`;
+
   const sessionData = JSON.stringify({
     access_token: session.access_token,
     refresh_token: session.refresh_token,
@@ -124,11 +141,11 @@ async function runTestSuite() {
   // Find accounts for each role
   const { data: allProfiles } = await supabaseAdmin.from('profiles').select('id, email, role, full_name');
   const roleAccounts = {
-    admin: allProfiles.find(p => p.role === 'admin')?.email || 'admin@ivc.com',
-    judge: allProfiles.find(p => p.role === 'judge')?.email || 'judge.arvind@ivc.pulse',
-    staff: allProfiles.find(p => p.role === 'staff' || p.role === 'organizer')?.email || 'staff.aman@ivc.pulse',
-    leader: allProfiles.find(p => p.role === 'leader')?.email || 'lead.team1@ivc.pulse',
-    participant: allProfiles.find(p => p.role === 'participant')?.email || 'member1.team1@ivc.pulse',
+    admin: 'admin@ivc.com',
+    judge: 'judge.arvind@ivc.pulse',
+    staff: 'staff.aman@ivc.pulse',
+    leader: 'lead.team1@ivc.pulse',
+    participant: 'member1.team1@ivc.pulse',
   };
 
   console.log('  Identified Role Credentials:');
@@ -137,7 +154,7 @@ async function runTestSuite() {
   }
 
   const roleSessions = {};
-  const passwordsToTry = ['Password@123', 'Password123!', '2026VICEVERSE@IVC'];
+  const passwordsToTry = ['Password@123', 'Password123!', '123'];
 
   for (const [role, email] of Object.entries(roleAccounts)) {
     let session = null;

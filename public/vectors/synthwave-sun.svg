@@ -1,0 +1,30 @@
+<svg width="200" height="200" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="sun" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#FBC815" />
+      <stop offset="100%" stop-color="#FF007F" />
+    </linearGradient>
+    <clipPath id="sunClip">
+      <circle cx="100" cy="100" r="90" />
+    </clipPath>
+  </defs>
+  
+  <rect width="200" height="200" fill="transparent"/>
+  
+  <g clip-path="url(#sunClip)">
+    <circle cx="100" cy="100" r="90" fill="url(#sun)" />
+    <!-- Horizontal lines for the synthwave sun effect -->
+    <rect x="0" y="100" width="200" height="6" fill="#050508">
+      <animate attributeName="y" values="100;190" dur="3s" repeatCount="indefinite" />
+      <animate attributeName="height" values="2;8" dur="3s" repeatCount="indefinite" />
+    </rect>
+    <rect x="0" y="120" width="200" height="6" fill="#050508">
+      <animate attributeName="y" values="100;190" dur="3s" begin="1s" repeatCount="indefinite" />
+      <animate attributeName="height" values="2;8" dur="3s" begin="1s" repeatCount="indefinite" />
+    </rect>
+    <rect x="0" y="140" width="200" height="6" fill="#050508">
+      <animate attributeName="y" values="100;190" dur="3s" begin="2s" repeatCount="indefinite" />
+      <animate attributeName="height" values="2;8" dur="3s" begin="2s" repeatCount="indefinite" />
+    </rect>
+  </g>
+</svg>

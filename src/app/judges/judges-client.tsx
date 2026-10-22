@@ -58,36 +58,36 @@ export default function JudgesPortal() {
   return (
     <>
       <div className="animate-fade-in relative">
-        <header className="flex justify-between items-start mb-6">
+        <header className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
           <div>
-            <h1 className="text-text-primary text-[3rem] font-heading tracking-[2px] leading-[1.1] uppercase m-0 mb-2">Judges Control Portal</h1>
-            <p className="text-text-secondary leading-[1.6] m-0">Manage judging panels, scorecards, and evaluations.</p>
+            <h1 className="text-text-primary text-2xl sm:text-3xl md:text-[3rem] font-heading tracking-[2px] leading-[1.1] uppercase m-0 mb-2">Judges Control Portal</h1>
+            <p className="text-text-secondary text-xs sm:text-sm leading-[1.6] m-0">Manage judging panels, scorecards, and evaluations.</p>
           </div>
-          <div className="flex items-center gap-3">
-            <button className="inline-flex items-center justify-center gap-2 px-6 py-3 font-bold font-tech uppercase tracking-[1px] cursor-pointer transition-all duration-200 border-none text-base bg-accent-primary text-black hover:bg-accent-primary-hover hover:shadow-[0_0_15px_rgba(251,200,21,0.4)] animate-glow" onClick={() => handleOpenModal()}>
-              <Plus size={18} /> Add Judge
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3 w-full sm:w-auto">
+            <button className="flex-1 sm:flex-none inline-flex items-center justify-center gap-2 px-4 sm:px-6 py-2.5 sm:py-3 font-bold font-tech uppercase tracking-[1px] cursor-pointer transition-all duration-200 border-none text-xs sm:text-base bg-accent-primary text-black hover:bg-accent-primary-hover hover:shadow-[0_0_15px_rgba(251,200,21,0.4)] animate-glow" onClick={() => handleOpenModal()}>
+              <Plus size={16} /> Add Judge
             </button>
             <SignOutButton variant="button" label="Sign Out" />
           </div>
         </header>
 
-        <div className="bg-surface-color rounded-lg border border-border-color p-4 px-6 flex justify-between mt-4">
-          <div className="flex gap-4 items-center">
-            <div className="relative">
+        <div className="bg-surface-color rounded-lg border border-border-color p-3.5 sm:p-4 px-4 sm:px-6 flex justify-between mt-4">
+          <div className="flex gap-4 items-center w-full sm:w-auto">
+            <div className="relative w-full sm:w-[300px]">
               <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-secondary" />
               <input 
                 type="text" 
                 placeholder="Search judges..." 
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="bg-bg-color border border-border-color pl-10 pr-3 py-2.5 rounded-lg text-text-primary font-sans tracking-normal w-[300px] outline-none focus:border-accent-primary transition-colors"
+                className="bg-bg-color border border-border-color pl-10 pr-3 py-2.5 rounded-lg text-text-primary font-sans tracking-normal w-full outline-none focus:border-accent-primary transition-colors text-xs sm:text-sm"
               />
             </div>
           </div>
         </div>
 
-        <div className="glass-panel mt-4 p-0">
-          <table className="w-full border-collapse">
+        <div className="glass-panel mt-4 p-0 overflow-x-auto w-full">
+          <table className="w-full border-collapse min-w-[500px]">
             <thead>
               <tr>
                 <th className="p-4 text-left border-b border-border-color text-accent-primary font-tech text-[0.9rem] uppercase tracking-[1px]">Judge Name</th>
