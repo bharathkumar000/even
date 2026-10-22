@@ -1,3 +1,0 @@
-module.exports=[10385,a=>{"use strict";var b=a.i(72131),c=a.i(50944),d=a.i(95445);a.s(["default",0,function({channelName:a="realtime-rounds-and-criteria",pollIntervalMs:e=6e3}){let f=(0,c.useRouter)();return(0,b.useEffect)(()=>{let b=(0,d.f)(),c=b.channel(a).on("postgres_changes",{event:"*",schema:"public",table:"evaluation_rounds"},()=>{f.refresh()}).on("postgres_changes",{event:"*",schema:"public",table:"evaluation_criteria"},()=>{f.refresh()}).subscribe(),g=setInterval(()=>{f.refresh()},e);return()=>{b.removeChannel(c),clearInterval(g)}},[f,a,e]),null}])}];
-
-//# sourceMappingURL=src_components_RealtimeRoundsListener_tsx_1_g0xo7zj_3ql._.js.map
