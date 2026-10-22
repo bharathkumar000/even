@@ -87,6 +87,24 @@ export async function middleware(request: NextRequest) {
     if (pathname.startsWith("/admin") || pathname.startsWith("/judge") || pathname.startsWith("/team")) {
       return NextResponse.redirect(new URL("/ops/scanner", request.url));
     }
+  } else if (pathname === "/") {
+    // Default root path: direct unauthenticated visitors straight to the login portal
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      return NextResponse.redirect(new URL("/login", request.url));
+    }
+
+    const role = (user.user_metadata?.role as string | undefined) || (user.app_metadata?.role as string | undefined);
+    let target = "/team";
+    if (role === "admin") target = "/admin";
+    else if (role === "judge") target = "/judge";
+    else if (role === "staff" || role === "organizer") target = "/ops/scanner";
+    else if (role === "participant" || role === "leader") target = "/team";
+
+    return NextResponse.redirect(new URL(target, request.url));
   } else if (pathname === "/login") {
     // Redirect authenticated users away from /login
     const {
