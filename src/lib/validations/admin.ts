@@ -30,4 +30,6 @@ export const EvaluationOverrideSchema = z.object({
 export const ResultActionSchema = z.object({
   event_id: z.string().uuid(),
   action: z.enum(["recalculate", "publish", "lock"]),
+  olympic: z.boolean().optional(),
 });
+

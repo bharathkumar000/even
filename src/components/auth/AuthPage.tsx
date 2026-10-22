@@ -8,7 +8,7 @@ import { getRoleRedirectUrl } from "@/lib/auth/redirect";
 import {
   Lock,
   Mail,
-  User,
+
   ArrowRight,
   ShieldCheck,
   AlertCircle,
@@ -22,6 +22,8 @@ export default function AuthPage({ isSignUp = false }: { isSignUp?: boolean }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [fullName, setFullName] = useState("");
+  const [role, setRole] = useState("participant");
+  const [accessCode, setAccessCode] = useState("");
   const [otp, setOtp] = useState("");
   const [step, setStep] = useState<"credentials" | "otp">("credentials");
   const [loading, setLoading] = useState(false);
@@ -72,13 +74,12 @@ export default function AuthPage({ isSignUp = false }: { isSignUp?: boolean }) {
         if (data?.user) {
           setSuccessMsg("Authenticated! Entering portal...");
           const redirectUrl = preferredPortal || (await getRoleRedirectUrl(data.user));
-          // Immediate client navigation to update UI
+          // Fast client navigation & session sync
           router.push(redirectUrl);
           router.refresh();
-          // Full reload after a short delay to ensure supabase session is persisted
           setTimeout(() => {
             window.location.assign(redirectUrl);
-          }, 3000);
+          }, 500);
         } else {
           throw new Error("No user record returned from authentication service.");
         }
@@ -101,16 +102,21 @@ export default function AuthPage({ isSignUp = false }: { isSignUp?: boolean }) {
     try {
       if (isSignUp) {
         const normalizedEmail = email.includes("@") ? email.trim() : `${email.trim()}@ivc.pulse`;
-        const { data, error } = await supabase.auth.signUp({
-          email: normalizedEmail,
-          password,
-          options: {
-            data: {
-              full_name: fullName,
-              role: "participant",
+          if (role !== "participant" && accessCode !== "0987") {
+            setErrorMsg("Invalid access code for selected role.");
+            setLoading(false);
+            return;
+          }
+          const { data, error } = await supabase.auth.signUp({
+            email: normalizedEmail,
+            password,
+            options: {
+              data: {
+                full_name: fullName,
+                role: role,
+              },
             },
-          },
-        });
+          });
 
         if (error) throw error;
 
@@ -161,7 +167,7 @@ export default function AuthPage({ isSignUp = false }: { isSignUp?: boolean }) {
     setErrorMsg(null);
 
     const supabase = createClient();
-    const normalizedEmail = email.includes("@") ? email : `${email}@demo.com`;
+    const normalizedEmail = email.includes("@") ? email : `${email}@ivc.pulse`;
 
     try {
           const { data, error } = await supabase.auth.verifyOtp({
@@ -200,11 +206,9 @@ export default function AuthPage({ isSignUp = false }: { isSignUp?: boolean }) {
     }
   };
 
-  // Determine the correct portal URL for demo accounts based on email prefix
+  // Determine portal redirect URL based on email domain
 
-    const handleDemoClick = async (demoEmail: string) => {
-      await executeSignIn(demoEmail, "123");
-    };
+
 
   const handleResendOtp = async () => {
     if (resendCooldown > 0 || resendLoading) return;
@@ -212,7 +216,7 @@ export default function AuthPage({ isSignUp = false }: { isSignUp?: boolean }) {
     setErrorMsg(null);
 
     const supabase = createClient();
-    const normalizedEmail = email.includes("@") ? email : `${email}@demo.com`;
+    const normalizedEmail = email.includes("@") ? email : `${email}@ivc.pulse`;
 
     try {
         const { error } = await supabase.auth.resend({
@@ -277,26 +281,8 @@ export default function AuthPage({ isSignUp = false }: { isSignUp?: boolean }) {
           </div>
         )}
 
-        {/* Demo login buttons (only on login, not sign‑up) */}
-        {!isSignUp && step === "credentials" && (
-          <div className="mb-4">
-            <p className="text-xs text-text-secondary mb-2 font-tech text-center sm:text-left">Demo Login (One‑click)</p>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-              <button type="button" onClick={() => handleDemoClick('admin@demo.com')} className="px-2.5 py-2 bg-gradient-to-r from-accent-primary to-accent-secondary text-black font-tech font-semibold text-xs rounded truncate">
-                Demo Admin
-              </button>
-              <button type="button" onClick={() => handleDemoClick('judge@demo.com')} className="px-2.5 py-2 bg-gradient-to-r from-accent-secondary to-accent-primary text-black font-tech font-semibold text-xs rounded truncate">
-                Demo Judge
-              </button>
-              <button type="button" onClick={() => handleDemoClick('ops@demo.com')} className="px-2.5 py-2 bg-gradient-to-r from-accent-tertiary to-accent-primary text-black font-tech font-semibold text-xs rounded truncate">
-                Demo Ops
-              </button>
-              <button type="button" onClick={() => handleDemoClick('team@demo.com')} className="px-2.5 py-2 bg-gradient-to-r from-accent-secondary to-accent-tertiary text-black font-tech font-semibold text-xs rounded truncate">
-                Demo Team
-              </button>
-            </div>
-          </div>
-        )}
+
+
 
         {step === "otp" ? (
           /* ================= OTP VERIFICATION FORM ================= */
@@ -362,22 +348,38 @@ export default function AuthPage({ isSignUp = false }: { isSignUp?: boolean }) {
           /* ================= CREDENTIALS FORM ================= */
           <form onSubmit={handleCredentialsSubmit} className="space-y-4">
             {isSignUp && (
-              <div className="space-y-1">
-                <label className="block text-xs uppercase text-text-secondary font-tech font-bold tracking-wider">
-                  Full Name
-                </label>
-                <div className="relative">
-                  <User size={15} className="absolute left-3 top-3 text-text-secondary" />
-                  <input
-                    type="text"
-                    required
-                    value={fullName}
-                    onChange={(e) => setFullName(e.target.value)}
-                    placeholder="Alex Mercer"
-                    className="w-full bg-surface-color border border-border-color p-2.5 pl-9 text-text-primary text-xs font-sans tracking-normal focus:border-accent-secondary outline-none"
-                  />
+              <>
+                <div className="space-y-1">
+                  <label className="block text-xs uppercase text-text-secondary font-tech font-bold tracking-wider">
+                    Role
+                  </label>
+                  <select
+                    value={role}
+                    onChange={(e) => setRole(e.target.value)}
+                    className="w-full bg-surface-color border border-border-color p-2.5 text-xs text-text-primary focus:border-accent-secondary outline-none"
+                  >
+                    <option value="participant">Participant</option>
+                    <option value="admin">Admin</option>
+                    <option value="judge">Judge</option>
+                    <option value="staff">Ops Team Lead</option>
+                  </select>
                 </div>
-              </div>
+                {/* Access code required for privileged roles */}
+                {role !== "participant" && (
+                  <div className="space-y-1">
+                    <label className="block text-xs uppercase text-text-secondary font-tech font-bold tracking-wider">
+                      Access Code
+                    </label>
+                    <input
+                      type="text"
+                      value={accessCode}
+                      onChange={(e) => setAccessCode(e.target.value)}
+                      placeholder="Enter access code"
+                      className="w-full bg-surface-color border border-border-color p-2.5 text-xs text-text-primary focus:border-accent-secondary outline-none"
+                    />
+                  </div>
+                )}
+              </>
             )}
 
             <div className="space-y-1">

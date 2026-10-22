@@ -1,8 +1,10 @@
 import { supabaseAdmin } from "@/lib/supabase/admin";
+import { createClient } from "@/lib/supabase/server";
 import Link from "next/link";
-import { ArrowRight, Layers, FileCheck } from "lucide-react";
+import { ArrowRight, Layers, FileCheck, ShieldCheck } from "lucide-react";
 import { getActiveAnnouncements } from "@/app/actions/announcements";
 import AnnouncementBanner from "@/components/AnnouncementBanner";
+import RealtimeRoundsListener from "@/components/RealtimeRoundsListener";
 
 export const dynamic = "force-dynamic";
 
@@ -29,13 +31,18 @@ interface JudgeEvaluation {
 }
 
 export default async function JudgeDashboardPage() {
-  let assignedTeams: AssignedTeam[] = [];
+  let allTeams: AssignedTeam[] = [];
   let rounds: JudgeRound[] = [];
   let evaluations: JudgeEvaluation[] = [];
   let announcements: any[] = [];
+  let judgeAssignedTeamIds: string[] = [];
+  let isJudgeSpecific = false;
 
   try {
-    const [teamsRes, roundsRes, evalsRes, annRes] = await Promise.all([
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+
+    const [teamsRes, roundsRes, evalsRes, annRes, assignRes] = await Promise.all([
       supabaseAdmin.from("teams").select("id, name, leader_name, track, status"),
       supabaseAdmin
         .from("evaluation_rounds")
@@ -43,15 +50,30 @@ export default async function JudgeDashboardPage() {
         .order("sequence_order", { ascending: true }),
       supabaseAdmin.from("evaluations").select("round_id, team_id, status, total_score"),
       getActiveAnnouncements("judges"),
+      user
+        ? supabaseAdmin
+            .from("judge_assignments")
+            .select("team_id")
+            .eq("judge_id", user.id)
+        : Promise.resolve({ data: [] }),
     ]);
 
-    if (teamsRes.data) assignedTeams = teamsRes.data;
+    if (teamsRes.data) allTeams = teamsRes.data;
     if (roundsRes.data) rounds = roundsRes.data;
     if (evalsRes.data) evaluations = evalsRes.data;
     announcements = annRes || [];
+
+    if (assignRes.data && assignRes.data.length > 0) {
+      judgeAssignedTeamIds = assignRes.data.map((a: any) => a.team_id);
+      isJudgeSpecific = true;
+    }
   } catch (err) {
     console.error("Failed to fetch assigned teams:", err);
   }
+
+  const assignedTeams = isJudgeSpecific
+    ? allTeams.filter((t) => judgeAssignedTeamIds.includes(t.id))
+    : allTeams;
 
   // Helper to determine team evaluation status for active round
   const activeRound = rounds.find((r) => r.status === "open" || r.status === "reopened") || rounds[0];
@@ -73,14 +95,27 @@ export default async function JudgeDashboardPage() {
 
   return (
     <div className="space-y-6 animate-fade-in font-tech">
+      <RealtimeRoundsListener channelName="judge-dashboard-rounds" />
       <AnnouncementBanner announcements={announcements} portalName="Judge Portal" />
 
       {/* Title */}
       <div className="border-b border-border-color pb-6 flex flex-col md:flex-row md:items-end justify-between gap-4">
         <div>
-          <p className="font-tech text-xs uppercase tracking-[3px] text-accent-primary font-bold mb-1">
-            Official Judge Console // Team Roster
-          </p>
+          <div className="flex items-center gap-2 mb-1">
+            <p className="font-tech text-xs uppercase tracking-[3px] text-accent-primary font-bold m-0">
+              Official Judge Console // Team Roster
+            </p>
+            {isJudgeSpecific ? (
+              <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 bg-accent-primary/20 text-accent-primary border border-accent-primary/40 uppercase">
+                <ShieldCheck size={12} />
+                {assignedTeams.length} Allotted Teams
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 bg-surface-color-light text-text-secondary border border-border-color uppercase">
+                All Teams (Jury View)
+              </span>
+            )}
+          </div>
           <h1 className="text-3xl md:text-5xl font-heading text-text-primary tracking-wider uppercase m-0">
             Assigned Teams
           </h1>

@@ -60,7 +60,7 @@ export async function updateRoundStatus(roundId: string, status: RoundStatus) {
 
   const { data: round, error } = await supabaseAdmin
     .from("evaluation_rounds")
-    .update({ status: validStatus, updated_at: new Date().toISOString() })
+    .update({ status: validStatus })
     .eq("id", roundId)
     .select()
     .single();
@@ -96,7 +96,6 @@ export async function updateRound(roundId: string, data: { title: string; sequen
       title: data.title,
       sequence_order: data.sequence_order,
       status: data.status,
-      updated_at: new Date().toISOString(),
     })
     .eq("id", roundId)
     .select()
@@ -123,6 +122,10 @@ export async function updateRound(roundId: string, data: { title: string; sequen
 
 export async function deleteRound(roundId: string) {
   const { user } = await requireAdmin();
+
+  // Clean up evaluations and criteria associated with this round to prevent foreign key errors
+  await supabaseAdmin.from("evaluations").delete().eq("round_id", roundId);
+  await supabaseAdmin.from("evaluation_criteria").delete().eq("round_id", roundId);
 
   const { error } = await supabaseAdmin
     .from("evaluation_rounds")

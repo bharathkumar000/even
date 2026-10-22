@@ -39,9 +39,18 @@ export async function middleware(request: NextRequest) {
     },
   });
 
+  // Refresh auth session
+  await supabase.auth.getUser();
+
+  const pathname = request.nextUrl.pathname;
+
   const host = request.headers.get("host") || "";
   const port = request.nextUrl.port || host.split(":")[1] || "";
-  const pathname = request.nextUrl.pathname;
+
+  // Handle direct /ops root path navigation cleanly
+  if (pathname === "/ops") {
+    return NextResponse.redirect(new URL("/ops/scanner", request.url));
+  }
 
   // Port-specific isolation and auto-routing
   const isJudgePort = port === "3001" || port === "4001" || port === "3011";
@@ -78,18 +87,14 @@ export async function middleware(request: NextRequest) {
     if (pathname.startsWith("/admin") || pathname.startsWith("/judge") || pathname.startsWith("/team")) {
       return NextResponse.redirect(new URL("/ops/scanner", request.url));
     }
-  } else if (pathname === "/" || pathname === "/login") {
-    // Default Port 3000 Role Routing + redirect authenticated users away from /login
+  } else if (pathname === "/") {
+    // Default root path: direct unauthenticated visitors straight to the login portal
     const {
       data: { user },
     } = await supabase.auth.getUser();
 
     if (!user) {
-      if (pathname === "/") {
-        return NextResponse.redirect(new URL("/login", request.url));
-      }
-      // Already on /login and not authenticated — let them through
-      return response;
+      return NextResponse.redirect(new URL("/login", request.url));
     }
 
     const role = (user.user_metadata?.role as string | undefined) || (user.app_metadata?.role as string | undefined);
@@ -100,6 +105,22 @@ export async function middleware(request: NextRequest) {
     else if (role === "participant" || role === "leader") target = "/team";
 
     return NextResponse.redirect(new URL(target, request.url));
+  } else if (pathname === "/login") {
+    // Redirect authenticated users away from /login
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (user) {
+      const role = (user.user_metadata?.role as string | undefined) || (user.app_metadata?.role as string | undefined);
+      let target = "/team";
+      if (role === "admin") target = "/admin";
+      else if (role === "judge") target = "/judge";
+      else if (role === "staff" || role === "organizer") target = "/ops/scanner";
+      else if (role === "participant" || role === "leader") target = "/team";
+
+      return NextResponse.redirect(new URL(target, request.url));
+    }
   }
 
   // Apply strict HTTP security headers

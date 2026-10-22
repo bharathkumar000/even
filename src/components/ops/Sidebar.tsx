@@ -8,9 +8,12 @@ import {
   Search,
   Radio,
   Activity,
-  ArrowLeft,
   ScanLine,
   Gavel,
+  Layers,
+  ArrowLeft,
+  Home,
+  Users,
 } from "lucide-react";
 import SignOutButton from "@/components/SignOutButton";
 
@@ -24,6 +27,13 @@ export default function OpsSidebar() {
       label: "QR Scanner Desk",
       badge: "Primary",
       desc: "Live badge scanning",
+    },
+    {
+      href: "/ops/rounds",
+      icon: Layers,
+      label: "Rounds & Rubrics",
+      badge: "Live",
+      desc: "Active evaluation rounds",
     },
     {
       href: "/ops/judges-roster",
@@ -49,7 +59,7 @@ export default function OpsSidebar() {
   ];
 
   return (
-    <aside className="w-[280px] flex-shrink-0 bg-[#0c0c14] md:border-r border-b md:border-b-0 border-border-color flex flex-col justify-between py-6 md:h-screen z-20 font-tech md:overflow-y-auto overscroll-contain custom-scrollbar">
+    <aside className="w-full md:w-[280px] md:shrink-0 bg-[#0c0c14] md:border-r border-b md:border-b-0 border-border-color flex flex-col justify-between py-6 md:h-screen z-20 font-tech md:overflow-y-auto overscroll-contain custom-scrollbar">
       {/* Brand Header */}
       <div className="shrink-0">
         <div className="px-6 pb-6 border-b border-border-color flex flex-col items-center text-center">
@@ -157,14 +167,6 @@ export default function OpsSidebar() {
             <span className="text-status-success">ACTIVE</span>
           </div>
         </div>
-
-        <Link
-          href="/"
-          className="flex items-center gap-2 py-2 px-3 text-xs font-tech font-bold uppercase tracking-[1px] text-text-secondary hover:text-accent-tertiary transition-colors border border-border-color hover:border-accent-tertiary/40 rounded bg-surface-color-light/50"
-        >
-          <ArrowLeft size={14} />
-          <span>Exit to Home</span>
-        </Link>
 
         <SignOutButton variant="menu-item" label="Sign Out (Ops)" />
 

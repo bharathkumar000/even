@@ -32,10 +32,40 @@ export default function ResultsClientView({
   const [loadingAction, setLoadingAction] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<string | null>(null);
 
+  const [olympicMode, setOlympicMode] = useState(false);
+
+  const handleExportCSV = () => {
+    if (results.length === 0) {
+      alert("No standings to export.");
+      return;
+    }
+
+    const headers = ["Rank", "Team ID", "Evaluations Count", "Average Score", "Total Score"];
+    const rows = results.map((r, idx) => [
+      r.rank || idx + 1,
+      `"${r.team_id || "Team"}"`,
+      r.evaluations_count || 0,
+      typeof r.average_score === "number" ? r.average_score.toFixed(2) : "0",
+      r.total_score ?? 0,
+    ]);
+
+    const csvContent = [headers.join(","), ...rows.map((row) => row.join(","))].join("\n");
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.setAttribute("download", `IVC_Deliberation_Standings_${new Date().toISOString().slice(0, 10)}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   const handleAction = async (action: "recalculate" | "publish" | "lock") => {
     let confirmPrompt = "";
     if (action === "recalculate") {
-      confirmPrompt = "Recalculate total scores for all teams from submitted evaluations?";
+      confirmPrompt = olympicMode
+        ? "Recalculate using Olympic Scoring (dropping highest & lowest outliers for teams with 3+ reviews)?"
+        : "Recalculate total scores for all teams from submitted evaluations?";
     } else if (action === "publish") {
       confirmPrompt = "Publish official results to participant dashboards and leaderboards?";
     } else if (action === "lock") {
@@ -50,6 +80,7 @@ export default function ResultsClientView({
       await triggerResultsEngine({
         event_id: eventId,
         action,
+        olympic: action === "recalculate" ? olympicMode : undefined,
       });
 
       if (action === "publish") {
@@ -59,7 +90,11 @@ export default function ResultsClientView({
         setIsLocked(true);
         setFeedback("Official results locked successfully.");
       } else {
-        setFeedback("Results recalculated across active evaluations.");
+        setFeedback(
+          olympicMode
+            ? "Results recalculated with Olympic Scoring (outliers trimmed)."
+            : "Results recalculated across active evaluations."
+        );
       }
     } catch (err: unknown) {
       alert(err instanceof Error ? err.message : "Failed to trigger results action");
@@ -97,6 +132,16 @@ export default function ResultsClientView({
                 <ShieldCheck size={14} /> DRAFT MODE
               </span>
             )}
+
+            <label className="flex items-center gap-2 ml-2 cursor-pointer font-tech text-xs text-text-secondary hover:text-text-primary">
+              <input
+                type="checkbox"
+                checked={olympicMode}
+                onChange={(e) => setOlympicMode(e.target.checked)}
+                className="accent-accent-secondary"
+              />
+              <span>Olympic Scoring (Trim Outliers)</span>
+            </label>
           </div>
         </div>
 
@@ -109,6 +154,13 @@ export default function ResultsClientView({
           >
             <RefreshCw size={15} className={loadingAction === "recalculate" ? "animate-spin" : ""} />
             {loadingAction === "recalculate" ? "Calculating..." : "Recalculate Results"}
+          </button>
+
+          <button
+            onClick={handleExportCSV}
+            className="flex items-center gap-2 px-4 py-2.5 bg-surface-color border border-border-color hover:border-accent-primary text-text-primary font-tech font-bold uppercase text-xs transition-colors"
+          >
+            Export CSV
           </button>
 
           <button

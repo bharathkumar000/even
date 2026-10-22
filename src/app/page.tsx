@@ -1,49 +1,45 @@
-import { redirect } from 'next/navigation';
-import { headers } from 'next/headers';
-import { createClient } from '@/lib/supabase/server';
-import { supabaseAdmin } from '@/lib/supabase/admin';
+import { redirect } from "next/navigation";
+import { createClient } from "@/lib/supabase/server";
+import { supabaseAdmin } from "@/lib/supabase/admin";
 
-export const dynamic = 'force-dynamic';
+export const dynamic = "force-dynamic";
+
+export const metadata = {
+  title: "Vice Verse 1.0 — IVC PULSE",
+  description:
+    "Unified Multi-Portal Event Network for Club Member, Judge, TEAM_LEADER, and Admin Portals — Innovators & Visionaries Club (IVC) × InUnity",
+};
 
 export default async function HomePage() {
-  const headersList = await headers();
-  const host = headersList.get('host') || '';
-  const port = host.split(':')[1] || '';
-
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
   if (!user) {
-    redirect('/login');
+    redirect("/login");
   }
 
-  if (port === '3001' || port === '4001' || port === '3011') redirect('/judge');
-  if (port === '3002' || port === '4002' || port === '3012') redirect('/team');
-  if (port === '3003' || port === '4003' || port === '3013') redirect('/ops/scanner');
+  // Determine user's portal
+  let role =
+    (user.user_metadata?.role as string | undefined) ||
+    (user.app_metadata?.role as string | undefined);
 
-  // Fetch role securely server-side using service client
-  const { data: profile } = await supabaseAdmin
-    .from('profiles')
-    .select('role')
-    .eq('id', user.id)
-    .maybeSingle();
-
-  const role = profile?.role || (user.user_metadata?.role as string | undefined);
-
-  switch (role) {
-    case 'admin':
-      redirect('/admin');
-    case 'judge':
-      redirect('/judge');
-    case 'staff':
-    case 'organizer':
-      redirect('/ops/scanner');
-    case 'participant':
-    case 'leader':
-      redirect('/team/submission');
-    default:
-      redirect('/login');
+  if (!role) {
+    try {
+      const { data: profile } = await supabaseAdmin
+        .from("profiles")
+        .select("role")
+        .eq("id", user.id)
+        .maybeSingle();
+      if (profile?.role) role = profile.role;
+    } catch {
+      // fallback
+    }
   }
 
-  return null;
+  if (role === "admin") redirect("/admin");
+  if (role === "judge") redirect("/judge");
+  if (role === "staff" || role === "organizer") redirect("/ops/scanner");
+  redirect("/team");
 }

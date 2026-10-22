@@ -1,0 +1,15 @@
+{
+  "node": {
+    "4093f1ab8dd1e690bb77c62cdfe9613993c49dba57": {
+      "workers": {
+        "app/admin/(dashboard)/evaluations/page": {
+          "moduleId": 10603,
+          "async": false
+        }
+      },
+      "exportedName": "overrideEvaluationStatus",
+      "filename": "src/app/actions/admin-evaluations.ts"
+    }
+  },
+  "edge": {}
+}

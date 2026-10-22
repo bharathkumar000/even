@@ -7,7 +7,7 @@ export default async function AdminResultsPage() {
   let results: ResultItem[] = [];
   let isPublished = false;
   let isLocked = false;
-  const eventId = "00000000-0000-0000-0000-000000000001"; // Default flagship event UUID
+  let eventId = ""; // No hardcoded mock event ID
 
   try {
     const fetchResultsData = async () => {
@@ -23,11 +23,13 @@ export default async function AdminResultsPage() {
     );
 
     const data = await Promise.race([fetchResultsData(), timeoutPromise]);
-    if (data && data.length > 0) {
-      results = data;
-      isPublished = data.some((r) => r.is_published);
-      isLocked = data.some((r) => r.is_locked);
-    }
+if (data && data.length > 0) {
+  results = data;
+  // Capture the event ID from the first result row (if available)
+  eventId = (data[0] as any).event_id || "";
+  isPublished = data.some((r) => r.is_published);
+  isLocked = data.some((r) => r.is_locked);
+}
   } catch (err) {
     console.error("Failed to load results data:", err);
   }

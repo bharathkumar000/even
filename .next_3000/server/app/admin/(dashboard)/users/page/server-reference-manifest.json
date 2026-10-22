@@ -1,0 +1,65 @@
+{
+  "node": {
+    "00cd54dcab940daba1174c6802a36652163eb9ba0a": {
+      "workers": {
+        "app/admin/(dashboard)/users/page": {
+          "moduleId": 91037,
+          "async": false
+        }
+      },
+      "exportedName": "getTeamsHierarchyData",
+      "filename": "src/app/actions/admin-users.ts"
+    },
+    "40071ebce1985495af007bf4245e1ac96b07ffbf16": {
+      "workers": {
+        "app/admin/(dashboard)/users/page": {
+          "moduleId": 91037,
+          "async": false
+        }
+      },
+      "exportedName": "createUser",
+      "filename": "src/app/actions/admin-users.ts"
+    },
+    "400e7c4cd70ed47f567ae5c3d8147b6455c2cf316c": {
+      "workers": {
+        "app/admin/(dashboard)/users/page": {
+          "moduleId": 91037,
+          "async": false
+        }
+      },
+      "exportedName": "bulkImportUsers",
+      "filename": "src/app/actions/admin-users.ts"
+    },
+    "40422e173099b2c1bd1da1e480c767e0ac5a093a31": {
+      "workers": {
+        "app/admin/(dashboard)/users/page": {
+          "moduleId": 91037,
+          "async": false
+        }
+      },
+      "exportedName": "getUsersList",
+      "filename": "src/app/actions/admin-users.ts"
+    },
+    "40f14c3687ceb65688f30f0795b32fea47abed2c5a": {
+      "workers": {
+        "app/admin/(dashboard)/users/page": {
+          "moduleId": 91037,
+          "async": false
+        }
+      },
+      "exportedName": "updateUserRole",
+      "filename": "src/app/actions/admin-users.ts"
+    },
+    "40fe21c73cc99a935aecb6854597a2f93069faf69c": {
+      "workers": {
+        "app/admin/(dashboard)/users/page": {
+          "moduleId": 91037,
+          "async": false
+        }
+      },
+      "exportedName": "deleteUser",
+      "filename": "src/app/actions/admin-users.ts"
+    }
+  },
+  "edge": {}
+}

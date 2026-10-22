@@ -12,7 +12,7 @@ export const dynamic = "force-dynamic";
 
 export default async function TeamQrPage() {
   const { teamId } = await requireAuthenticatedTeamUser();
-  const effectiveTeamId = teamId || "00000000-0000-0000-0000-000000000010";
+  const effectiveTeamId = teamId;
 
   interface TeamInfo {
     id: string;

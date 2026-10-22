@@ -1,0 +1,15 @@
+{
+  "node": {
+    "40644aed84e8b9b9b6cf7f046495df65e12b013817": {
+      "workers": {
+        "app/admin/(dashboard)/results/page": {
+          "moduleId": 58786,
+          "async": false
+        }
+      },
+      "exportedName": "triggerResultsEngine",
+      "filename": "src/app/actions/admin-results.ts"
+    }
+  },
+  "edge": {}
+}

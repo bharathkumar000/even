@@ -22,7 +22,7 @@ interface TeamPublishedResult {
 
 export default async function TeamResultsPage() {
   const { teamId } = await requireAuthenticatedTeamUser();
-  const effectiveTeamId = teamId || "00000000-0000-0000-0000-000000000010";
+  const effectiveTeamId = teamId;
 
   let publishedResult: TeamPublishedResult | null = null;
   let teamInfo: TeamBasicInfo | null = null;

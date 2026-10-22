@@ -1,0 +1,35 @@
+{
+  "node": {
+    "400f430085789546279684e7fa43ce42c939a6f6c6": {
+      "workers": {
+        "app/judge/page": {
+          "moduleId": 65935,
+          "async": false
+        }
+      },
+      "exportedName": "getActiveAnnouncements",
+      "filename": "src/app/actions/announcements.ts"
+    },
+    "404c8da7c0c07ee3c6687724a5dd3d92f5602961f3": {
+      "workers": {
+        "app/judge/page": {
+          "moduleId": 65935,
+          "async": false
+        }
+      },
+      "exportedName": "createAnnouncement",
+      "filename": "src/app/actions/announcements.ts"
+    },
+    "60118d5e0fcccd485f059cd826684bc620e3723a8b": {
+      "workers": {
+        "app/judge/page": {
+          "moduleId": 65935,
+          "async": false
+        }
+      },
+      "exportedName": "toggleAnnouncementActive",
+      "filename": "src/app/actions/announcements.ts"
+    }
+  },
+  "edge": {}
+}

@@ -10,6 +10,7 @@ import {
   AlertCircle,
   Clock,
 } from "lucide-react";
+import RealtimeRoundsListener from "@/components/RealtimeRoundsListener";
 
 export const dynamic = "force-dynamic";
 
@@ -103,6 +104,7 @@ export default async function JudgeRubricsPage() {
 
   return (
     <div className="space-y-8 animate-fade-in font-tech">
+      <RealtimeRoundsListener channelName="judge-rubrics-rounds" />
       {/* Page Header */}
       <div className="border-b border-border-color pb-6">
         <p className="text-xs uppercase tracking-[3px] text-accent-primary font-bold mb-1">

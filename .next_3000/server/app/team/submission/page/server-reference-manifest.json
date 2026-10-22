@@ -1,0 +1,25 @@
+{
+  "node": {
+    "40fe9f69911ed83b78a9083d5643d7ed14b4fab191": {
+      "workers": {
+        "app/team/submission/page": {
+          "moduleId": 44018,
+          "async": false
+        }
+      },
+      "exportedName": "upsertTeamSubmission",
+      "filename": "src/app/actions/team-submission.ts"
+    },
+    "40d8bdd968efdc0f9acabaa653d450ba246f2ee524": {
+      "workers": {
+        "app/team/submission/page": {
+          "moduleId": 44018,
+          "async": false
+        }
+      },
+      "exportedName": "uploadPresentationFile",
+      "filename": "src/app/actions/upload-deliverable.ts"
+    }
+  },
+  "edge": {}
+}

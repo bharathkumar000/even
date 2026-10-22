@@ -361,3 +361,104 @@ export async function updateSpocTeams(data: {
   revalidatePath("/admin/spoc");
   return { success: true };
 }
+
+/**
+ * Smart Auto-Allotment Algorithm for SPOCs
+ * Distributes teams evenly across active SPOCs using 1-to-1 exclusive team mapping.
+ */
+export async function autoBalanceSpocAssignments(options: {
+  clearExisting?: boolean;
+} = {}) {
+  const { user } = await requireAdmin();
+
+  const [spocsRes, teamsRes] = await Promise.all([
+    supabaseAdmin.from("spocs").select("id, name").order("name", { ascending: true }),
+    supabaseAdmin.from("teams").select("id, name, track").order("name", { ascending: true }),
+  ]);
+
+  const spocs = spocsRes.data || [];
+  const teams = teamsRes.data || [];
+
+  if (spocs.length === 0) {
+    throw new Error("No SPOCs found to allocate. Please create SPOCs first.");
+  }
+  if (teams.length === 0) {
+    throw new Error("No teams found to allocate.");
+  }
+
+  // Clear existing if requested
+  if (options.clearExisting) {
+    await supabaseAdmin.from("team_spoc_assignments").delete();
+  } else {
+    // Only allocate unassigned teams
+    const { data: existing } = await supabaseAdmin.from("team_spoc_assignments").select("team_id");
+    const assignedTeamIds = new Set((existing || []).map((e) => e.team_id));
+    const unassignedTeams = teams.filter((t) => !assignedTeamIds.has(t.id));
+
+    if (unassignedTeams.length === 0) {
+      return { success: true, message: "All teams are already assigned to SPOCs.", count: 0 };
+    }
+  }
+
+  // Fetch current load per SPOC
+  const { data: currentAssignments } = await supabaseAdmin
+    .from("team_spoc_assignments")
+    .select("spoc_id");
+
+  const spocLoads = new Map<string, number>();
+  spocs.forEach((s) => spocLoads.set(s.id, 0));
+  (currentAssignments || []).forEach((a) => {
+    spocLoads.set(a.spoc_id, (spocLoads.get(a.spoc_id) || 0) + 1);
+  });
+
+  const { data: alreadyAssigned } = await supabaseAdmin.from("team_spoc_assignments").select("team_id");
+  const assignedSet = new Set((alreadyAssigned || []).map((e) => e.team_id));
+  const teamsToAssign = teams.filter((t) => !assignedSet.has(t.id));
+
+  const newRows: Array<{ spoc_id: string; team_id: string; allotted_at: string }> = [];
+
+  for (const team of teamsToAssign) {
+    // Pick SPOC with lowest current load
+    const targetSpoc = [...spocs].sort((a, b) => (spocLoads.get(a.id) || 0) - (spocLoads.get(b.id) || 0))[0];
+    newRows.push({
+      spoc_id: targetSpoc.id,
+      team_id: team.id,
+      allotted_at: new Date().toISOString(),
+    });
+    spocLoads.set(targetSpoc.id, (spocLoads.get(targetSpoc.id) || 0) + 1);
+  }
+
+  if (newRows.length > 0) {
+    const { error: insertError } = await supabaseAdmin
+      .from("team_spoc_assignments")
+      .upsert(newRows, { onConflict: "team_id" });
+
+    if (insertError) {
+      throw new Error(`Failed to save auto-balanced SPOC allotments: ${insertError.message}`);
+    }
+  }
+
+  // Audit log
+  void supabaseAdmin.from("audit_logs").insert([
+    {
+      action: "AUTO_BALANCE_SPOC_ASSIGNMENTS",
+      entity_type: "team_spoc_assignments",
+      admin_id: user.id,
+      details: {
+        spocs_count: spocs.length,
+        allocated_teams_count: newRows.length,
+      },
+      created_at: new Date().toISOString(),
+    },
+  ]);
+
+  revalidatePath("/admin/spoc");
+  revalidatePath("/ops");
+
+  return {
+    success: true,
+    spocsCount: spocs.length,
+    allocatedTeamsCount: newRows.length,
+  };
+}
+

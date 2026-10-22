@@ -14,6 +14,9 @@ import {
   ArrowLeft,
   Shield,
   Layers,
+  Home,
+  Gavel,
+  ScanLine,
 } from "lucide-react";
 import SignOutButton from "@/components/SignOutButton";
 
@@ -171,14 +174,6 @@ export default function TeamSidebar({
             <span className="text-accent-tertiary">{isLeader ? "LEADER" : "MEMBER"}</span>
           </div>
         </div>
-
-        <Link
-          href="/"
-          className="flex items-center gap-2 py-2 px-3 text-xs font-tech font-bold uppercase tracking-[1px] text-text-secondary hover:text-accent-tertiary transition-colors border border-border-color hover:border-accent-tertiary/40 rounded bg-surface-color-light/50"
-        >
-          <ArrowLeft size={14} />
-          <span>Exit to Home</span>
-        </Link>
 
         <SignOutButton variant="menu-item" label="Sign Out" />
 

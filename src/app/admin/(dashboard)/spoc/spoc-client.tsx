@@ -31,6 +31,8 @@ import {
   deleteSpoc,
   updateSpocTeams,
   uploadSpocAvatar,
+  autoBalanceSpocAssignments,
+  getSpocPortalData,
 } from "@/app/actions/admin-spoc";
 
 interface SpocClientProps {
@@ -425,6 +427,35 @@ export default function SpocClientView({
     });
   };
 
+  const handleAutoBalance = () => {
+    if (spocs.length === 0) {
+      setNotification({ type: "error", message: "Please create at least one SPOC before auto-balancing." });
+      return;
+    }
+
+    if (!confirm("Auto-balance unassigned teams evenly across all active SPOCs?")) {
+      return;
+    }
+
+    startTransition(async () => {
+      try {
+        const res = await autoBalanceSpocAssignments();
+        const fresh = await getSpocPortalData();
+        setSpocs(fresh.spocs);
+        setTeams(fresh.teams);
+        setNotification({
+          type: "success",
+          message: `Auto-balance complete! Distributed teams across ${res.spocsCount || spocs.length} SPOCs.`,
+        });
+      } catch (err: unknown) {
+        setNotification({
+          type: "error",
+          message: err instanceof Error ? err.message : "Failed to auto-balance SPOCs.",
+        });
+      }
+    });
+  };
+
   return (
     <div className="space-y-6 animate-fade-in font-tech">
       {/* Toast Notification */}
@@ -464,13 +495,24 @@ export default function SpocClientView({
                 SPOCs ({spocs.length})
               </h2>
             </div>
-            <button
-              onClick={handleOpenCreateModal}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-accent-secondary to-accent-primary text-black font-tech font-bold uppercase tracking-wider text-xs rounded transition-all hover:opacity-90 cursor-pointer shadow-[0_0_15px_rgba(255,0,127,0.3)]"
-            >
-              <Plus size={14} />
-              <span>Add SPOC</span>
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleAutoBalance}
+                disabled={isPending}
+                title="Automatically distribute teams across SPOCs evenly"
+                className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-surface-color-light border border-accent-tertiary/50 hover:border-accent-tertiary text-accent-tertiary font-tech font-bold uppercase tracking-wider text-[11px] rounded transition-all hover:bg-accent-tertiary/10 cursor-pointer disabled:opacity-50"
+              >
+                <Sparkles size={12} />
+                <span>Auto-Balance</span>
+              </button>
+              <button
+                onClick={handleOpenCreateModal}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-accent-secondary to-accent-primary text-black font-tech font-bold uppercase tracking-wider text-xs rounded transition-all hover:opacity-90 cursor-pointer shadow-[0_0_15px_rgba(255,0,127,0.3)]"
+              >
+                <Plus size={14} />
+                <span>Add SPOC</span>
+              </button>
+            </div>
           </div>
 
           {/* SPOC Search */}

@@ -26,19 +26,11 @@ const nextConfig: NextConfig = {
       },
     ],
   },
-  async headers() {
-    return [
-      {
-        source: '/:all*',
-        headers: [
-          {
-            key: 'Cache-Control',
-            value: 'public, max-age=31536000, immutable',
-          },
-        ],
-      },
-    ];
+  transpilePackages: ["lucide-react"],
+  experimental: {
+    optimizePackageImports: ["lucide-react"],
   },
+  // Removed global Cache‑Control header to avoid stale chunk caching.
 };
 
 export default nextConfig;

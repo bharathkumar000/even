@@ -2,6 +2,9 @@
 // This script removes all user accounts from Supabase except the predefined demo accounts.
 // It also ensures the demo accounts exist (creates them if missing).
 
+import dotenv from "dotenv";
+dotenv.config({ path: ".env.local" });
+dotenv.config();
 import { createClient } from "@supabase/supabase-js";
 
 // Load credentials from environment (same as test script)
@@ -65,7 +68,7 @@ async function purgeAndEnsure() {
       // Create auth user first
       const { data: authRes, error: authErr } = await supabase.auth.admin.createUser({
         email: demo.email,
-        password: "123",
+        password: "Password@123",
         email_confirm: true,
         user_metadata: { full_name: demo.email.split("@")[0], role: demo.role },
       });
