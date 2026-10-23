@@ -14,6 +14,7 @@ export interface UserProfileItem {
   created_at: string;
   team_name?: string | null;
   team_role?: string | null;
+  username?: string | null;
 }
 
 export interface MemberHierarchyItem {
@@ -182,42 +183,57 @@ export async function getUsersList(params?: {
       return [];
     }
 
-    // Fetch team memberships for team name display
+    // Fetch team memberships and auth users metadata in parallel
     const userIds = profiles.map((p) => p.id);
-  const { data: teamMembers } = await supabaseAdmin
-    .from("team_members")
-    .select(`
-      user_id,
-      role,
-      teams (
-        name,
-        code
-      )
-    `)
-    .in("user_id", userIds);
+    const [teamMembersRes, authUsersRes] = await Promise.all([
+      supabaseAdmin
+        .from("team_members")
+        .select(`
+          user_id,
+          role,
+          teams (
+            name,
+            code
+          )
+        `)
+        .in("user_id", userIds),
+      supabaseAdmin.auth.admin.listUsers({ perPage: 1000 }).catch(() => ({ data: null })),
+    ]);
 
-  const teamMap = new Map<string, { team_name: string; team_role: string }>();
-  if (teamMembers) {
-    (
-      teamMembers as unknown as Array<{
-        user_id: string;
-        role?: string | null;
-        teams?:
-          | { name?: string | null; code?: string | null }
-          | Array<{ name?: string | null; code?: string | null }>
-          | null;
-      }>
-    ).forEach((tm) => {
-      const teamObj = Array.isArray(tm.teams) ? tm.teams[0] : tm.teams;
-      teamMap.set(tm.user_id, {
-        team_name: teamObj?.name || teamObj?.code || "",
-        team_role: tm.role || "",
+    const teamMembers = teamMembersRes.data;
+    const teamMap = new Map<string, { team_name: string; team_role: string }>();
+    if (teamMembers) {
+      (
+        teamMembers as unknown as Array<{
+          user_id: string;
+          role?: string | null;
+          teams?:
+            | { name?: string | null; code?: string | null }
+            | Array<{ name?: string | null; code?: string | null }>
+            | null;
+        }>
+      ).forEach((tm) => {
+        const teamObj = Array.isArray(tm.teams) ? tm.teams[0] : tm.teams;
+        teamMap.set(tm.user_id, {
+          team_name: teamObj?.name || teamObj?.code || "",
+          team_role: tm.role || "",
+        });
       });
-    });
-  }
+    }
+
+    const usernameMap = new Map<string, string>();
+    if (authUsersRes?.data?.users) {
+      for (const u of authUsersRes.data.users) {
+        if (u.user_metadata?.username) {
+          usernameMap.set(u.id, String(u.user_metadata.username));
+        }
+      }
+    }
 
     return profiles.map((p) => {
       const tm = teamMap.get(p.id);
+      const explicitUsername = usernameMap.get(p.id);
+      const fallbackUsername = p.email ? p.email.split("@")[0] : null;
       return {
         id: p.id,
         email: p.email,
@@ -226,15 +242,16 @@ export async function getUsersList(params?: {
         created_at: p.created_at,
         team_name: tm?.team_name || null,
         team_role: tm?.team_role || null,
+        username: explicitUsername || fallbackUsername,
       };
     });
   };
 
   const timeoutPromise = new Promise<UserProfileItem[]>((resolve) =>
     setTimeout(() => {
-      console.warn("getUsersList timed out after 3000ms. Returning fallback empty list.");
+      console.warn("getUsersList timed out after 8000ms. Returning fallback empty list.");
       resolve([]);
-    }, 3000)
+    }, 8000)
   );
 
   return Promise.race([fetchUsers(), timeoutPromise]);
@@ -311,6 +328,7 @@ export async function createUser(data: {
   password: string;
   fullName: string;
   role: AllowedUserRole;
+  username?: string;
 }) {
   const { user } = await requireAdmin();
 
@@ -323,15 +341,16 @@ export async function createUser(data: {
   }
 
   // 1. Create account via Supabase Admin API
-  const { data: newUser, error: createError } = await supabaseAdmin.auth.admin.createUser({
-    email: data.email,
-    password: data.password,
-    email_confirm: true,
-    user_metadata: {
-      full_name: data.fullName,
-      role: data.role,
-    },
-  });
+    const { data: newUser, error: createError } = await supabaseAdmin.auth.admin.createUser({
+      email: data.email,
+      password: data.password,
+      email_confirm: true,
+      user_metadata: {
+        full_name: data.fullName,
+        role: data.role,
+        username: data.username,
+      },
+    });
 
   if (createError || !newUser?.user) {
     throw new Error(`Failed to create user: ${createError?.message || "Unknown error"}`);
@@ -429,6 +448,7 @@ export interface BulkImportUserRecord {
   team_name?: string;
   team_code?: string;
   track?: string;
+  username?: string;
 }
 
 export async function bulkImportUsers(records: BulkImportUserRecord[]) {
@@ -448,8 +468,15 @@ export async function bulkImportUsers(records: BulkImportUserRecord[]) {
   const DEFAULT_PASSWORD = "123";
 
   for (const item of records) {
-    const email = item.email?.trim().toLowerCase();
-    const fullName = item.full_name?.trim();
+     const rawEmail = item.email?.trim().toLowerCase();
+     const username = item.username?.trim();
+     const loginEmail = rawEmail
+       ? rawEmail
+       : username
+       ? (username.includes("@") ? username.toLowerCase() : `${username.toLowerCase()}@ivc.pulse`)
+       : null;
+     const email = loginEmail;
+     const fullName = item.full_name?.trim();
     let rawRole = item.role?.toLowerCase();
     // Security fencing: Nobody can be assigned as admin through CSV import
     if (rawRole === "admin") {
@@ -486,7 +513,7 @@ export async function bulkImportUsers(records: BulkImportUserRecord[]) {
         if (userId) {
           try {
             await supabaseAdmin.auth.admin.updateUserById(userId, {
-              user_metadata: { full_name: fullName, role },
+               user_metadata: { full_name: fullName, role, username: item.username },
             });
           } catch {
             // Ignore metadata sync error
@@ -501,7 +528,7 @@ export async function bulkImportUsers(records: BulkImportUserRecord[]) {
             email,
             password,
             email_confirm: true,
-            user_metadata: { full_name: fullName, role },
+             user_metadata: { full_name: fullName, role, username: item.username },
           });
 
           if (createAuthErr) throw createAuthErr;

@@ -98,13 +98,13 @@ export default function OpsMobileNav() {
                     key={item.href}
                     href={item.href}
                     onClick={() => setOpen(false)}
-                    className={`flex items-center gap-3 py-2.5 px-3 rounded text-xs font-tech font-semibold uppercase tracking-wider transition-colors ${
+                    className={`flex items-center gap-3.5 py-3 px-4 rounded-2xl text-[13px] font-medium transition-all duration-300 ease-out active:scale-[0.98] ${
                       isActive
-                        ? "bg-gradient-to-r from-accent-tertiary/20 to-transparent text-text-primary border-l-2 border-accent-tertiary"
-                        : "text-text-secondary hover:bg-surface-color-light/40 hover:text-text-primary"
+                        ? "bg-[linear-gradient(90deg,#E0026E_0%,#B8005A_26%,#5B0832_60%,#240A1B_85%,#140E17_100%)] text-white shadow-[0_4px_22px_rgba(224,2,110,0.38),inset_0_1px_1px_rgba(255,255,255,0.22)] border border-pink-500/25 animate-active-pill font-semibold"
+                        : "text-[#94A3B8] border border-transparent hover:bg-white/[0.04] hover:text-white"
                     }`}
                   >
-                    <item.icon size={18} className={isActive ? "text-accent-tertiary" : ""} />
+                    <item.icon size={18} className={isActive ? "text-white" : "text-[#94A3B8]"} />
                     <span>{item.label}</span>
                   </Link>
                 );

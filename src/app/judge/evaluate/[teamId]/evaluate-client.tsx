@@ -98,21 +98,13 @@ export default function EvaluateClientView({
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [draftRestoredMsg, setDraftRestoredMsg] = useState<string | null>(null);
-  const [showTimer, setShowTimer] = useState(false);
+  const [showTimer, setShowTimer] = useState(true);
+  const [timerSeconds, setTimerSeconds] = useState(300);
 
   const isLocked = existingEvaluation?.status === "locked";
   const draftKey = `ivc_draft_${activeRound?.id || "noround"}_${teamId}`;
 
-  // Check localStorage for timer toggle preference on mount
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    try {
-      const savedTimerPref = localStorage.getItem("ivc_judge_show_timer");
-      if (savedTimerPref === "true") {
-        setShowTimer(true);
-      }
-    } catch {}
-  }, []);
+
 
   // Check localStorage for unsaved drafts on mount if not already submitted
   useEffect(() => {
@@ -317,7 +309,22 @@ export default function EvaluateClientView({
         </button>
       </div>
 
-      {showTimer && <PitchTimer initialSeconds={300} />}
+        {/* Editable timer input */}
+        <div className="flex items-center gap-2 mt-2">
+          <label className="font-tech text-xs uppercase text-text-secondary">Timer (seconds):</label>
+          <input
+            type="number"
+            min="1"
+            value={timerSeconds}
+            onChange={(e) => {
+              const val = Number(e.target.value);
+              if (!isNaN(val) && val > 0) setTimerSeconds(val);
+            }}
+            className="w-20 p-1 border border-border-color rounded text-xs"
+          />
+        </div>
+        {showTimer && <PitchTimer key={timerSeconds} initialSeconds={timerSeconds} />}
+
 
 
       {/* Submission Assets Panel */}

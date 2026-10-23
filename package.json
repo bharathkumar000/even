@@ -41,8 +41,9 @@
     "@types/react-dom": "^18",
     "autoprefixer": "^10.6.1",
     "dotenv": "^18.0.8",
-    "eslint": "^9.20.0",
+    "eslint": "^8.57.1",
     "eslint-config-next": "^14.2.35",
+    "eslint-plugin-react-hooks": "^7.1.1",
     "postcss": "^8.5.28",
     "tailwindcss": "^4.3.3",
     "typescript": "^5"

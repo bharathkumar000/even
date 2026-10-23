@@ -25,7 +25,7 @@ export default function AdminSidebar() {
   const pathname = usePathname();
 
   const navItems = [
-    { href: "/admin", icon: LayoutDashboard, label: "Overview" },
+    { href: "/admin", icon: Users, label: "Overview" },
     { href: "/admin/users", icon: Users, label: "User Management" },
     { href: "/admin/assignments", icon: UserCheck, label: "Judge Assignments" },
     { href: "/admin/spoc", icon: Contact2, label: "SPOC Management" },
@@ -72,7 +72,7 @@ export default function AdminSidebar() {
         </div>
       </div>
 
-      <div className="flex-1 py-6 px-4 flex flex-col gap-2">
+      <div className="flex-1 py-6 px-4 flex flex-col gap-1.5">
         <p className="font-tech text-xs uppercase tracking-[2px] text-text-secondary mb-3 pl-3 font-bold">
           Navigation
         </p>
@@ -93,29 +93,29 @@ export default function AdminSidebar() {
                   setPendingHref(item.href);
                 }
               }}
-              className={`group flex items-center justify-between py-3 px-4 font-tech font-semibold uppercase tracking-[1px] transition-all duration-150 border-l-[3px] ${
+              className={`group relative flex items-center justify-between py-3.5 px-4 rounded-2xl transition-all duration-300 ease-out active:scale-[0.98] ${
                 isActive
-                  ? "bg-gradient-to-r from-[rgba(255,0,127,0.2)] to-transparent text-text-primary border-accent-secondary"
-                  : "text-text-secondary border-transparent hover:bg-[rgba(255,255,255,0.03)] hover:text-text-primary hover:border-border-color hover:pl-5"
+                  ? "bg-[linear-gradient(90deg,#E0026E_0%,#B8005A_26%,#5B0832_60%,#240A1B_85%,#140E17_100%)] text-white shadow-[0_4px_22px_rgba(224,2,110,0.38),inset_0_1px_1px_rgba(255,255,255,0.22)] border border-pink-500/25 animate-active-pill"
+                  : "text-[#94A3B8] border border-transparent hover:text-white hover:bg-white/[0.04] hover:translate-x-1"
               }`}
             >
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-3.5">
                 <item.icon
-                  size={18}
-                  className={isActive ? "text-accent-secondary" : "group-hover:text-text-primary"}
+                  size={19}
+                  className={`transition-colors duration-200 shrink-0 ${
+                    isActive ? "text-white" : "text-[#94A3B8] group-hover:text-white"
+                  }`}
                 />
                 <span
-                  style={{
-                    textShadow: isActive
-                      ? "0 0 10px #FF007F, 0 0 20px rgba(255,0,127,0.5)"
-                      : "none",
-                  }}
+                  className={`text-[14px] font-medium tracking-normal transition-colors duration-200 ${
+                    isActive ? "text-white font-semibold" : "text-[#94A3B8] group-hover:text-white"
+                  }`}
                 >
                   {item.label}
                 </span>
               </div>
               {isPending && !isCurrentActive && (
-                <div className="w-1.5 h-1.5 rounded-full bg-accent-secondary animate-ping" />
+                <div className="w-1.5 h-1.5 rounded-full bg-white shadow-[0_0_8px_#FFF] animate-ping" />
               )}
             </Link>
           );

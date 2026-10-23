@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useTransition, useMemo } from "react";
+import { createPortal } from "react-dom";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   Users,
@@ -129,6 +130,20 @@ export default function UsersClientView({
   // Modals state
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [userToDelete, setUserToDelete] = useState<UserProfileItem | null>(null);
+  const [mounted, setMounted] = useState(false);
+
+  React.useEffect(() => {
+    setMounted(true);
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setIsAddModalOpen(false);
+        setUserToDelete(null);
+        setIsImportModalOpen(false);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
 
   // Notifications
   const [notification, setNotification] = useState<{
@@ -137,12 +152,13 @@ export default function UsersClientView({
   } | null>(null);
 
   // New User Form State
-  const [newUserData, setNewUserData] = useState({
-    fullName: "",
-    email: "",
-    password: "",
-    role: "participant" as AllowedUserRole,
-  });
+   const [newUserData, setNewUserData] = useState({
+     fullName: "",
+     username: "",
+     email: "",
+     password: "",
+     role: "participant" as AllowedUserRole,
+   });
   const [formLoading, setFormLoading] = useState(false);
 
   // Import / Export State
@@ -214,9 +230,10 @@ export default function UsersClientView({
   // Export Users as CSV
   const handleExportCSV = () => {
     try {
-      const headers = ["Full Name", "Email", "Role", "Team Name", "Team Role", "Created At"];
+      const headers = ["Full Name", "Username", "Email", "Role", "Team Name", "Team Role", "Created At"];
       const rows = usersList.map((u) => [
         `"${(u.full_name || "").replace(/"/g, '""')}"`,
+        `"${(u.username || (u.email ? u.email.split("@")[0] : "")).replace(/"/g, '""')}"`,
         `"${(u.email || "").replace(/"/g, '""')}"`,
         `"${u.role || ""}"`,
         `"${(u.team_name || "").replace(/"/g, '""')}"`,
@@ -246,14 +263,19 @@ export default function UsersClientView({
   };
 
   // Download Sample CSV Template
-  const handleDownloadSampleTemplate = () => {
-    const headers = ["Full Name", "Email", "Role", "Password", "Team Name", "Team Code", "Track"];
-    const sampleRows = [
-      ['"Dr. Rajesh Sharma"', '"judge.rajesh@ivc.pulse"', '"judge"', '"123"', '""', '""', '""'],
-      ['"Ananya Rao"', '"lead.team21@ivc.pulse"', '"leader"', '"123"', '"Team CyberViper"', '"CV-21"', '"Artificial Intelligence"'],
-      ['"Rohan Verma"', '"member1.team21@ivc.pulse"', '"participant"', '"123"', '"Team CyberViper"', '"CV-21"', '"Artificial Intelligence"'],
-      ['"Kavita Patil"', '"spoc.kavita@ivc.pulse"', '"staff"', '"123"', '""', '""', '""'],
-    ];
+   const handleDownloadSampleTemplate = () => {
+     const headers = ["Full Name", "Email", "Username", "Role", "Password", "Team Name", "Team Code", "Track"];
+     const sampleRows = [
+
+
+
+
+      ['"Dr. Rajesh Sharma"', '"judge.rajesh@ivc.pulse"', '', '"judge"', '"123"', '""', '""', '""'],
+      ['"Ananya Rao"', '"lead.team21@ivc.pulse"', '', '"leader"', '"123"', '"Team CyberViper"', '"CV-21"', '"Artificial Intelligence"'],
+      ['"Rohan Verma"', '"member1.team21@ivc.pulse"', '', '"participant"', '"123"', '"Team CyberViper"', '"CV-21"', '"Artificial Intelligence"'],
+      ['"Kavita Patil"', '"spoc.kavita@ivc.pulse"', '', '"staff"', '"123"', '""', '""', '""'],
+     ];
+
 
     const csvContent = "data:text/csv;charset=utf-8," + [headers.join(","), ...sampleRows.map((e) => e.join(","))].join("\n");
     const encodedUri = encodeURI(csvContent);
@@ -290,18 +312,19 @@ export default function UsersClientView({
         const rawHeaders = lines[0].split(",").map((h) => h.replace(/^["']|["']$/g, "").trim().toLowerCase());
         
         // Find column indices
-        const nameIdx = rawHeaders.findIndex((h) => h.includes("name"));
-        const emailIdx = rawHeaders.findIndex((h) => h.includes("email"));
-        const roleIdx = rawHeaders.findIndex((h) => h.includes("role"));
-        const passIdx = rawHeaders.findIndex((h) => h.includes("pass"));
-        const teamNameIdx = rawHeaders.findIndex((h) => h.includes("team") && !h.includes("code") && !h.includes("role"));
-        const teamCodeIdx = rawHeaders.findIndex((h) => h.includes("code"));
-        const trackIdx = rawHeaders.findIndex((h) => h.includes("track"));
-
-        if (emailIdx === -1) {
-          setImportError("CSV header must contain an 'Email' column.");
-          return;
-        }
+         const nameIdx = rawHeaders.findIndex((h) => h.includes("name"));
+         const emailIdx = rawHeaders.findIndex((h) => h.includes("email"));
+         const usernameIdx = rawHeaders.findIndex((h) => h.includes("username"));
+         const roleIdx = rawHeaders.findIndex((h) => h.includes("role"));
+         const passIdx = rawHeaders.findIndex((h) => h.includes("pass"));
+         const teamNameIdx = rawHeaders.findIndex((h) => h.includes("team") && !h.includes("code") && !h.includes("role"));
+         const teamCodeIdx = rawHeaders.findIndex((h) => h.includes("code"));
+         const trackIdx = rawHeaders.findIndex((h) => h.includes("track"));
+ 
+         if (emailIdx === -1 && usernameIdx === -1) {
+           setImportError("CSV header must contain an 'Email' or 'Username' column.");
+           return;
+         }
 
         // Helper regex to split CSV respecting quotes
         const parseCSVLine = (line: string): string[] => {
@@ -323,30 +346,42 @@ export default function UsersClientView({
           return result;
         };
 
-        const records: BulkImportUserRecord[] = [];
-        for (let i = 1; i < lines.length; i++) {
-          const cols = parseCSVLine(lines[i]);
-          const email = cols[emailIdx]?.trim();
-          const fullName = nameIdx !== -1 ? cols[nameIdx]?.trim() : email.split("@")[0];
-          let roleRaw = (roleIdx !== -1 ? cols[roleIdx]?.trim().toLowerCase() : "participant") as AllowedUserRole;
-          
-          // Fencing: nobody can be assigned as admin through CSV import
-          if (roleRaw === "admin" || !["judge", "staff", "participant", "leader"].includes(roleRaw)) {
-            roleRaw = "participant";
-          }
+         const records: BulkImportUserRecord[] = [];
+         for (let i = 1; i < lines.length; i++) {
+           const cols = parseCSVLine(lines[i]);
 
-          if (email) {
+
+          const rawEmail = emailIdx !== -1 ? cols[emailIdx]?.trim() : undefined;
+          const rawUsername = usernameIdx !== -1 ? cols[usernameIdx]?.trim() : undefined;
+          const loginEmail = rawEmail
+            ? rawEmail.toLowerCase()
+            : rawUsername
+            ? (rawUsername.includes("@") ? rawUsername.toLowerCase() : `${rawUsername.toLowerCase()}@ivc.pulse`)
+            : undefined;
+          const fullName = nameIdx !== -1 ? cols[nameIdx]?.trim() : loginEmail?.split("@")[0];
+           let roleRaw = (roleIdx !== -1 ? cols[roleIdx]?.trim().toLowerCase() : "participant") as AllowedUserRole;
+            
+           // Fencing: nobody can be assigned as admin through CSV import
+           if (roleRaw === "admin" || !["judge", "staff", "participant", "leader"].includes(roleRaw)) {
+             roleRaw = "participant";
+           }
+ 
+
+
+          if (loginEmail) {
             records.push({
-              email,
-              full_name: fullName || email.split("@")[0],
+              email: loginEmail,
+              full_name: fullName || loginEmail.split("@")[0],
               role: roleRaw,
               password: passIdx !== -1 && cols[passIdx] ? cols[passIdx] : undefined,
               team_name: teamNameIdx !== -1 ? cols[teamNameIdx] : undefined,
               team_code: teamCodeIdx !== -1 ? cols[teamCodeIdx] : undefined,
               track: trackIdx !== -1 ? cols[trackIdx] : undefined,
+              username: rawUsername,
             });
           }
-        }
+         }
+
 
         if (records.length === 0) {
           setImportError("No valid rows found in the CSV.");
@@ -427,7 +462,10 @@ export default function UsersClientView({
         const nameMatch = u.full_name?.toLowerCase().includes(query);
         const emailMatch = u.email?.toLowerCase().includes(query);
         const teamMatch = u.team_name?.toLowerCase().includes(query);
-        if (!nameMatch && !emailMatch && !teamMatch) return false;
+        const usernameMatch =
+          u.username?.toLowerCase().includes(query) ||
+          u.email?.split("@")[0]?.toLowerCase().includes(query);
+        if (!nameMatch && !emailMatch && !teamMatch && !usernameMatch) return false;
       }
 
       return true;
@@ -485,19 +523,35 @@ export default function UsersClientView({
     setNotification(null);
 
     try {
-      await createUser(newUserData);
-      setNotification({
-        type: "success",
-        message: `Account created for ${newUserData.email} with role ${newUserData.role}`,
-      });
-      setIsAddModalOpen(false);
-      setNewUserData({
-        fullName: "",
-        email: "",
-        password: "",
-        role: "participant",
-      });
-      router.refresh();
+       const emailProvided = newUserData.email.trim();
+       const loginEmail = emailProvided
+         ? emailProvided
+         : (() => {
+             const trimmedUsername = newUserData.username.trim();
+             return trimmedUsername.includes("@")
+               ? trimmedUsername
+               : `${trimmedUsername}@ivc.pulse`;
+           })();
+       await createUser({
+         email: loginEmail,
+         password: newUserData.password,
+         fullName: newUserData.fullName,
+         role: newUserData.role,
+         username: newUserData.username.trim(),
+       });
+       setNotification({
+         type: "success",
+         message: `Account created for ${loginEmail} with role ${newUserData.role}`,
+       });
+       setIsAddModalOpen(false);
+       setNewUserData({
+         fullName: "",
+         username: "",
+         email: "",
+         password: "",
+         role: "participant",
+       });
+       router.refresh();
     } catch (err: unknown) {
       setNotification({
         type: "error",
@@ -844,15 +898,20 @@ export default function UsersClientView({
                       key={user.id}
                       className="hover:bg-white/[0.02] transition-colors duration-150"
                     >
-                      {/* Name & Email */}
+                      {/* Name, Username & Email */}
                       <td className="p-4">
                         <div className="flex items-center gap-3">
                           <div className="w-9 h-9 rounded bg-surface-color-light border border-border-color flex items-center justify-center font-heading font-bold text-accent-primary uppercase">
                             {user.full_name ? user.full_name.charAt(0) : "U"}
                           </div>
                           <div>
-                            <div className="font-bold text-text-primary flex items-center gap-2">
+                            <div className="font-bold text-text-primary flex items-center gap-2 flex-wrap">
                               <span>{user.full_name || "Unnamed User"}</span>
+                              {(user.username || (user.email ? user.email.split("@")[0] : null)) && (
+                                <span className="text-[11px] font-mono text-accent-tertiary bg-accent-tertiary/10 border border-accent-tertiary/30 px-1.5 py-0.5 rounded font-normal">
+                                  @{user.username || user.email?.split("@")[0]}
+                                </span>
+                              )}
                               {isSelf && (
                                 <span className="text-[10px] px-1.5 py-0.2 bg-accent-secondary/20 text-accent-secondary border border-accent-secondary/40 font-mono">
                                   YOU
@@ -945,9 +1004,14 @@ export default function UsersClientView({
       )}
 
       {/* ADD USER MODAL */}
-      {isAddModalOpen && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in">
-          <div className="glass-panel max-w-md w-full p-6 border border-accent-secondary/60 shadow-2xl relative space-y-5">
+      {isAddModalOpen && mounted && createPortal(
+        <div
+          className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[100] flex items-center justify-center p-4 animate-fade-in overflow-y-auto"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setIsAddModalOpen(false);
+          }}
+        >
+          <div className="glass-panel w-full max-w-md my-auto p-6 border border-accent-secondary/60 shadow-2xl relative space-y-5">
             <div className="flex items-center justify-between border-b border-border-color pb-3">
               <div className="flex items-center gap-2">
                 <UserPlus size={18} className="text-accent-secondary" />
@@ -956,8 +1020,9 @@ export default function UsersClientView({
                 </h3>
               </div>
               <button
+                type="button"
                 onClick={() => setIsAddModalOpen(false)}
-                className="text-text-secondary hover:text-text-primary"
+                className="text-text-secondary hover:text-text-primary transition-colors cursor-pointer"
               >
                 <X size={18} />
               </button>
@@ -983,24 +1048,43 @@ export default function UsersClientView({
                 </div>
               </div>
 
-              <div className="space-y-1">
-                <label className="block text-xs uppercase text-text-secondary font-bold">
-                  Email Address
-                </label>
-                <div className="relative">
-                  <Mail size={15} className="absolute left-3 top-2.5 text-text-secondary" />
-                  <input
-                    type="email"
-                    required
-                    placeholder="e.g. alex@ivcpulse.com"
-                    value={newUserData.email}
-                    onChange={(e) =>
-                      setNewUserData((p) => ({ ...p, email: e.target.value }))
-                    }
-                    className="w-full bg-surface-color border border-border-color py-2 pl-9 pr-3 text-xs text-text-primary focus:border-accent-secondary outline-none font-sans tracking-normal"
-                  />
-                </div>
-              </div>
+               <div className="space-y-1">
+                 <label className="block text-xs uppercase text-text-secondary font-bold">
+                   Username
+                 </label>
+                 <div className="relative">
+                   <User size={15} className="absolute left-3 top-2.5 text-text-secondary" />
+                   <input
+                     type="text"
+                     required
+                     placeholder="e.g. alex"
+                     value={newUserData.username}
+                     onChange={(e) =>
+                       setNewUserData((p) => ({ ...p, username: e.target.value }))
+                     }
+                     className="w-full bg-surface-color border border-border-color py-2 pl-9 pr-3 text-xs text-text-primary focus:border-accent-secondary outline-none font-sans tracking-normal"
+                   />
+                 </div>
+               </div>
+
+               <div className="space-y-1">
+                 <label className="block text-xs uppercase text-text-secondary font-bold">
+                   Email Address
+                 </label>
+                 <div className="relative">
+                   <Mail size={15} className="absolute left-3 top-2.5 text-text-secondary" />
+                   <input
+                     type="email"
+                     required
+                     placeholder="e.g. alex@ivc.pulse"
+                     value={newUserData.email}
+                     onChange={(e) =>
+                       setNewUserData((p) => ({ ...p, email: e.target.value }))
+                     }
+                     className="w-full bg-surface-color border border-border-color py-2 pl-9 pr-3 text-xs text-text-primary focus:border-accent-secondary outline-none font-sans tracking-normal"
+                   />
+                 </div>
+               </div>
 
               <div className="space-y-1">
                 <label className="block text-xs uppercase text-text-secondary font-bold">
@@ -1063,13 +1147,19 @@ export default function UsersClientView({
               </div>
             </form>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* DELETE CONFIRMATION MODAL */}
-      {userToDelete && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in">
-          <div className="glass-panel max-w-sm w-full p-6 border border-status-error/60 shadow-2xl relative space-y-4">
+      {userToDelete && mounted && createPortal(
+        <div
+          className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[100] flex items-center justify-center p-4 animate-fade-in overflow-y-auto"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setUserToDelete(null);
+          }}
+        >
+          <div className="glass-panel max-w-sm w-full my-auto p-6 border border-status-error/60 shadow-2xl relative space-y-4">
             <div className="flex items-center gap-3 text-status-error">
               <div className="p-2 rounded bg-status-error/15 border border-status-error/40">
                 <Trash2 size={20} />
@@ -1102,13 +1192,27 @@ export default function UsersClientView({
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* IMPORT CSV / GOOGLE SHEETS MODAL */}
-      {isImportModalOpen && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in font-tech">
-          <div className="glass-panel max-w-xl w-full p-6 border border-accent-tertiary/60 shadow-2xl relative space-y-4 max-h-[90vh] overflow-y-auto">
+      {isImportModalOpen && mounted && createPortal(
+        <div
+          className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[100] flex items-center justify-center p-4 animate-fade-in font-tech overflow-y-auto"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setIsImportModalOpen(false);
+              setImportFile(null);
+              setImportPreview([]);
+              setSelectedRecordIndexes(new Set());
+              setEditingIndex(null);
+              setEditRowData(null);
+              setImportError(null);
+            }
+          }}
+        >
+          <div className="glass-panel max-w-xl w-full my-auto p-6 border border-accent-tertiary/60 shadow-2xl relative space-y-4 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between border-b border-border-color pb-3">
               <div className="flex items-center gap-2.5">
                 <div className="p-2 rounded bg-accent-tertiary/15 border border-accent-tertiary/40">
@@ -1151,9 +1255,9 @@ export default function UsersClientView({
                   Download Sample Template (.CSV)
                 </button>
               </div>
-              <p className="text-text-secondary text-[11px] leading-relaxed m-0">
-                Columns supported: <code className="text-accent-tertiary font-mono">Full Name</code>, <code className="text-accent-tertiary font-mono">Email</code>, <code className="text-accent-tertiary font-mono">Role</code> (judge / leader / participant / staff / admin), <code className="text-accent-tertiary font-mono">Password</code> (optional, defaults to 123), <code className="text-accent-tertiary font-mono">Team Name</code>, <code className="text-accent-tertiary font-mono">Team Code</code>, <code className="text-accent-tertiary font-mono">Track</code>.
-              </p>
+                 <p className="text-text-secondary text-[11px] leading-relaxed m-0">
+                 Columns supported: <code className="text-accent-tertiary font-mono">Full Name</code>, <code className="text-accent-tertiary font-mono">Email</code>, <code className="text-accent-tertiary font-mono">Username</code>, <code className="text-accent-tertiary font-mono">Role</code> (judge / leader / participant / staff / admin), <code className="text-accent-tertiary font-mono">Password</code> (optional, defaults to 123), <code className="text-accent-tertiary font-mono">Team Name</code>, <code className="text-accent-tertiary font-mono">Team Code</code>, <code className="text-accent-tertiary font-mono">Track</code>.
+                 </p>
               <p className="text-[10px] text-text-secondary/70 m-0">
                 Tip: In Google Sheets, click <em>File → Download → Comma Separated Values (.csv)</em> and upload it below.
               </p>
@@ -1343,19 +1447,32 @@ export default function UsersClientView({
                     />
                   </div>
 
-                  <div>
-                    <label className="text-[10px] text-text-secondary uppercase font-bold block mb-1">
-                      Email Address
-                    </label>
-                    <input
-                      type="email"
-                      value={editRowData.email}
-                      onChange={(e) =>
-                        setEditRowData({ ...editRowData, email: e.target.value })
-                      }
-                      className="w-full bg-surface-color-light border border-border-color p-2 rounded text-xs text-text-primary outline-none focus:border-accent-tertiary font-mono"
-                    />
-                  </div>
+                   <div>
+                     <label className="text-[10px] text-text-secondary uppercase font-bold block mb-1">
+                       Email Address
+                     </label>
+                     <input
+                       type="email"
+                       value={editRowData.email}
+                       onChange={(e) =>
+                         setEditRowData({ ...editRowData, email: e.target.value })
+                       }
+                       className="w-full bg-surface-color-light border border-border-color p-2 rounded text-xs text-text-primary outline-none focus:border-accent-tertiary font-mono"
+                     />
+                   </div>
+                   <div>
+                     <label className="text-[10px] text-text-secondary uppercase font-bold block mb-1">
+                       Username (optional)
+                     </label>
+                     <input
+                       type="text"
+                       value={editRowData.username || ""}
+                       onChange={(e) =>
+                         setEditRowData({ ...editRowData, username: e.target.value })
+                       }
+                       className="w-full bg-surface-color-light border border-border-color p-2 rounded text-xs text-text-primary outline-none focus:border-accent-tertiary font-mono"
+                     />
+                   </div>
 
                   <div>
                     <label className="text-[10px] text-text-secondary uppercase font-bold block mb-1">
@@ -1456,7 +1573,8 @@ export default function UsersClientView({
               </div>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

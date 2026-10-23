@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Radio, Send, Plus, CheckCircle2, AlertCircle } from "lucide-react";
+import { Radio, Send } from "lucide-react";
 import { createAnnouncement } from "@/app/actions/announcements";
 
 export default function AdminAnnouncementModal() {
@@ -16,10 +16,8 @@ export default function AdminAnnouncementModal() {
   const handleBroadcast = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim() || !message.trim()) return;
-
     setLoading(true);
     setStatusMsg(null);
-
     try {
       await createAnnouncement({
         title,
@@ -41,6 +39,10 @@ export default function AdminAnnouncementModal() {
     }
   };
 
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Escape") setIsOpen(false);
+  };
+
   return (
     <>
       <button
@@ -52,12 +54,19 @@ export default function AdminAnnouncementModal() {
       </button>
 
       {isOpen && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 font-tech animate-fade-in">
+        <div
+          className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 font-tech animate-fade-in"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="admin-announcement-title"
+          aria-describedby="admin-announcement-desc"
+          onKeyDown={handleKeyDown}
+        >
           <div className="glass-panel max-w-lg w-full p-6 border border-accent-secondary/50 space-y-5 bg-[#0a0a12]">
             <div className="flex items-center justify-between border-b border-border-color pb-3">
               <div className="flex items-center gap-2">
                 <Radio className="text-accent-secondary animate-pulse" size={18} />
-                <h3 className="font-heading text-lg text-text-primary uppercase m-0">
+                <h3 id="admin-announcement-title" className="font-heading text-lg text-text-primary uppercase m-0">
                   Broadcast Event Announcement
                 </h3>
               </div>
@@ -70,7 +79,7 @@ export default function AdminAnnouncementModal() {
             </div>
 
             {statusMsg && (
-              <div className="p-3 bg-status-success/15 border border-status-success text-status-success text-xs font-mono">
+              <div id="admin-announcement-desc" className="p-3 bg-status-success/15 border border-status-success text-status-success text-xs font-mono">
                 {statusMsg}
               </div>
             )}
@@ -111,7 +120,7 @@ export default function AdminAnnouncementModal() {
                   </label>
                   <select
                     value={priority}
-                    onChange={(e: any) => setPriority(e.target.value)}
+                    onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setPriority(e.target.value as "normal" | "important" | "urgent")}
                     className="w-full bg-surface-color border border-border-color p-2.5 text-text-primary text-xs focus:border-accent-secondary outline-none"
                   >
                     <option value="normal">Normal (Info)</option>
@@ -126,7 +135,7 @@ export default function AdminAnnouncementModal() {
                   </label>
                   <select
                     value={targetAudience}
-                    onChange={(e: any) => setTargetAudience(e.target.value)}
+                    onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setTargetAudience(e.target.value as "all" | "teams" | "judges" | "ops")}
                     className="w-full bg-surface-color border border-border-color p-2.5 text-text-primary text-xs focus:border-accent-secondary outline-none"
                   >
                     <option value="all">All Portals (Global)</option>
@@ -161,3 +170,4 @@ export default function AdminAnnouncementModal() {
     </>
   );
 }
+
