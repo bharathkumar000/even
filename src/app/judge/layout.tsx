@@ -51,7 +51,7 @@ export default async function JudgeLayout({
     <div className="flex flex-col md:flex-row min-h-screen md:h-screen md:overflow-hidden bg-[#050508] text-text-primary">
       <JudgeSidebar />
       <main
-        className="flex-1 p-6 md:p-10 md:overflow-y-auto overscroll-contain h-full"
+        className="flex-1 p-4 sm:p-6 md:p-10 pb-28 sm:pb-24 md:pb-10 md:overflow-y-auto overscroll-contain h-full"
         style={{
           background:
             "radial-gradient(circle at top right, rgba(251, 200, 21, 0.04), transparent 500px), radial-gradient(circle at bottom left, rgba(255, 0, 127, 0.04), transparent 500px)",
