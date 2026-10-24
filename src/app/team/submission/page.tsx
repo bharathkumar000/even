@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 export default async function TeamSubmissionPage() {
   const { teamId, role } = await requireAuthenticatedTeamUser();
 
-  const effectiveTeamId = teamId || "00000000-0000-0000-0000-000000000010"; // Fallback demo team context
+  const effectiveTeamId = teamId; // No fallback mock ID
   let activeRound: ActiveRoundInfo | null = null;
   let currentSubmission: CurrentSubmissionInfo | null = null;
 

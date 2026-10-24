@@ -99,6 +99,7 @@ export default function EvaluateClientView({
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [draftRestoredMsg, setDraftRestoredMsg] = useState<string | null>(null);
   const [showTimer, setShowTimer] = useState(false);
+  const [timerSeconds, setTimerSeconds] = useState(300);
 
   const isLocked = existingEvaluation?.status === "locked";
   const draftKey = `ivc_draft_${activeRound?.id || "noround"}_${teamId}`;
@@ -317,7 +318,27 @@ export default function EvaluateClientView({
         </button>
       </div>
 
-      {showTimer && <PitchTimer initialSeconds={300} />}
+      {showTimer && (
+        <div className="space-y-3">
+          <div className="flex items-center gap-2">
+            <label className="font-tech text-xs uppercase text-text-secondary font-bold">
+              Timer Duration (Seconds):
+            </label>
+            <input
+              type="number"
+              min="10"
+              max="3600"
+              value={timerSeconds}
+              onChange={(e) => {
+                const val = Number(e.target.value);
+                if (!isNaN(val) && val > 0) setTimerSeconds(val);
+              }}
+              className="w-24 px-2 py-1 bg-surface-color border border-border-color rounded text-xs font-mono text-text-primary focus:border-accent-primary outline-none"
+            />
+          </div>
+          <PitchTimer key={timerSeconds} initialSeconds={timerSeconds} />
+        </div>
+      )}
 
 
       {/* Submission Assets Panel */}

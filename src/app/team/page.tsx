@@ -33,7 +33,7 @@ export const dynamic = "force-dynamic";
 
 export default async function TeamDashboardPage() {
   const { teamId, user, role } = await requireAuthenticatedTeamUser();
-  const effectiveTeamId = teamId || "00000000-0000-0000-0000-000000000010";
+  const effectiveTeamId = teamId;
 
   let teamInfo: any = null;
   let members: any[] = [];

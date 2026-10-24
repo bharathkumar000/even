@@ -8,7 +8,7 @@ import { getRoleRedirectUrl } from "@/lib/auth/redirect";
 import {
   Lock,
   Mail,
-  User,
+
   ArrowRight,
   ShieldCheck,
   AlertCircle,
@@ -22,6 +22,8 @@ export default function AuthPage({ isSignUp = false }: { isSignUp?: boolean }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [fullName, setFullName] = useState("");
+  const [role, setRole] = useState("leader");
+  const [accessCode, setAccessCode] = useState("");
   const [otp, setOtp] = useState("");
   const [step, setStep] = useState<"credentials" | "otp">("credentials");
   const [loading, setLoading] = useState(false);
@@ -100,16 +102,21 @@ export default function AuthPage({ isSignUp = false }: { isSignUp?: boolean }) {
     try {
       if (isSignUp) {
         const normalizedEmail = email.includes("@") ? email.trim() : `${email.trim()}@ivc.pulse`;
-        const { data, error } = await supabase.auth.signUp({
-          email: normalizedEmail,
-          password,
-          options: {
-            data: {
-              full_name: fullName,
-              role: "participant",
+          if (role !== "participant" && accessCode !== "0987") {
+            setErrorMsg("Invalid access code for selected role.");
+            setLoading(false);
+            return;
+          }
+          const { data, error } = await supabase.auth.signUp({
+            email: normalizedEmail,
+            password,
+            options: {
+              data: {
+                full_name: fullName,
+                role: role,
+              },
             },
-          },
-        });
+          });
 
         if (error) throw error;
 
@@ -160,7 +167,7 @@ export default function AuthPage({ isSignUp = false }: { isSignUp?: boolean }) {
     setErrorMsg(null);
 
     const supabase = createClient();
-    const normalizedEmail = email.includes("@") ? email : `${email}@demo.com`;
+    const normalizedEmail = email.includes("@") ? email : `${email}@ivc.pulse`;
 
     try {
           const { data, error } = await supabase.auth.verifyOtp({
@@ -199,7 +206,7 @@ export default function AuthPage({ isSignUp = false }: { isSignUp?: boolean }) {
     }
   };
 
-  // Determine the correct portal URL for demo accounts based on email prefix
+  // Determine portal redirect URL based on email domain
 
     const handleDemoClick = async (demoEmail: string, roleName: string, targetPath: string) => {
       setEmail(demoEmail);
@@ -215,7 +222,7 @@ export default function AuthPage({ isSignUp = false }: { isSignUp?: boolean }) {
     setErrorMsg(null);
 
     const supabase = createClient();
-    const normalizedEmail = email.includes("@") ? email : `${email}@demo.com`;
+    const normalizedEmail = email.includes("@") ? email : `${email}@ivc.pulse`;
 
     try {
         const { error } = await supabase.auth.resend({
@@ -395,22 +402,39 @@ export default function AuthPage({ isSignUp = false }: { isSignUp?: boolean }) {
           /* ================= CREDENTIALS FORM ================= */
           <form onSubmit={handleCredentialsSubmit} className="space-y-4">
             {isSignUp && (
-              <div className="space-y-1">
-                <label className="block text-xs uppercase text-text-secondary font-tech font-bold tracking-wider">
-                  Full Name
-                </label>
-                <div className="relative">
-                  <User size={15} className="absolute left-3 top-3 text-text-secondary" />
-                  <input
-                    type="text"
-                    required
-                    value={fullName}
-                    onChange={(e) => setFullName(e.target.value)}
-                    placeholder="Alex Mercer"
-                    className="w-full bg-surface-color border border-border-color p-2.5 pl-9 text-text-primary text-xs font-sans tracking-normal focus:border-accent-secondary outline-none"
-                  />
+              <>
+                <div className="space-y-1">
+                  <label className="block text-xs uppercase text-text-secondary font-tech font-bold tracking-wider">
+                    Role
+                  </label>
+                  <select
+                    value={role}
+                    onChange={(e) => setRole(e.target.value)}
+                    className="w-full bg-surface-color border border-border-color p-2.5 text-xs text-text-primary focus:border-accent-secondary outline-none"
+                  >
+                    <option value="participant">Participant</option>
+                    <option value="admin">Admin</option>
+                    <option value="judge">Judge</option>
+                    <option value="staff">Ops Team Lead</option>
+                    <option value="leader">Team Leader</option>
+                  </select>
                 </div>
-              </div>
+                {/* Access code required for privileged roles */}
+                {role !== "participant" && (
+                  <div className="space-y-1">
+                    <label className="block text-xs uppercase text-text-secondary font-tech font-bold tracking-wider">
+                      Access Code
+                    </label>
+                    <input
+                      type="text"
+                      value={accessCode}
+                      onChange={(e) => setAccessCode(e.target.value)}
+                      placeholder="Enter access code"
+                      className="w-full bg-surface-color border border-border-color p-2.5 text-xs text-text-primary focus:border-accent-secondary outline-none"
+                    />
+                  </div>
+                )}
+              </>
             )}
 
             <div className="space-y-1">
@@ -460,7 +484,8 @@ export default function AuthPage({ isSignUp = false }: { isSignUp?: boolean }) {
           </form>
         )}
 
-        <div className="pt-4 border-t border-border-color text-center font-tech text-xs text-text-secondary">
+
+<div className="pt-4 border-t border-border-color text-center font-tech text-xs text-text-secondary">
           {isSignUp ? (
             <p className="m-0">
               Already have an account?{" "}
@@ -470,7 +495,7 @@ export default function AuthPage({ isSignUp = false }: { isSignUp?: boolean }) {
             </p>
           ) : (
             <p className="m-0">
-              New participant?{" "}
+              New account?{" "}
               <Link href="/signup" className="text-accent-tertiary font-bold hover:underline">
                 Create an account
               </Link>

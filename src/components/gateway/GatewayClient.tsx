@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+// useState import removed
 import Link from "next/link";
 import Image from "next/image";
 import {
@@ -9,8 +9,6 @@ import {
   Users,
   ShieldAlert,
   ArrowRight,
-  ExternalLink,
-  Sparkles,
   QrCode,
   Layers,
   Award,
@@ -19,13 +17,11 @@ import {
   Settings,
   UserCheck,
   CheckCircle2,
-  Clock,
   Radio,
   Zap,
-  Info,
 } from "lucide-react";
 import CrossPortalNav from "@/components/navigation/CrossPortalNav";
-import PortalQuickSwitcher from "@/components/gateway/PortalQuickSwitcher";
+
 import AnnouncementBanner from "@/components/AnnouncementBanner";
 import PartnerLogosBar from "@/components/PartnerLogosBar";
 import type { AnnouncementItem } from "@/app/actions/announcements";
@@ -50,7 +46,7 @@ export default function GatewayClient({
   announcements,
   stats,
 }: GatewayClientProps) {
-  const [isSwitcherModalOpen, setIsSwitcherModalOpen] = useState(false);
+  
 
   // Determine user's matching portal based on role
   const getUserTargetPortal = (role?: string) => {
@@ -74,10 +70,7 @@ export default function GatewayClient({
   return (
     <div className="min-h-screen bg-[#050508] text-text-primary flex flex-col font-tech selection:bg-accent-secondary selection:text-white">
       {/* Top Universal Cross-Portal Navigation */}
-      <CrossPortalNav
-        user={user}
-        onOpenQuickSwitcher={() => setIsSwitcherModalOpen(true)}
-      />
+        <CrossPortalNav user={user} />
 
       {/* Main Content Area */}
       <main className="flex-1 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-10">
@@ -177,14 +170,7 @@ export default function GatewayClient({
                   <ArrowRight size={14} />
                 </Link>
               ) : (
-                <button
-                  type="button"
-                  onClick={() => setIsSwitcherModalOpen(true)}
-                  className="w-full py-2.5 px-5 bg-surface-color border border-accent-primary/60 hover:border-accent-primary text-accent-primary hover:bg-accent-primary/10 font-tech font-bold uppercase tracking-wider text-xs transition-all shadow-[0_0_15px_rgba(251,200,21,0.2)] flex items-center justify-center gap-2 text-center"
-                >
-                  <Sparkles size={14} className="animate-pulse" />
-                  <span>Explore With Demo Roles</span>
-                </button>
+                <> </>
               )}
             </div>
           </div>
@@ -244,14 +230,7 @@ export default function GatewayClient({
               </p>
             </div>
 
-            <button
-              type="button"
-              onClick={() => setIsSwitcherModalOpen(true)}
-              className="text-xs text-accent-primary hover:underline flex items-center gap-1 font-bold uppercase tracking-wider self-start sm:self-auto"
-            >
-              <Zap size={13} />
-              <span>Switch Testing Role</span>
-            </button>
+{/* Test role switcher removed */}
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -570,9 +549,7 @@ export default function GatewayClient({
         {/* ========================================================================= */}
         {/* EMBEDDED QUICK ROLE SWITCHER FOR INSTANT TESTING                          */}
         {/* ========================================================================= */}
-        <section className="space-y-3">
-          <PortalQuickSwitcher variant="inline" />
-        </section>
+{/* Quick role switcher inline removed */}
 
         {/* ========================================================================= */}
         {/* PUBLIC EVENT RESOURCES QUICK ACCESS                                       */}
@@ -669,11 +646,7 @@ export default function GatewayClient({
       </main>
 
       {/* Floating Modal for Role Switcher (Triggered from Top Nav) */}
-      <PortalQuickSwitcher
-        variant="modal"
-        isOpen={isSwitcherModalOpen}
-        onClose={() => setIsSwitcherModalOpen(false)}
-      />
+{/* Quick role switcher modal removed */}
     </div>
   );
 }

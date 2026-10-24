@@ -1,6 +1,9 @@
 const { createClient } = require('@supabase/supabase-js');
 const http = require('http');
 
+try { process.loadEnvFile('.env.local'); } catch {}
+try { process.loadEnvFile('.env'); } catch {}
+
 // Load Supabase credentials from environment variables (do NOT commit actual keys)
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;

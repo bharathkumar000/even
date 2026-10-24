@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+// useState import removed
 import Link from "next/link";
 import {
   ShieldAlert,
@@ -14,7 +14,7 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import SignOutButton from "@/components/SignOutButton";
-import PortalQuickSwitcher from "@/components/gateway/PortalQuickSwitcher";
+// PortalQuickSwitcher import removed
 
 interface PortalAccessDeniedProps {
   portalTitle: string;
@@ -34,7 +34,7 @@ export default function PortalAccessDenied({
   accentColor = "yellow",
   currentUser,
 }: PortalAccessDeniedProps) {
-  const [isSwitcherOpen, setIsSwitcherOpen] = useState(false);
+  // isSwitcherOpen state removed
 
   // Map user's actual role to their authorized portal
   const getUserAuthorizedPortal = (role?: string) => {
@@ -178,14 +178,7 @@ export default function PortalAccessDenied({
           </Link>
 
           {/* 2. Switch Test Role (1-Click) */}
-          <button
-            type="button"
-            onClick={() => setIsSwitcherOpen(true)}
-            className="w-full py-2.5 px-4 bg-surface-color border border-accent-primary/60 hover:border-accent-primary text-accent-primary hover:bg-accent-primary/10 font-tech font-bold uppercase tracking-wider text-xs transition-all flex items-center justify-center gap-2 text-center"
-          >
-            <Zap size={14} className="animate-pulse" />
-            <span>Switch Role With Test Accounts</span>
-          </button>
+
 
           {/* 3. Return to Gateway & Sign Out Row */}
           <div className="flex items-center gap-3 pt-1">
@@ -207,11 +200,7 @@ export default function PortalAccessDenied({
       </div>
 
       {/* Role Switcher Modal */}
-      <PortalQuickSwitcher
-        variant="modal"
-        isOpen={isSwitcherOpen}
-        onClose={() => setIsSwitcherOpen(false)}
-      />
+
     </div>
   );
 }

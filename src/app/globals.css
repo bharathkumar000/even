@@ -1,8 +1,7 @@
 @import url('https://fonts.googleapis.com/css2?family=Fredoka+One&family=Fredoka:wght@300;400;500;600;700&display=swap');
 
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+
 
 :root {
   --bg-color: #050508;
@@ -29,9 +28,25 @@
   --font-family-input: var(--font-family-fredoka);
 }
 
+@theme {
+  --color-bg-color: #050508;
+  --color-surface-color: #0d0d14;
+  --color-surface-color-light: #161622;
+  --color-border-color: rgba(255, 255, 255, 0.1);
+  --color-text-primary: #ffffff;
+  --color-text-secondary: #a1a1aa;
+  --color-accent-primary: #FBC815;
+  --color-accent-primary-hover: #e0b010;
+  --color-accent-secondary: #FF007F;
+  --color-accent-tertiary: #00F0FF;
+  --color-status-success: #10b981;
+  --color-status-warning: #FBC815;
+  --color-status-error: #FF007F;
+}
+
 @layer base {
   *, ::before, ::after {
-    @apply border-border;
+    border-color: var(--border-color);
     font-family: var(--font-family-fredoka);
   }
   html,
@@ -113,9 +128,8 @@
 .glass-panel {
   background: rgba(13, 13, 20, 0.7);
   backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
   border: 1px solid var(--border-color);
-  border-radius: 4px;
+  border-radius: 1rem;
 }
 
 /* Typography Overrides */
@@ -141,7 +155,12 @@ p {
   line-height: 1.6;
 }
 
-/* Animations */
+/* Prevent image dragging */
+img {
+  -webkit-user-drag: none;
+  user-drag: none;
+}
+
 @keyframes fadeIn {
   from { opacity: 0; transform: translateY(10px); }
   to { opacity: 1; transform: translateY(0); }
@@ -259,3 +278,20 @@ p {
   color: var(--accent-secondary) !important;
   filter: drop-shadow(0 0 5px var(--accent-secondary));
 }
+
+/* Sidebar Active Pill Glowing Animation */
+@keyframes activePillPulse {
+  0%, 100% {
+    box-shadow: 0 4px 22px rgba(224, 2, 110, 0.38), inset 0 1px 1px rgba(255, 255, 255, 0.25);
+    transform: translateY(0);
+  }
+  50% {
+    box-shadow: 0 6px 28px rgba(224, 2, 110, 0.58), inset 0 1px 2px rgba(255, 255, 255, 0.4);
+    transform: translateY(-0.5px);
+  }
+}
+
+.animate-active-pill {
+  animation: activePillPulse 3s ease-in-out infinite;
+}
+

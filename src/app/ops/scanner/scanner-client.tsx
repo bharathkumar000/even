@@ -384,18 +384,41 @@ export default function ScannerClientView() {
   const hasAnyGoodiesClaimed = teamData?.activityLogs?.some((l) => l.action_type === "goodies");
   const firstGoodiesLog = teamData?.activityLogs?.find((l) => l.action_type === "goodies");
 
-  useEffect(() => {
-    return () => {
-      if (html5QrCodeRef.current) {
-        try {
-          html5QrCodeRef.current.stop();
-        } catch {}
-      }
-    };
-  }, []);
+useEffect(() => {
+      return () => {
+        if (html5QrCodeRef.current) {
+          try {
+            html5QrCodeRef.current.stop();
+          } catch {}
+        }
+      };
+    }, []);
 
-  return (
-    <div className="space-y-6">
+    // Scroll to hash sections (e.g., #manual-lookup or #live-activity) when the hash changes or on initial load
+    useEffect(() => {
+      const scrollToHash = () => {
+        if (typeof window === 'undefined') return;
+        const { hash } = window.location;
+        if (hash) {
+          const id = hash.substring(1);
+          const el = document.getElementById(id);
+          if (el) {
+            el.scrollIntoView({ behavior: 'smooth' });
+          }
+        }
+      };
+      // Scroll on component mount (in case hash is already present)
+      scrollToHash();
+      // Listen for future hash changes (e.g., when navigating via sidebar links)
+      window.addEventListener('hashchange', scrollToHash);
+      return () => {
+        window.removeEventListener('hashchange', scrollToHash);
+      };
+    }, []);
+
+    return (
+      <div className="space-y-6">
+
       {/* Alert Banners */}
       {successMsg && (
         <div className="p-4 bg-status-success/15 border border-status-success text-status-success font-tech text-xs flex items-center gap-2 animate-fade-in">
