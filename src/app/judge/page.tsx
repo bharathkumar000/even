@@ -1,7 +1,16 @@
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import Link from "next/link";
-import { ArrowRight, Layers, FileCheck, ShieldCheck } from "lucide-react";
+import {
+  ArrowRight,
+  Layers,
+  FileCheck,
+  ShieldCheck,
+  Users,
+  CheckCircle2,
+  Clock,
+  AlertCircle,
+} from "lucide-react";
 import { getActiveAnnouncements } from "@/app/actions/announcements";
 import AnnouncementBanner from "@/components/AnnouncementBanner";
 import RealtimeRoundsListener from "@/components/RealtimeRoundsListener";
@@ -93,6 +102,23 @@ export default async function JudgeDashboardPage() {
     return { label: "Draft", style: "bg-accent-secondary/10 text-accent-secondary border-accent-secondary/40" };
   };
 
+  // Compute stats for overview cards
+  const allottedCount = assignedTeams.length;
+  let evaluatedCount = 0;
+  let draftedCount = 0;
+  let pendingCount = 0;
+
+  assignedTeams.forEach((team) => {
+    const status = getEvaluationStatus(team.id, activeRound?.id);
+    if (status.label === "Submitted" || status.label === "Locked") {
+      evaluatedCount++;
+    } else if (status.label === "Draft") {
+      draftedCount++;
+    } else {
+      pendingCount++;
+    }
+  });
+
   return (
     <div className="space-y-6 animate-fade-in font-tech">
       <RealtimeRoundsListener channelName="judge-dashboard-rounds" />
@@ -137,6 +163,89 @@ export default async function JudgeDashboardPage() {
             </div>
           </div>
         )}
+      </div>
+
+      {/* Overview Metric Cards */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        {/* Total Allotted */}
+        <div className="glass-panel p-4 border border-border-color bg-surface-color/60 flex flex-col justify-between rounded">
+          <div className="flex items-center justify-between mb-2">
+            <span className="font-tech text-[10px] uppercase tracking-wider text-text-secondary font-bold">
+              Total Allotted
+            </span>
+            <div className="p-2 rounded bg-accent-primary/10 border border-accent-primary/30 text-accent-primary">
+              <Users size={16} />
+            </div>
+          </div>
+          <div>
+            <p className="font-heading text-3xl text-text-primary uppercase m-0 font-bold">
+              {allottedCount}
+            </p>
+            <p className="font-tech text-xs text-text-secondary mt-1 m-0">
+              Assigned Teams
+            </p>
+          </div>
+        </div>
+
+        {/* Evaluated / Completed */}
+        <div className="glass-panel p-4 border border-status-success/40 bg-status-success/[0.04] flex flex-col justify-between rounded shadow-[0_0_15px_rgba(34,197,94,0.05)]">
+          <div className="flex items-center justify-between mb-2">
+            <span className="font-tech text-[10px] uppercase tracking-wider text-status-success font-bold">
+              Evaluated
+            </span>
+            <div className="p-2 rounded bg-status-success/15 border border-status-success/40 text-status-success">
+              <CheckCircle2 size={16} />
+            </div>
+          </div>
+          <div>
+            <p className="font-heading text-3xl text-status-success uppercase m-0 font-bold">
+              {evaluatedCount}
+            </p>
+            <p className="font-tech text-xs text-text-secondary mt-1 m-0">
+              Submitted &amp; Recorded
+            </p>
+          </div>
+        </div>
+
+        {/* Drafted / In Progress */}
+        <div className="glass-panel p-4 border border-accent-secondary/40 bg-accent-secondary/[0.04] flex flex-col justify-between rounded shadow-[0_0_15px_rgba(255,0,127,0.05)]">
+          <div className="flex items-center justify-between mb-2">
+            <span className="font-tech text-[10px] uppercase tracking-wider text-accent-secondary font-bold">
+              Drafted
+            </span>
+            <div className="p-2 rounded bg-accent-secondary/15 border border-accent-secondary/40 text-accent-secondary">
+              <Clock size={16} />
+            </div>
+          </div>
+          <div>
+            <p className="font-heading text-3xl text-accent-secondary uppercase m-0 font-bold">
+              {draftedCount}
+            </p>
+            <p className="font-tech text-xs text-text-secondary mt-1 m-0">
+              Saved Drafts
+            </p>
+          </div>
+        </div>
+
+        {/* Pending */}
+        <div className="glass-panel p-4 border border-accent-tertiary/40 bg-accent-tertiary/[0.04] flex flex-col justify-between rounded shadow-[0_0_15px_rgba(255,200,0,0.05)]">
+          <div className="flex items-center justify-between mb-2">
+            <span className="font-tech text-[10px] uppercase tracking-wider text-accent-tertiary font-bold">
+              Pending
+            </span>
+            <div className="p-2 rounded bg-accent-tertiary/15 border border-accent-tertiary/40 text-accent-tertiary">
+              <AlertCircle size={16} />
+            </div>
+          </div>
+          <div>
+            <p className="font-heading text-3xl text-accent-tertiary uppercase m-0 font-bold">
+              {pendingCount}
+            </p>
+            <p className="font-tech text-xs text-text-secondary mt-1 m-0">
+              Awaiting Evaluation
+            </p>
+          </div>
+        </div>
       </div>
 
       {/* Team Cards Grid */}
