@@ -29,6 +29,8 @@ export default function AuthPage({ isSignUp = false }: { isSignUp?: boolean }) {
   const [loading, setLoading] = useState(false);
   const [resendLoading, setResendLoading] = useState(false);
   const [resendCooldown, setResendCooldown] = useState(0);
+  const [failedAttempts, setFailedAttempts] = useState(0);
+  const [rateLimitCooldown, setRateLimitCooldown] = useState(0);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
@@ -40,6 +42,15 @@ export default function AuthPage({ isSignUp = false }: { isSignUp?: boolean }) {
     }, 1000);
     return () => clearInterval(timer);
   }, [resendCooldown]);
+
+  // Rate-limiting security cooldown timer
+  useEffect(() => {
+    if (rateLimitCooldown <= 0) return;
+    const timer = setInterval(() => {
+      setRateLimitCooldown((prev) => Math.max(0, prev - 1));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [rateLimitCooldown]);
 
 
   // Robust sign-in execution
@@ -72,6 +83,8 @@ export default function AuthPage({ isSignUp = false }: { isSignUp?: boolean }) {
         if (error) throw error;
 
         if (data?.user) {
+          setFailedAttempts(0);
+          setRateLimitCooldown(0);
           setSuccessMsg("Authenticated! Entering portal...");
           const redirectUrl = preferredPortal || (await getRoleRedirectUrl(data.user));
           // Fast client navigation & session sync
@@ -84,7 +97,16 @@ export default function AuthPage({ isSignUp = false }: { isSignUp?: boolean }) {
           throw new Error("No user record returned from authentication service.");
         }
       } catch (err: unknown) {
-        setErrorMsg(err instanceof Error ? err.message : "Authentication failed");
+        const nextAttempts = failedAttempts + 1;
+        setFailedAttempts(nextAttempts);
+        if (nextAttempts >= 5) {
+          setRateLimitCooldown(30);
+          setErrorMsg("Excessive failed login attempts. For system defense, please wait 30 seconds before retrying.");
+        } else {
+          const remaining = 5 - nextAttempts;
+          const msg = err instanceof Error ? err.message : "Authentication failed";
+          setErrorMsg(remaining <= 2 ? `${msg} (${remaining} attempts remaining before cooldown)` : msg);
+        }
         setLoading(false);
       }
     };
@@ -473,10 +495,18 @@ export default function AuthPage({ isSignUp = false }: { isSignUp?: boolean }) {
 
             <button
               type="submit"
-              disabled={loading}
+              disabled={loading || rateLimitCooldown > 0}
               className="w-full py-3 bg-gradient-to-r from-accent-secondary to-accent-primary hover:opacity-90 disabled:opacity-50 text-black font-tech font-bold uppercase tracking-wider text-xs transition-all shadow-lg flex items-center justify-center gap-2 mt-2"
             >
-               <span>{loading ? "Authenticating..." : isSignUp ? "Sign Up" : "Sign In"}</span>
+               <span>
+                 {rateLimitCooldown > 0
+                   ? `Rate Limited (Wait ${rateLimitCooldown}s)`
+                   : loading
+                   ? "Authenticating..."
+                   : isSignUp
+                   ? "Sign Up"
+                   : "Sign In"}
+               </span>
                <ArrowRight size={14} />
              </button>
 
