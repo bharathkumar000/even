@@ -24,6 +24,7 @@ import type { ActionType } from "@/lib/validations/operations";
 import ScannerDesk from "@/components/ops/ScannerDesk";
 import LiveActivityStream from "@/components/ops/LiveActivityStream";
 import { createClient } from "@/lib/supabase/client";
+import { playScanSuccess, playScanError } from "@/lib/feedback-sound";
 
 export interface TeamScanMember {
   id: string;
@@ -237,6 +238,7 @@ export default function ScannerClientView() {
       setErrorMsg(null);
       try {
         const res = await recordTeamBulkAction(teamId, op as ActionType);
+        playScanSuccess();
         setSuccessMsg(
           `Bulk Claim Complete: Distributed "${op.toUpperCase()}" to ${res.claimedCount} members.`
         );
@@ -244,11 +246,13 @@ export default function ScannerClientView() {
         fetchLiveStream();
         loadTeamData(teamId);
       } catch (err: unknown) {
+        playScanError();
         setErrorMsg(err instanceof Error ? err.message : `Bulk ${op} claim failed`);
       } finally {
         setActionLoading(null);
       }
     } else if (op === "feedback") {
+      playScanError();
       setErrorMsg("Feedback operation is not supported in Ops scanner.");
     } else {
       // No operation selected or unsupported, just load team roster
@@ -263,9 +267,11 @@ export default function ScannerClientView() {
     setSuccessMsg(null);
     try {
       const res = await fetchTeamMembersForScan(teamId);
+      playScanSuccess();
       setTeamData(res);
       setSuccessMsg(`Loaded roster for team "${res.team.name}"`);
     } catch (err: unknown) {
+      playScanError();
       setErrorMsg(err instanceof Error ? err.message : "Failed to fetch team details");
       setTeamData(null);
     } finally {
@@ -321,6 +327,7 @@ export default function ScannerClientView() {
         action_type: actionType,
       });
 
+      playScanSuccess();
       setSuccessMsg(
         `Recorded "${actionType.toUpperCase()}"! Distributed by ${res.record.scanner_name}.`
       );
@@ -332,6 +339,7 @@ export default function ScannerClientView() {
       fetchLiveStream();
       loadTeamData(teamData.team.id);
     } catch (err: unknown) {
+      playScanError();
       // Revert optimistic update on failure
       setTeamData((prev) =>
         !prev
@@ -357,6 +365,7 @@ export default function ScannerClientView() {
 
     try {
       const res = await recordTeamBulkAction(teamData.team.id, actionType);
+      playScanSuccess();
       setSuccessMsg(
         `Bulk Claim Complete: Distributed "${actionType.toUpperCase()}" to ${res.claimedCount} members.`
       );
@@ -364,6 +373,7 @@ export default function ScannerClientView() {
       fetchLiveStream();
       loadTeamData(teamData.team.id);
     } catch (err: unknown) {
+      playScanError();
       setErrorMsg(err instanceof Error ? err.message : `Bulk ${actionType} claim failed`);
     } finally {
       setActionLoading(null);
