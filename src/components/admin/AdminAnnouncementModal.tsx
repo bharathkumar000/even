@@ -1,10 +1,12 @@
 "use client";
 
-import { useState } from "react";
-import { Radio, Send } from "lucide-react";
+import { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
+import { Radio, Send, X } from "lucide-react";
 import { createAnnouncement } from "@/app/actions/announcements";
 
 export default function AdminAnnouncementModal() {
+  const [mounted, setMounted] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
   const [title, setTitle] = useState("");
   const [message, setMessage] = useState("");
@@ -12,6 +14,19 @@ export default function AdminAnnouncementModal() {
   const [targetAudience, setTargetAudience] = useState<"all" | "teams" | "judges" | "ops">("all");
   const [loading, setLoading] = useState(false);
   const [statusMsg, setStatusMsg] = useState<string | null>(null);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = originalOverflow;
+    };
+  }, [isOpen]);
 
   const handleBroadcast = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -47,22 +62,25 @@ export default function AdminAnnouncementModal() {
     <>
       <button
         onClick={() => setIsOpen(true)}
-        className="px-4 py-2 bg-accent-secondary hover:bg-accent-secondary/80 text-white font-tech font-bold uppercase text-xs flex items-center gap-2 transition-colors shadow-lg shadow-accent-secondary/20"
+        className="px-4 py-2 bg-accent-secondary hover:bg-accent-secondary/80 text-white font-tech font-bold uppercase text-xs flex items-center gap-2 transition-colors shadow-lg shadow-accent-secondary/20 cursor-pointer"
       >
         <Radio size={14} className="animate-pulse" />
         <span>Broadcast Alert</span>
       </button>
 
-      {isOpen && (
+      {isOpen && mounted && createPortal(
         <div
-          className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 font-tech animate-fade-in"
+          className="fixed inset-0 z-[9999] bg-black/85 backdrop-blur-md flex items-start justify-center p-4 pt-10 sm:pt-14 md:pt-16 font-tech animate-fade-in overflow-y-auto"
           role="dialog"
           aria-modal="true"
           aria-labelledby="admin-announcement-title"
           aria-describedby="admin-announcement-desc"
           onKeyDown={handleKeyDown}
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setIsOpen(false);
+          }}
         >
-          <div className="glass-panel max-w-lg w-full p-6 border border-accent-secondary/50 space-y-5 bg-[#0a0a12]">
+          <div className="glass-panel max-w-lg w-full max-h-[calc(100vh-4rem)] overflow-y-auto p-5 sm:p-6 border border-accent-secondary/50 space-y-4 sm:space-y-5 bg-[#0a0a12] shadow-2xl relative my-0">
             <div className="flex items-center justify-between border-b border-border-color pb-3">
               <div className="flex items-center gap-2">
                 <Radio className="text-accent-secondary animate-pulse" size={18} />
@@ -71,10 +89,12 @@ export default function AdminAnnouncementModal() {
                 </h3>
               </div>
               <button
+                type="button"
                 onClick={() => setIsOpen(false)}
-                className="text-text-secondary hover:text-text-primary text-xs font-mono font-bold uppercase"
+                className="text-text-secondary hover:text-text-primary text-xs font-mono font-bold uppercase flex items-center gap-1 cursor-pointer transition-colors"
               >
-                ✕ Close
+                <X size={15} />
+                <span>Close</span>
               </button>
             </div>
 
@@ -150,14 +170,14 @@ export default function AdminAnnouncementModal() {
                 <button
                   type="button"
                   onClick={() => setIsOpen(false)}
-                  className="px-4 py-2 bg-surface-color border border-border-color text-text-secondary hover:text-text-primary text-xs uppercase font-bold"
+                  className="px-4 py-2 bg-surface-color border border-border-color text-text-secondary hover:text-text-primary text-xs uppercase font-bold cursor-pointer transition-colors"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={loading}
-                  className="px-5 py-2 bg-accent-secondary hover:bg-accent-secondary/80 text-white text-xs uppercase font-bold flex items-center gap-2"
+                  className="px-5 py-2 bg-accent-secondary hover:bg-accent-secondary/80 text-white text-xs uppercase font-bold flex items-center gap-2 cursor-pointer transition-colors disabled:opacity-50"
                 >
                   <Send size={13} />
                   <span>{loading ? "Broadcasting..." : "Publish Broadcast"}</span>
@@ -165,7 +185,8 @@ export default function AdminAnnouncementModal() {
               </div>
             </form>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </>
   );
