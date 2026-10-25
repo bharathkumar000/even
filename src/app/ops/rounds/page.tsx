@@ -80,7 +80,7 @@ export default async function OpsRoundsPage() {
 
   let rounds: Round[] = [];
   let criteria: Criterion[] = [];
-  let evaluationsCountByRound = new Map<string, number>();
+  const evaluationsCountByRound = new Map<string, number>();
 
   try {
     const [roundsRes, criteriaRes, evalsRes] = await Promise.all([
@@ -157,7 +157,7 @@ export default async function OpsRoundsPage() {
           </div>
           <div className="flex items-center gap-2">
             <span className="text-xs text-status-success font-mono uppercase border border-status-success/40 px-2.5 py-1 bg-status-success/5">
-              Round {activeRound.sequence_order} // LIVE
+              Round {activeRound.sequence_order} {"//"} LIVE
             </span>
             <span className="text-xs text-text-secondary font-mono border border-border-color px-2.5 py-1">
               {evaluationsCountByRound.get(activeRound.id) || 0} Submissions Recorded
