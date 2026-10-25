@@ -16,6 +16,7 @@ import {
   ChevronRight,
   ExternalLink,
   Zap,
+  HelpCircle,
 } from "lucide-react";
 import SignOutButton from "@/components/SignOutButton";
 
@@ -40,6 +41,33 @@ export default function CrossPortalNav({
       name: "Gateway",
       href: "/",
       icon: Home,
+      accent: "text-accent-primary",
+      activeBg: "bg-accent-primary/10 border-accent-primary text-accent-primary",
+      activeGlow: "0 0 10px rgba(251, 200, 21, 0.5)",
+      exact: true,
+    },
+    {
+      name: "Schedule",
+      href: "/schedule",
+      icon: Calendar,
+      accent: "text-accent-tertiary",
+      activeBg: "bg-accent-tertiary/10 border-accent-tertiary text-accent-tertiary",
+      activeGlow: "0 0 10px rgba(0, 240, 255, 0.5)",
+      exact: true,
+    },
+    {
+      name: "About",
+      href: "/about",
+      icon: Info,
+      accent: "text-accent-secondary",
+      activeBg: "bg-accent-secondary/10 border-accent-secondary text-accent-secondary",
+      activeGlow: "0 0 10px rgba(255, 0, 127, 0.5)",
+      exact: true,
+    },
+    {
+      name: "FAQ",
+      href: "/faq",
+      icon: HelpCircle,
       accent: "text-accent-primary",
       activeBg: "bg-accent-primary/10 border-accent-primary text-accent-primary",
       activeGlow: "0 0 10px rgba(251, 200, 21, 0.5)",

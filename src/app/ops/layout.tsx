@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
@@ -6,6 +7,17 @@ import PortalAccessDenied from "@/components/navigation/PortalAccessDenied";
 import OpsMobileNav from "@/components/ops/MobileNavDrawer";
 
 export const dynamic = "force-dynamic";
+
+export const metadata: Metadata = {
+  robots: {
+    index: false,
+    follow: false,
+    googleBot: {
+      index: false,
+      follow: false,
+    },
+  },
+};
 
 export default async function OpsLayout({
   children,
