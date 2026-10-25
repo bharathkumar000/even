@@ -160,7 +160,7 @@ export default function AuthPage({ isSignUp = false }: { isSignUp?: boolean }) {
         // Resolve role aliases or direct emails
 
         let targetEmail = email.trim();
-        let targetPass = password.trim() || "Password@123";
+        const targetPass = password.trim() || "Password@123";
 
 
         // Resolve direct email or username
