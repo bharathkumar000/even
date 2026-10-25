@@ -48,11 +48,24 @@ function openDB(): Promise<IDBDatabase | null> {
   });
 }
 
+export interface OfflineDraftPayload {
+  key?: string;
+  data?: {
+    scores?: Record<string, number>;
+    feedback?: string;
+    [key: string]: unknown;
+  };
+  savedAt?: number;
+}
+
 /**
  * Save draft score sheet into IndexedDB + localStorage mirror
  */
-export async function saveOfflineDraft(key: string, data: any): Promise<void> {
-  const payload = {
+export async function saveOfflineDraft(
+  key: string,
+  data: { scores?: Record<string, number>; feedback?: string; [key: string]: unknown }
+): Promise<void> {
+  const payload: OfflineDraftPayload = {
     key,
     data,
     savedAt: Date.now(),
@@ -79,16 +92,16 @@ export async function saveOfflineDraft(key: string, data: any): Promise<void> {
 /**
  * Retrieve draft from IndexedDB or localStorage
  */
-export async function getOfflineDraft(key: string): Promise<any | null> {
+export async function getOfflineDraft(key: string): Promise<OfflineDraftPayload | null> {
   // Check IndexedDB first
   const db = await openDB();
   if (db) {
     try {
-      const item = await new Promise<any>((resolve) => {
+      const item = await new Promise<OfflineDraftPayload | null>((resolve) => {
         const tx = db.transaction(DRAFTS_STORE, "readonly");
         const store = tx.objectStore(DRAFTS_STORE);
         const req = store.get(key);
-        req.onsuccess = () => resolve(req.result);
+        req.onsuccess = () => resolve(req.result || null);
         req.onerror = () => resolve(null);
       });
       if (item && item.data) return item;
