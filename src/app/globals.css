@@ -1,7 +1,8 @@
 @import url('https://fonts.googleapis.com/css2?family=Fredoka+One&family=Fredoka:wght@300;400;500;600;700&display=swap');
 
-@import "tailwindcss";
-
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
 :root {
   --bg-color: #050508;
@@ -28,22 +29,6 @@
   --font-family-input: var(--font-family-fredoka);
 }
 
-@theme {
-  --color-bg-color: #050508;
-  --color-surface-color: #0d0d14;
-  --color-surface-color-light: #161622;
-  --color-border-color: rgba(255, 255, 255, 0.1);
-  --color-text-primary: #ffffff;
-  --color-text-secondary: #a1a1aa;
-  --color-accent-primary: #FBC815;
-  --color-accent-primary-hover: #e0b010;
-  --color-accent-secondary: #FF007F;
-  --color-accent-tertiary: #00F0FF;
-  --color-status-success: #10b981;
-  --color-status-warning: #FBC815;
-  --color-status-error: #FF007F;
-}
-
 @layer base {
   *, ::before, ::after {
     border-color: var(--border-color);
@@ -51,7 +36,8 @@
   }
   html,
   body {
-    @apply bg-bg-color text-text-primary;
+    background-color: var(--bg-color);
+    color: var(--text-primary);
     font-family: var(--font-family-fredoka) !important;
     min-height: 100vh;
     overflow-x: hidden;
