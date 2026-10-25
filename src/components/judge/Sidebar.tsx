@@ -6,7 +6,6 @@ import { usePathname } from "next/navigation";
 import {
   Gavel,
   Users,
-  Award,
   Layers,
 } from "lucide-react";
 import SignOutButton from "@/components/SignOutButton";
