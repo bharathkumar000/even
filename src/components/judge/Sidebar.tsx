@@ -27,12 +27,6 @@ export default function JudgeSidebar() {
       label: "Judging Rubrics",
       badge: "Criteria",
     },
-    {
-      href: "/judge/results",
-      icon: Award,
-      label: "Leaderboard View",
-      badge: "Standings",
-    },
   ];
 
   const isItemActive = (item: (typeof navItems)[0]) => {
