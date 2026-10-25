@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import {
   FileText,
   Github,
@@ -108,7 +108,6 @@ export default function EvaluateClientView({
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [draftRestoredMsg, setDraftRestoredMsg] = useState<string | null>(null);
   const [showTimer, setShowTimer] = useState(false);
-  const [timerSeconds, setTimerSeconds] = useState(300);
   const [isOnline, setIsOnline] = useState(true);
   const [pitchCalling, setPitchCalling] = useState(false);
   const [pitchCallSent, setPitchCallSent] = useState(false);
@@ -157,12 +156,12 @@ export default function EvaluateClientView({
   useEffect(() => {
     if (typeof window === "undefined" || isLocked || existingEvaluation?.status === "submitted") return;
     getOfflineDraft(draftKey).then((saved) => {
-      if (saved) {
-        const draftContent = saved.data || saved;
+      if (saved && saved.data) {
+        const draftContent = saved.data;
         if (draftContent.scores && Object.keys(draftContent.scores).length > 0) {
           setScores(draftContent.scores);
           if (draftContent.feedback) setFeedback(draftContent.feedback);
-          const timeAgo = Math.round((Date.now() - (saved.savedAt || draftContent.savedAt || Date.now())) / 60000);
+          const timeAgo = Math.round((Date.now() - (saved.savedAt || Date.now())) / 60000);
           setDraftRestoredMsg(`Recovered offline draft from IndexedDB (${timeAgo < 1 ? "just now" : `${timeAgo}m ago`})`);
         }
       }
