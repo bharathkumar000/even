@@ -24,6 +24,7 @@ import { requireAuthenticatedTeamUser } from "@/lib/auth/team";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { getActiveAnnouncements } from "@/app/actions/announcements";
 import AnnouncementBanner from "@/components/AnnouncementBanner";
+import PitchAlertListener from "@/components/team/PitchAlertListener";
 import { getTeamRegistrationByEmail } from "@/lib/googleSheet";
 
 import Image from "next/image";
@@ -147,6 +148,9 @@ export default async function TeamDashboardPage() {
 
   return (
     <div className="space-y-8 animate-fade-in font-tech">
+      {/* Real-time Jury Pitch Call Alert */}
+      <PitchAlertListener teamId={effectiveTeamId} teamName={teamInfo?.name} />
+
       {/* Live Announcement Banner */}
       <AnnouncementBanner announcements={announcements} portalName="Team Portal" />
 
