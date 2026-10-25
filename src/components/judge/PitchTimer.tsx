@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
-import { Play, Pause, RotateCcw, Clock, Bell, Volume2, VolumeX } from "lucide-react";
+import { Play, Pause, RotateCcw, Clock, Volume2, VolumeX } from "lucide-react";
 
 interface PitchTimerProps {
   initialSeconds?: number;
@@ -10,6 +10,7 @@ interface PitchTimerProps {
 export default function PitchTimer({ initialSeconds = 300 }: PitchTimerProps) {
   const [targetSeconds, setTargetSeconds] = useState(initialSeconds);
   const [secondsLeft, setSecondsLeft] = useState(initialSeconds);
+  const [inputMinutes, setInputMinutes] = useState(String(Math.round(initialSeconds / 60) || 5));
   const [isRunning, setIsRunning] = useState(false);
   const [mode, setMode] = useState<"pitch" | "qa">("pitch");
   const [soundEnabled, setSoundEnabled] = useState(true);
@@ -74,10 +75,16 @@ export default function PitchTimer({ initialSeconds = 300 }: PitchTimerProps) {
     setSecondsLeft(newSeconds);
   };
 
-  const setPreset = (seconds: number, newMode: "pitch" | "qa") => {
-    setTargetSeconds(seconds);
-    setMode(newMode);
-    resetTimer(seconds);
+  const handleApplyMinutes = (customMins?: number) => {
+    const mins = customMins !== undefined ? customMins : parseFloat(inputMinutes);
+    if (!isNaN(mins) && mins > 0) {
+      const calculatedSeconds = Math.round(mins * 60);
+      setTargetSeconds(calculatedSeconds);
+      resetTimer(calculatedSeconds);
+      if (customMins !== undefined) {
+        setInputMinutes(String(customMins));
+      }
+    }
   };
 
   const minutes = Math.floor(secondsLeft / 60);
@@ -88,10 +95,10 @@ export default function PitchTimer({ initialSeconds = 300 }: PitchTimerProps) {
   const isExpired = secondsLeft === 0;
 
   return (
-    <div className="glass-panel p-4 border border-border-color bg-surface-color/80 flex flex-col md:flex-row items-center justify-between gap-4">
-      <div className="flex items-center gap-3">
+    <div className="glass-panel p-4 border border-border-color bg-surface-color/80 flex flex-col md:flex-row items-center justify-between gap-4 rounded">
+      <div className="flex flex-col sm:flex-row sm:items-center gap-3">
         <div
-          className={`p-2.5 rounded border transition-colors ${
+          className={`p-2.5 rounded border transition-colors self-start sm:self-center ${
             isExpired
               ? "bg-status-error/20 border-status-error text-status-error animate-pulse"
               : isWarning
@@ -116,47 +123,73 @@ export default function PitchTimer({ initialSeconds = 300 }: PitchTimerProps) {
               {mode === "pitch" ? "Pitching" : "Q & A"}
             </span>
           </div>
-          <div className="flex items-center gap-2 mt-0.5">
-            <button
-              onClick={() => setPreset(180, "pitch")}
-              className={`font-tech text-[10px] uppercase px-2 py-0.5 border ${
-                targetSeconds === 180 && mode === "pitch"
-                  ? "border-accent-secondary bg-accent-secondary/20 text-text-primary"
-                  : "border-border-color text-text-secondary hover:text-text-primary"
-              }`}
-            >
-              3m
-            </button>
-            <button
-              onClick={() => setPreset(300, "pitch")}
-              className={`font-tech text-[10px] uppercase px-2 py-0.5 border ${
-                targetSeconds === 300 && mode === "pitch"
-                  ? "border-accent-secondary bg-accent-secondary/20 text-text-primary"
-                  : "border-border-color text-text-secondary hover:text-text-primary"
-              }`}
-            >
-              5m
-            </button>
-            <button
-              onClick={() => setPreset(180, "qa")}
-              className={`font-tech text-[10px] uppercase px-2 py-0.5 border ${
-                targetSeconds === 180 && mode === "qa"
-                  ? "border-accent-tertiary bg-accent-tertiary/20 text-text-primary"
-                  : "border-border-color text-text-secondary hover:text-text-primary"
-              }`}
-            >
-              3m Q&A
-            </button>
-            <button
-              onClick={() => setPreset(120, "qa")}
-              className={`font-tech text-[10px] uppercase px-2 py-0.5 border ${
-                targetSeconds === 120 && mode === "qa"
-                  ? "border-accent-tertiary bg-accent-tertiary/20 text-text-primary"
-                  : "border-border-color text-text-secondary hover:text-text-primary"
-              }`}
-            >
-              2m Q&A
-            </button>
+
+          {/* Minute Input & Preset Buttons */}
+          <div className="flex flex-wrap items-center gap-2 mt-1.5">
+            {/* Custom Minutes Input */}
+            <div className="flex items-center gap-1.5 bg-surface-color border border-border-color px-2 py-1 rounded">
+              <span className="font-tech text-[11px] text-text-secondary uppercase font-bold">
+                Time:
+              </span>
+              <input
+                type="number"
+                min="0.5"
+                max="180"
+                step="0.5"
+                value={inputMinutes}
+                onChange={(e) => setInputMinutes(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") handleApplyMinutes();
+                }}
+                className="w-14 bg-surface-color-light border border-border-color/80 text-text-primary font-mono font-bold text-xs text-center py-0.5 focus:border-accent-primary outline-none rounded"
+                placeholder="min"
+              />
+              <span className="font-tech text-[10px] text-text-secondary font-bold">
+                min
+              </span>
+              <button
+                type="button"
+                onClick={() => handleApplyMinutes()}
+                className="px-2 py-0.5 bg-accent-primary hover:bg-accent-primary/80 text-black font-tech font-bold text-[10px] uppercase rounded transition-colors ml-0.5"
+              >
+                Set
+              </button>
+            </div>
+
+            {/* Quick Presets */}
+            <div className="flex items-center gap-1">
+              {[3, 5, 7, 10].map((m) => (
+                <button
+                  key={m}
+                  type="button"
+                  onClick={() => {
+                    setMode("pitch");
+                    handleApplyMinutes(m);
+                  }}
+                  className={`font-tech text-[10px] uppercase px-2 py-0.5 border rounded transition-colors ${
+                    targetSeconds === m * 60 && mode === "pitch"
+                      ? "border-accent-secondary bg-accent-secondary/20 text-text-primary font-bold"
+                      : "border-border-color text-text-secondary hover:text-text-primary"
+                  }`}
+                >
+                  {m}m
+                </button>
+              ))}
+              <button
+                type="button"
+                onClick={() => {
+                  setMode("qa");
+                  handleApplyMinutes(2);
+                }}
+                className={`font-tech text-[10px] uppercase px-2 py-0.5 border rounded transition-colors ${
+                  targetSeconds === 120 && mode === "qa"
+                    ? "border-accent-tertiary bg-accent-tertiary/20 text-text-primary font-bold"
+                    : "border-border-color text-text-secondary hover:text-text-primary"
+                }`}
+              >
+                2m Q&A
+              </button>
+            </div>
           </div>
         </div>
       </div>
