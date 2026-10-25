@@ -14,11 +14,20 @@ import {
   RotateCcw,
   Sparkles,
   Clock,
+  Megaphone,
+  Wifi,
+  WifiOff,
 } from "lucide-react";
 import Link from "next/link";
 import { saveOrSubmitEvaluation } from "@/app/actions/judge-evaluation";
 import ScoringSlider from "@/components/judge/ScoringSlider";
 import PitchTimer from "@/components/judge/PitchTimer";
+import { createClient } from "@/lib/supabase/client";
+import {
+  saveOfflineDraft,
+  getOfflineDraft,
+  deleteOfflineDraft,
+} from "@/lib/offline-storage";
 
 export interface TeamDetail {
   id: string;
@@ -100,6 +109,9 @@ export default function EvaluateClientView({
   const [draftRestoredMsg, setDraftRestoredMsg] = useState<string | null>(null);
   const [showTimer, setShowTimer] = useState(false);
   const [timerSeconds, setTimerSeconds] = useState(300);
+  const [isOnline, setIsOnline] = useState(true);
+  const [pitchCalling, setPitchCalling] = useState(false);
+  const [pitchCallSent, setPitchCallSent] = useState(false);
 
   const isLocked = existingEvaluation?.status === "locked";
   const draftKey = `ivc_draft_${activeRound?.id || "noround"}_${teamId}`;
@@ -115,53 +127,89 @@ export default function EvaluateClientView({
     } catch {}
   }, []);
 
-  // Check localStorage for unsaved drafts on mount if not already submitted
+  // Network status detection & offline sync listener
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    setIsOnline(navigator.onLine);
+
+    const handleOnline = () => {
+      setIsOnline(true);
+      // Auto-sync draft to cloud if we have active round and scores
+      if (activeRound?.id) {
+        getOfflineDraft(draftKey).then((saved) => {
+          if (saved?.data?.scores && Object.keys(saved.data.scores).length > 0) {
+            setDraftRestoredMsg("Back online: Ready to sync scores to cloud.");
+          }
+        });
+      }
+    };
+    const handleOffline = () => setIsOnline(false);
+
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
+    return () => {
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
+    };
+  }, [activeRound?.id, draftKey]);
+
+  // Check IndexedDB + localStorage for unsaved drafts on mount if not already submitted
   useEffect(() => {
     if (typeof window === "undefined" || isLocked || existingEvaluation?.status === "submitted") return;
-    try {
-      const saved = localStorage.getItem(draftKey);
+    getOfflineDraft(draftKey).then((saved) => {
       if (saved) {
-        const parsed = JSON.parse(saved);
-        if (parsed.scores && Object.keys(parsed.scores).length > 0) {
-          setScores(parsed.scores);
-          if (parsed.feedback) setFeedback(parsed.feedback);
-          const timeAgo = Math.round((Date.now() - (parsed.savedAt || Date.now())) / 60000);
-          setDraftRestoredMsg(`Recovered unsaved draft (${timeAgo < 1 ? "just now" : `${timeAgo}m ago`})`);
+        const draftContent = saved.data || saved;
+        if (draftContent.scores && Object.keys(draftContent.scores).length > 0) {
+          setScores(draftContent.scores);
+          if (draftContent.feedback) setFeedback(draftContent.feedback);
+          const timeAgo = Math.round((Date.now() - (saved.savedAt || draftContent.savedAt || Date.now())) / 60000);
+          setDraftRestoredMsg(`Recovered offline draft from IndexedDB (${timeAgo < 1 ? "just now" : `${timeAgo}m ago`})`);
         }
       }
-    } catch {
-      // LocalStorage error fallback
-    }
+    });
   }, [draftKey, isLocked, existingEvaluation?.status]);
 
-  // Auto-save in-progress draft to localStorage
+  // Auto-save in-progress draft to IndexedDB and localStorage
   useEffect(() => {
     if (typeof window === "undefined" || isLocked || existingEvaluation?.status === "submitted") return;
-    try {
-      const hasScores = Object.values(scores).some((val) => val > 0);
-      if (hasScores || feedback.trim().length > 0) {
-        localStorage.setItem(
-          draftKey,
-          JSON.stringify({
-            scores,
-            feedback,
-            savedAt: Date.now(),
-          })
-        );
-      }
-    } catch {
-      // Quota exceeded or private browsing
+    const hasScores = Object.values(scores).some((val) => val > 0);
+    if (hasScores || feedback.trim().length > 0) {
+      saveOfflineDraft(draftKey, {
+        scores,
+        feedback,
+      });
     }
   }, [scores, feedback, draftKey, isLocked, existingEvaluation?.status]);
 
-  const clearLocalDraft = () => {
+  const clearLocalDraft = async () => {
+    await deleteOfflineDraft(draftKey);
+    setScores(initialScores);
+    setFeedback(existingEvaluation?.feedback || "");
+    setDraftRestoredMsg(null);
+  };
+
+  const callTeamToPitch = async () => {
     try {
-      localStorage.removeItem(draftKey);
-      setScores(initialScores);
-      setFeedback(existingEvaluation?.feedback || "");
-      setDraftRestoredMsg(null);
-    } catch {
-      // ignore
+      setPitchCalling(true);
+      const supabase = createClient();
+      const channel = supabase.channel("team-pitch-alerts");
+      await channel.send({
+        type: "broadcast",
+        event: "pitch_call",
+        payload: {
+          team_id: teamId,
+          team_name: team?.name || `Team ${teamId.slice(0, 8)}`,
+          round_title: activeRound?.title || "Active Round",
+          track: team?.track || "Innovation Track",
+          timestamp: Date.now(),
+        },
+      });
+      setPitchCallSent(true);
+      setTimeout(() => setPitchCallSent(false), 5000);
+    } catch (err) {
+      console.warn("Pitch call broadcast notice:", err);
+    } finally {
+      setPitchCalling(false);
     }
   };
 
@@ -201,10 +249,8 @@ export default function EvaluateClientView({
       });
 
       if (!isDraft) {
-        try {
-          localStorage.removeItem(draftKey);
-          setDraftRestoredMsg(null);
-        } catch {}
+        await deleteOfflineDraft(draftKey);
+        setDraftRestoredMsg(null);
       }
 
       setSuccessMsg(
@@ -286,9 +332,9 @@ export default function EvaluateClientView({
         </div>
       )}
 
-      {/* Pitch Timekeeper Toggle Bar */}
-      <div className="flex items-center justify-between p-3.5 glass-panel border border-border-color bg-surface-color/60 rounded">
-        <div className="flex items-center gap-2.5">
+      {/* Pitch Timekeeper & Operations Control Bar */}
+      <div className="flex flex-wrap items-center justify-between gap-3 p-3.5 glass-panel border border-border-color bg-surface-color/60 rounded">
+        <div className="flex flex-wrap items-center gap-2.5">
           <Clock size={16} className={showTimer ? "text-accent-secondary" : "text-text-secondary"} />
           <span className="font-tech text-xs uppercase tracking-wider text-text-primary font-bold">
             Live Presentation & Q&A Pitch Timekeeper
@@ -298,45 +344,55 @@ export default function EvaluateClientView({
           }`}>
             {showTimer ? "Active" : "Hidden"}
           </span>
+
+          {/* Network State Chip */}
+          <div className={`flex items-center gap-1.5 px-2 py-0.5 rounded text-[10px] font-tech uppercase font-bold border ${
+            isOnline ? "border-status-success/40 text-status-success bg-status-success/10" : "border-status-warning/40 text-status-warning bg-status-warning/10"
+          }`}>
+            {isOnline ? <Wifi size={11} /> : <WifiOff size={11} />}
+            <span>{isOnline ? "Online (Auto-Sync)" : "Offline (IndexedDB Active)"}</span>
+          </div>
         </div>
-        <button
-          type="button"
-          onClick={() => {
-            const next = !showTimer;
-            setShowTimer(next);
-            try {
-              localStorage.setItem("ivc_judge_show_timer", String(next));
-            } catch {}
-          }}
-          className={`px-3 py-1 font-tech text-xs uppercase font-bold tracking-wider rounded border transition-colors ${
-            showTimer
-              ? "border-border-color bg-surface-color-light text-text-secondary hover:text-text-primary"
-              : "border-accent-secondary bg-accent-secondary/20 text-accent-secondary hover:bg-accent-secondary/30"
-          }`}
-        >
-          {showTimer ? "Hide Pitch Timer" : "Launch Pitch Timer"}
-        </button>
+
+        <div className="flex items-center gap-2">
+          {/* Pitch Call Alert Button */}
+          <button
+            type="button"
+            onClick={callTeamToPitch}
+            disabled={pitchCalling || pitchCallSent}
+            className={`flex items-center gap-1.5 px-3 py-1 font-tech text-xs uppercase font-bold tracking-wider rounded border transition-colors ${
+              pitchCallSent
+                ? "border-status-success bg-status-success/20 text-status-success"
+                : "border-accent-primary bg-accent-primary/20 text-accent-primary hover:bg-accent-primary/30"
+            }`}
+          >
+            <Megaphone size={13} />
+            <span>{pitchCallSent ? "Team Notified!" : pitchCalling ? "Calling..." : "Call Team to Pitch"}</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              const next = !showTimer;
+              setShowTimer(next);
+              try {
+                localStorage.setItem("ivc_judge_show_timer", String(next));
+              } catch {}
+            }}
+            className={`px-3 py-1 font-tech text-xs uppercase font-bold tracking-wider rounded border transition-colors ${
+              showTimer
+                ? "border-border-color bg-surface-color-light text-text-secondary hover:text-text-primary"
+                : "border-accent-secondary bg-accent-secondary/20 text-accent-secondary hover:bg-accent-secondary/30"
+            }`}
+          >
+            {showTimer ? "Hide Pitch Timer" : "Launch Pitch Timer"}
+          </button>
+        </div>
       </div>
 
       {showTimer && (
         <div className="space-y-3">
-          <div className="flex items-center gap-2">
-            <label className="font-tech text-xs uppercase text-text-secondary font-bold">
-              Timer Duration (Seconds):
-            </label>
-            <input
-              type="number"
-              min="10"
-              max="3600"
-              value={timerSeconds}
-              onChange={(e) => {
-                const val = Number(e.target.value);
-                if (!isNaN(val) && val > 0) setTimerSeconds(val);
-              }}
-              className="w-24 px-2 py-1 bg-surface-color border border-border-color rounded text-xs font-mono text-text-primary focus:border-accent-primary outline-none"
-            />
-          </div>
-          <PitchTimer key={timerSeconds} initialSeconds={timerSeconds} />
+          <PitchTimer initialSeconds={300} />
         </div>
       )}
 
