@@ -1,6 +1,9 @@
 import type { NextConfig } from "next";
 
 function getPort(): string | undefined {
+  if (process.env.NODE_ENV === "production" || process.env.VERCEL) {
+    return undefined;
+  }
   if (process.env.PORT) return process.env.PORT;
   const pIndex = process.argv.indexOf("-p");
   if (pIndex !== -1 && process.argv[pIndex + 1]) {

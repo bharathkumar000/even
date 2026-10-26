@@ -19,6 +19,13 @@ import {
   CheckCircle2,
   Radio,
   Zap,
+  Cpu,
+  Coins,
+  HeartPulse,
+  Sprout,
+  Globe,
+  HelpCircle,
+  Compass,
 } from "lucide-react";
 import CrossPortalNav from "@/components/navigation/CrossPortalNav";
 
@@ -529,7 +536,7 @@ export default function GatewayClient({
                   rubric weightage configuration, live score override engine, SPOC team matching, and security audit logs.
                 </p>
                 <p className="text-[11px] text-pink-400 font-mono font-bold m-0 mt-1">
-                  Security Passcode: <span className="underline">2026VICEVERSE@IVC</span>
+                  Access Level: <span className="text-text-primary">Executive Committee · MFA Enforced</span>
                 </p>
               </div>
             </div>
@@ -566,7 +573,7 @@ export default function GatewayClient({
 
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <Link
-              href="/event-flow"
+              href="/schedule"
               className="p-3.5 glass-panel border border-border-color hover:border-accent-primary text-text-secondary hover:text-text-primary transition-all flex flex-col justify-between group"
             >
               <div className="flex items-center justify-between mb-2">
@@ -575,7 +582,7 @@ export default function GatewayClient({
               </div>
               <div>
                 <p className="font-heading text-xs text-text-primary uppercase m-0">
-                  Event Flow
+                  Event Schedule
                 </p>
                 <p className="text-[10px] text-text-secondary m-0 mt-0.5">
                   Timeline &amp; Rounds
@@ -584,43 +591,43 @@ export default function GatewayClient({
             </Link>
 
             <Link
-              href="/event-details"
+              href="/about"
               className="p-3.5 glass-panel border border-border-color hover:border-accent-secondary text-text-secondary hover:text-text-primary transition-all flex flex-col justify-between group"
             >
               <div className="flex items-center justify-between mb-2">
-                <Settings size={18} className="text-accent-secondary group-hover:scale-110 transition-transform" />
+                <Compass size={18} className="text-accent-secondary group-hover:scale-110 transition-transform" />
                 <ArrowRight size={13} className="text-text-secondary group-hover:translate-x-1 transition-transform" />
               </div>
               <div>
                 <p className="font-heading text-xs text-text-primary uppercase m-0">
-                  Event Details
+                  About Eventra
                 </p>
                 <p className="text-[10px] text-text-secondary m-0 mt-0.5">
-                  Rules &amp; Guidelines
+                  VVCE, IVC &amp; InUnity
                 </p>
               </div>
             </Link>
 
             <Link
-              href="/judges"
+              href="/faq"
               className="p-3.5 glass-panel border border-border-color hover:border-accent-tertiary text-text-secondary hover:text-text-primary transition-all flex flex-col justify-between group"
             >
               <div className="flex items-center justify-between mb-2">
-                <Gavel size={18} className="text-accent-tertiary group-hover:scale-110 transition-transform" />
+                <HelpCircle size={18} className="text-accent-tertiary group-hover:scale-110 transition-transform" />
                 <ArrowRight size={13} className="text-text-secondary group-hover:translate-x-1 transition-transform" />
               </div>
               <div>
                 <p className="font-heading text-xs text-text-primary uppercase m-0">
-                  Jury Directory
+                  Rules &amp; FAQ
                 </p>
                 <p className="text-[10px] text-text-secondary m-0 mt-0.5">
-                  5 Track Experts
+                  Rubrics &amp; Guidelines
                 </p>
               </div>
             </Link>
 
             <Link
-              href="/participants"
+              href="/login"
               className="p-3.5 glass-panel border border-border-color hover:border-status-success text-text-secondary hover:text-text-primary transition-all flex flex-col justify-between group"
             >
               <div className="flex items-center justify-between mb-2">
@@ -629,13 +636,187 @@ export default function GatewayClient({
               </div>
               <div>
                 <p className="font-heading text-xs text-text-primary uppercase m-0">
-                  Participants
+                  Portal Sign In
                 </p>
                 <p className="text-[10px] text-text-secondary m-0 mt-0.5">
-                  Squads &amp; Codes
+                  Admin, Jury &amp; Squads
                 </p>
               </div>
             </Link>
+          </div>
+        </section>
+
+        {/* ========================================================================= */}
+        {/* COMPETITION TRACKS SECTION                                                */}
+        {/* ========================================================================= */}
+        <section id="tracks" className="space-y-4" aria-labelledby="tracks-heading">
+          <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-2 border-b border-border-color pb-3">
+            <div>
+              <div className="flex items-center gap-2">
+                <Zap size={18} className="text-accent-primary animate-pulse" />
+                <h2 id="tracks-heading" className="font-heading text-xl sm:text-2xl text-text-primary uppercase m-0 tracking-wide">
+                  Vice Verse 1.0 Innovation Tracks
+                </h2>
+              </div>
+              <p className="text-xs text-text-secondary m-0 mt-1">
+                Five high-impact domains challenging participating student engineering squads
+              </p>
+            </div>
+            <span className="text-[11px] font-mono text-accent-secondary border border-accent-secondary/40 px-2.5 py-1 bg-surface-color rounded">
+              5 Technical Tracks
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {/* Track 1 */}
+            <article className="glass-panel p-5 border border-border-color hover:border-accent-primary transition-all duration-300 rounded flex flex-col justify-between">
+              <div className="space-y-2.5">
+                <div className="w-10 h-10 rounded bg-accent-primary/10 border border-accent-primary/30 flex items-center justify-center text-accent-primary">
+                  <Cpu size={20} />
+                </div>
+                <h3 className="font-heading text-base text-text-primary uppercase m-0">
+                  AI &amp; Intelligent Systems
+                </h3>
+                <p className="text-xs text-text-secondary leading-relaxed m-0">
+                  Generative AI, agentic systems, autonomous models, computer vision, and real-time inference solving enterprise and consumer bottlenecks.
+                </p>
+              </div>
+              <div className="pt-3 mt-3 border-t border-border-color/60 text-[10px] font-mono text-accent-primary">
+                Keywords: LLMs · Multi-Agent · Vision · RAG
+              </div>
+            </article>
+
+            {/* Track 2 */}
+            <article className="glass-panel p-5 border border-border-color hover:border-accent-secondary transition-all duration-300 rounded flex flex-col justify-between">
+              <div className="space-y-2.5">
+                <div className="w-10 h-10 rounded bg-accent-secondary/10 border border-accent-secondary/30 flex items-center justify-center text-accent-secondary">
+                  <Coins size={20} />
+                </div>
+                <h3 className="font-heading text-base text-text-primary uppercase m-0">
+                  Web3 &amp; Fintech Security
+                </h3>
+                <p className="text-xs text-text-secondary leading-relaxed m-0">
+                  Decentralized applications, cryptographic identity verification, smart contract security, cross-border settlement, and fraud detection.
+                </p>
+              </div>
+              <div className="pt-3 mt-3 border-t border-border-color/60 text-[10px] font-mono text-accent-secondary">
+                Keywords: Smart Contracts · Zero-Knowledge · DeFi
+              </div>
+            </article>
+
+            {/* Track 3 */}
+            <article className="glass-panel p-5 border border-border-color hover:border-accent-tertiary transition-all duration-300 rounded flex flex-col justify-between">
+              <div className="space-y-2.5">
+                <div className="w-10 h-10 rounded bg-accent-tertiary/10 border border-accent-tertiary/30 flex items-center justify-center text-accent-tertiary">
+                  <HeartPulse size={20} />
+                </div>
+                <h3 className="font-heading text-base text-text-primary uppercase m-0">
+                  Smart Healthcare &amp; MedTech
+                </h3>
+                <p className="text-xs text-text-secondary leading-relaxed m-0">
+                  Diagnostic triage tools, remote patient monitoring, assistive robotic devices, hospital resource scheduling, and bio-telemetry processing.
+                </p>
+              </div>
+              <div className="pt-3 mt-3 border-t border-border-color/60 text-[10px] font-mono text-accent-tertiary">
+                Keywords: Telehealth · Medical AI · Wearables
+              </div>
+            </article>
+
+            {/* Track 4 */}
+            <article className="glass-panel p-5 border border-border-color hover:border-status-success transition-all duration-300 rounded flex flex-col justify-between">
+              <div className="space-y-2.5">
+                <div className="w-10 h-10 rounded bg-status-success/10 border border-status-success/30 flex items-center justify-center text-status-success">
+                  <Sprout size={20} />
+                </div>
+                <h3 className="font-heading text-base text-text-primary uppercase m-0">
+                  Agriculture &amp; Rural Impact
+                </h3>
+                <p className="text-xs text-text-secondary leading-relaxed m-0">
+                  Precision soil analysis, crop disease detection, IoT irrigation controllers, rural credit linkages, and agri-supply chain transparency.
+                </p>
+              </div>
+              <div className="pt-3 mt-3 border-t border-border-color/60 text-[10px] font-mono text-status-success">
+                Keywords: Agritech · IoT Sensing · Soil Analytics
+              </div>
+            </article>
+
+            {/* Track 5 */}
+            <article className="glass-panel p-5 border border-border-color hover:border-pink-400 transition-all duration-300 rounded flex flex-col justify-between lg:col-span-2">
+              <div className="space-y-2.5">
+                <div className="w-10 h-10 rounded bg-pink-500/10 border border-pink-500/30 flex items-center justify-center text-pink-400">
+                  <Globe size={20} />
+                </div>
+                <h3 className="font-heading text-base text-text-primary uppercase m-0">
+                  Open Innovation &amp; Social Transformation
+                </h3>
+                <p className="text-xs text-text-secondary leading-relaxed m-0">
+                  Cross-disciplinary solutions targeting civic infrastructure, renewable energy distribution, disaster early warning, educational equity, and sustainability metrics.
+                </p>
+              </div>
+              <div className="pt-3 mt-3 border-t border-border-color/60 text-[10px] font-mono text-pink-400">
+                Keywords: CleanTech · Civic Tech · Accessibility · Public Infrastructure
+              </div>
+            </article>
+          </div>
+        </section>
+
+        {/* ========================================================================= */}
+        {/* EVALUATION CRITERIA & RUBRIC PILLARS                                      */}
+        {/* ========================================================================= */}
+        <section className="glass-panel p-6 sm:p-8 border border-border-color space-y-5" aria-labelledby="rubric-heading">
+          <div className="border-b border-border-color pb-3">
+            <h2 id="rubric-heading" className="font-heading text-lg sm:text-xl text-text-primary uppercase m-0">
+              Jury Evaluation Rubric &amp; Weightage
+            </h2>
+            <p className="text-xs text-text-secondary m-0 mt-1">
+              Standardized scoring matrix enforced across all track judges via the live Judge Portal
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="p-4 bg-surface-color/60 border border-border-color rounded space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-mono font-bold text-accent-primary uppercase">Pillar 1</span>
+                <span className="text-sm font-heading font-black text-accent-primary">30%</span>
+              </div>
+              <h3 className="font-heading text-sm text-text-primary uppercase m-0">Innovation &amp; Originality</h3>
+              <p className="text-xs text-text-secondary m-0">
+                Novelty of the concept, technical ingenuity, and differentiation from existing commercial alternatives.
+              </p>
+            </div>
+
+            <div className="p-4 bg-surface-color/60 border border-border-color rounded space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-mono font-bold text-accent-secondary uppercase">Pillar 2</span>
+                <span className="text-sm font-heading font-black text-accent-secondary">30%</span>
+              </div>
+              <h3 className="font-heading text-sm text-text-primary uppercase m-0">Technical Execution</h3>
+              <p className="text-xs text-text-secondary m-0">
+                Architecture robustness, clean repository commits, operational API integrations, and prototype fidelity.
+              </p>
+            </div>
+
+            <div className="p-4 bg-surface-color/60 border border-border-color rounded space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-mono font-bold text-accent-tertiary uppercase">Pillar 3</span>
+                <span className="text-sm font-heading font-black text-accent-tertiary">25%</span>
+              </div>
+              <h3 className="font-heading text-sm text-text-primary uppercase m-0">Impact &amp; Feasibility</h3>
+              <p className="text-xs text-text-secondary m-0">
+                Target market viability, user persona validation, scalability potential, and clear deployment roadmap.
+              </p>
+            </div>
+
+            <div className="p-4 bg-surface-color/60 border border-border-color rounded space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-mono font-bold text-pink-400 uppercase">Pillar 4</span>
+                <span className="text-sm font-heading font-black text-pink-400">15%</span>
+              </div>
+              <h3 className="font-heading text-sm text-text-primary uppercase m-0">Presentation &amp; Pitch</h3>
+              <p className="text-xs text-text-secondary m-0">
+                Clarity of articulation, prototype live demonstration, defense during jury Q&amp;A, and team cohesion.
+              </p>
+            </div>
           </div>
         </section>
 
@@ -645,8 +826,111 @@ export default function GatewayClient({
         </section>
       </main>
 
-      {/* Floating Modal for Role Switcher (Triggered from Top Nav) */}
-{/* Quick role switcher modal removed */}
+      {/* Accessible Footer with Semantic Crawlable Links */}
+      <footer className="w-full border-t border-border-color bg-[#07070c] py-10 text-xs text-text-secondary font-tech">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6">
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <Image
+                  src="/ivc-gear-logo.png"
+                  alt="IVC Gear Emblem"
+                  width={24}
+                  height={24}
+                  className="object-contain"
+                />
+                <span className="font-heading text-sm font-bold text-text-primary uppercase tracking-wider">
+                  EVENTRA
+                </span>
+              </div>
+              <p className="text-xs text-text-secondary leading-relaxed m-0">
+                Multi-Portal Hackathon Operating System powering Vice Verse 1.0 Ideathon. Built by Innovators &amp; Visionaries Club (IVC) at Vidyavardhaka College of Engineering.
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <h4 className="font-heading text-xs uppercase text-text-primary font-bold tracking-wider m-0">
+                Public Discovery
+              </h4>
+              <ul className="space-y-1.5 list-none p-0 m-0">
+                <li>
+                  <Link href="/" className="hover:text-accent-primary transition-colors">
+                    Home &amp; Gateway
+                  </Link>
+                </li>
+                <li>
+                  <Link href="/about" className="hover:text-accent-primary transition-colors">
+                    About Organizers &amp; Venue
+                  </Link>
+                </li>
+                <li>
+                  <Link href="/schedule" className="hover:text-accent-primary transition-colors">
+                    Event Schedule &amp; Flow
+                  </Link>
+                </li>
+                <li>
+                  <Link href="/faq" className="hover:text-accent-primary transition-colors">
+                    Rules &amp; Frequently Asked Questions
+                  </Link>
+                </li>
+              </ul>
+            </div>
+
+            <div className="space-y-2">
+              <h4 className="font-heading text-xs uppercase text-text-primary font-bold tracking-wider m-0">
+                Stakeholder Portals
+              </h4>
+              <ul className="space-y-1.5 list-none p-0 m-0">
+                <li>
+                  <Link href="/login" className="hover:text-accent-secondary transition-colors">
+                    Portal Access Sign In
+                  </Link>
+                </li>
+                <li>
+                  <Link href="/signup" className="hover:text-accent-secondary transition-colors">
+                    Squad Registration
+                  </Link>
+                </li>
+                <li>
+                  <Link href="/judge" className="hover:text-accent-secondary transition-colors">
+                    Jury Evaluation Panel
+                  </Link>
+                </li>
+                <li>
+                  <Link href="/ops/scanner" className="hover:text-accent-secondary transition-colors">
+                    Operations &amp; QR Desk
+                  </Link>
+                </li>
+              </ul>
+            </div>
+
+            <div className="space-y-2">
+              <h4 className="font-heading text-xs uppercase text-text-primary font-bold tracking-wider m-0">
+                Venue &amp; Host
+              </h4>
+              <address className="not-italic text-xs text-text-secondary leading-relaxed">
+                <p className="m-0 font-bold text-text-primary">Vidyavardhaka College of Engineering</p>
+                <p className="m-0">Sri H. Kempegowda Indoor Sports Complex</p>
+                <p className="m-0">Gokulam 3rd Stage, Mysuru, Karnataka 570002</p>
+                <p className="m-0 pt-1 text-accent-primary">Autonomous Institution · NAAC &apos;A&apos; Grade</p>
+              </address>
+            </div>
+          </div>
+
+          <div className="pt-6 border-t border-border-color/60 flex flex-col sm:flex-row items-center justify-between gap-3 text-[11px] text-text-secondary">
+            <p className="m-0">
+              &copy; 2026 Innovators &amp; Visionaries Club (IVC) × InUnity. All rights reserved.
+            </p>
+            <div className="flex items-center gap-4">
+              <span>Next.js 16 App Router</span>
+              <span>•</span>
+              <span>Accessible Semantic HTML5</span>
+              <span>•</span>
+              <span>Robots &amp; Sitemap Validated</span>
+            </div>
+          </div>
+        </div>
+      </footer>
     </div>
   );
 }

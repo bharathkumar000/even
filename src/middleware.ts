@@ -39,8 +39,19 @@ export async function middleware(request: NextRequest) {
     },
   });
 
-  // Refresh auth session
-  await supabase.auth.getUser();
+  // Refresh auth session only when session cookies exist
+  const allCookies = request.cookies.getAll();
+  const hasAuthCookie = allCookies.some(
+    (c) => c.name.includes("-auth-token") || c.name.startsWith("sb-")
+  );
+
+  if (hasAuthCookie) {
+    try {
+      await supabase.auth.getUser();
+    } catch {
+      // Ignore network timeout on invalid or expired token
+    }
+  }
 
   const pathname = request.nextUrl.pathname;
 
@@ -88,23 +99,9 @@ export async function middleware(request: NextRequest) {
       return NextResponse.redirect(new URL("/ops/scanner", request.url));
     }
   } else if (pathname === "/") {
-    // Default root path: direct unauthenticated visitors straight to the login portal
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      return NextResponse.redirect(new URL("/login", request.url));
-    }
-
-    const role = (user.user_metadata?.role as string | undefined) || (user.app_metadata?.role as string | undefined);
-    let target = "/team";
-    if (role === "admin") target = "/admin";
-    else if (role === "judge") target = "/judge";
-    else if (role === "staff" || role === "organizer") target = "/ops/scanner";
-    else if (role === "participant" || role === "leader") target = "/team";
-
-    return NextResponse.redirect(new URL(target, request.url));
+    // Root path is the public landing and central gateway.
+    // Unauthenticated visitors and crawlers receive HTTP 200 with public event details.
+    // Authenticated users are not forced away so they can view the central gateway and quick-switch portals.
   } else if (pathname === "/login") {
     // Redirect authenticated users away from /login
     const {
@@ -129,6 +126,21 @@ export async function middleware(request: NextRequest) {
   response.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
   response.headers.set("X-XSS-Protection", "1; mode=block");
   response.headers.set("Permissions-Policy", "camera=(self), microphone=(), geolocation=()");
+
+  // Prevent indexing of private, dashboard, and administrative portals
+  if (
+    pathname.startsWith("/admin") ||
+    pathname.startsWith("/judge") ||
+    pathname.startsWith("/team") ||
+    pathname.startsWith("/ops") ||
+    pathname.startsWith("/participants") ||
+    pathname.startsWith("/judges") ||
+    pathname.startsWith("/event-details") ||
+    pathname === "/login" ||
+    pathname === "/signup"
+  ) {
+    response.headers.set("X-Robots-Tag", "noindex, nofollow, noarchive");
+  }
 
   return response;
 }
