@@ -295,7 +295,7 @@ export default function AuthPage({ isSignUp = false }: { isSignUp?: boolean }) {
             </h1>
             <p className="font-tech text-xs text-text-secondary uppercase tracking-wider">
               {isSignUp
-                ? "Register for Vice Verse 1.0"
+                ? "Register for Eventra 1.0"
                 : "Unified entry point for Admin, Judges, Teams & Staff"}
             </p>
           </div>

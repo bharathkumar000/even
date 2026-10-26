@@ -38,7 +38,7 @@ async function start() {
   const bold = '\x1b[1m';
 
   console.log(`\n${bold}====================================================${reset}`);
-  console.log(`${bold}  VICE VERSE MULTI-PORT PORTAL SYSTEM               ${reset}`);
+  console.log(`${bold}  EVENTRA MULTI-PORT PORTAL SYSTEM                  ${reset}`);
   console.log(`${bold}====================================================${reset}`);
   portals.forEach((p) => {
     console.log(`  ${p.color}● ${p.name.padEnd(14)}${reset} → ${bold}http://localhost:${p.port}${reset}`);

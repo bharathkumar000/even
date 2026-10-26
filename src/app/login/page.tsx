@@ -3,8 +3,8 @@ import AuthPage from "@/components/auth/AuthPage";
 import { getCanonicalUrl } from "@/lib/seo-config";
 
 export const metadata: Metadata = {
-  title: "Login · Access Portal",
-  description: "Unified Authentication Portal for Vice Verse 1.0 — Admin, Judges, Teams & Staff.",
+  title: "Login · Access Portal | Eventra",
+  description: "Unified Authentication Portal for Eventra 1.0 — Admin, Judges, Teams & Staff.",
   alternates: {
     canonical: getCanonicalUrl("/login"),
   },

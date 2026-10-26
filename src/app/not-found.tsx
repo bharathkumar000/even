@@ -22,7 +22,7 @@ export default function NotFound() {
             Sector Not Found
           </h2>
           <p className="font-tech text-xs text-text-secondary mt-2 max-w-sm mx-auto">
-            The coordinates you requested do not exist in the Vice Verse network grid.
+            The coordinates you requested do not exist in the Eventra network grid.
           </p>
         </div>
 

@@ -136,7 +136,7 @@ export default function CrossPortalNav({
             <div className="hidden sm:flex flex-col">
               <div className="flex items-center gap-1.5">
                 <span className="font-heading font-black text-sm tracking-[2px] text-text-primary uppercase group-hover:text-accent-primary transition-colors">
-                  Vice Verse
+                  Eventra
                 </span>
                 <span className="text-[10px] bg-accent-secondary/20 text-accent-secondary px-1.5 py-0.2 border border-accent-secondary/40 font-mono font-bold">
                   v2.0

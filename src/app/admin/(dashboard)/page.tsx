@@ -130,7 +130,7 @@ export default async function AdminDashboardPage() {
         {/* Top Control Bar */}
         <div className="flex flex-wrap items-center justify-between gap-4">
           <p className="font-tech text-xs uppercase tracking-[3px] text-accent-secondary font-bold m-0">
-            Vice Verse 1.0 // Command Center
+            Eventra 1.0 // Command Center
           </p>
 
           <div className="flex items-center gap-3">

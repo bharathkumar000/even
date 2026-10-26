@@ -16,7 +16,7 @@ export default function JudgeHeader() {
             Judges Evaluation Hub
           </h2>
           <p className="font-tech text-[11px] text-accent-secondary m-0 font-bold tracking-[1px] uppercase">
-            Vice Verse 1.0 // Official Scoring Portal
+            Eventra 1.0 // Official Scoring Portal
           </p>
         </div>
       </div>

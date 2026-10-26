@@ -3,8 +3,8 @@ import AuthPage from "@/components/auth/AuthPage";
 import { getCanonicalUrl } from "@/lib/seo-config";
 
 export const metadata: Metadata = {
-  title: "Register · Participant Onboarding",
-  description: "Create an Account for Vice Verse 1.0 — Ideathon Squad Registration.",
+  title: "Register · Participant Onboarding | Eventra",
+  description: "Create an Account for Eventra 1.0 — Ideathon Squad Registration.",
   alternates: {
     canonical: getCanonicalUrl("/signup"),
   },

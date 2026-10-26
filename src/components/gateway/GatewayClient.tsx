@@ -104,7 +104,7 @@ export default function GatewayClient({
               <div className="inline-flex items-center gap-2 px-3 py-1 bg-surface-color/90 border border-border-color rounded-full">
                 <span className="w-2 h-2 rounded-full bg-status-success animate-pulse" />
                 <span className="text-[11px] font-mono uppercase tracking-[2px] text-text-primary font-bold">
-                  Ideathon 2026 Live · Vice Verse 1.0
+                  Ideathon 2026 Live · Eventra 1.0
                 </span>
                 <span className="text-[10px] text-accent-primary font-bold">
                   IVC × InUnity
@@ -159,7 +159,7 @@ export default function GatewayClient({
                 <div className="absolute inset-0 bg-gradient-to-r from-accent-secondary via-accent-primary to-accent-tertiary rounded-full blur-xl opacity-40 group-hover:opacity-75 transition-opacity" />
                 <Image
                   src="/Vice_verse_logo.png"
-                  alt="Vice Verse Logo"
+                  alt="Eventra Logo"
                   width={210}
                   height={130}
                   priority

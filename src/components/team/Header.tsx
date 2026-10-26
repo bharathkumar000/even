@@ -16,7 +16,7 @@ export default function TeamHeader() {
             Team Deliverables Hub
           </h2>
           <p className="font-tech text-[11px] text-accent-tertiary m-0 font-bold tracking-[1px] uppercase">
-            Vice Verse 1.0 // Participant Console
+            Eventra 1.0 // Participant Console
           </p>
         </div>
       </div>

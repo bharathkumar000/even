@@ -9,13 +9,13 @@ import { SITE_CONFIG, getCanonicalUrl } from "@/lib/seo-config";
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "EVENTRA · Central Hackathon & Event Portal | Vice Verse 1.0",
+  title: "EVENTRA · Central Hackathon & Event Portal | Eventra 1.0",
   description: SITE_CONFIG.description,
   alternates: {
     canonical: getCanonicalUrl("/"),
   },
   openGraph: {
-    title: "EVENTRA · Central Hackathon & Event Portal | Vice Verse 1.0",
+    title: "EVENTRA · Central Hackathon & Event Portal | Eventra 1.0",
     description: SITE_CONFIG.description,
     url: getCanonicalUrl("/"),
     siteName: SITE_CONFIG.name,

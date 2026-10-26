@@ -8,7 +8,7 @@ export default function EventDetails() {
   const [formData, setFormData] = useState({
     clubName: 'IVC × InUnity',
     tagline: 'Ideate visualize create',
-    eventName: 'Vice Verse 1.0 2026',
+    eventName: 'Eventra 1.0 2026',
     venue: 'Sri H. Kempegowda Indoor Sports Complex',
     eventDate: '2026-10-26',
     eventTime: '09:00',
