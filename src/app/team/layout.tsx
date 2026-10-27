@@ -3,9 +3,10 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import TeamSidebar from "@/components/team/Sidebar";
-import PortalAccessDenied from "@/components/navigation/PortalAccessDenied";
+import SessionSync from "@/components/auth/SessionSync";
 import { getTeamRegistrationByEmail } from "@/lib/googleSheet";
 import TeamMobileNav from "@/components/team/MobileNavDrawer";
+import { getAuthorizedPortalUrl } from "@/lib/auth/portal-route";
 
 export const metadata: Metadata = {
   robots: {
@@ -43,20 +44,12 @@ export default async function TeamLayout({
     (user.user_metadata?.role as string | undefined) ||
     (user.app_metadata?.role as string | undefined);
 
-  if (userRole !== "participant" && userRole !== "leader" && userRole !== "admin") {
-    return (
-      <PortalAccessDenied
-        portalTitle="TEAM_LEADER & Participant Console"
-        requiredRoleLabel="Team Leader / Participant"
-        accentColor="pink"
-        currentUser={{
-          id: user.id,
-          email: user.email,
-          role: userRole || "judge",
-          fullName: profile?.full_name || (user.user_metadata?.full_name as string | undefined),
-        }}
-      />
-    );
+  const isAuthorized =
+    userRole === "participant" || userRole === "leader" || userRole === "admin";
+
+  if (!isAuthorized) {
+    const authorizedUrl = getAuthorizedPortalUrl(userRole);
+    redirect(`${authorizedUrl}?access_denied=1&portal=team`);
   }
 
   // Find team details
@@ -112,6 +105,7 @@ export default async function TeamLayout({
         >
         <div className="max-w-6xl mx-auto w-full">
           {children}
+        <SessionSync />
         </div>
       </main>
     </div>

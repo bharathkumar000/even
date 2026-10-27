@@ -5,7 +5,8 @@ import { cookies } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import AdminSidebar from "@/components/admin/Sidebar";
-import PortalAccessDenied from "@/components/navigation/PortalAccessDenied";
+import SessionSync from "@/components/auth/SessionSync";
+import { getAuthorizedPortalUrl } from "@/lib/auth/portal-route";
 
 export const dynamic = "force-dynamic";
 
@@ -61,19 +62,9 @@ export default async function AdminLayout({
   const isAdmin = profile?.role === "admin" || metaRole === "admin";
 
   if (!isAdmin) {
-    return (
-      <PortalAccessDenied
-        portalTitle="Admin HQ Mission Control"
-        requiredRoleLabel="System Administrator"
-        accentColor="purple"
-        currentUser={{
-          id: user.id,
-          email: user.email,
-          role: metaRole || profile?.role || "participant",
-          fullName: (user.user_metadata?.full_name as string | undefined) || user.email?.split("@")[0],
-        }}
-      />
-    );
+    // Redirect to the user's authorized portal instead of showing a 403 checkpoint
+    const authorizedUrl = getAuthorizedPortalUrl(metaRole || profile?.role);
+    redirect(`${authorizedUrl}?access_denied=1&portal=admin`);
   }
 
   // 2. Checkpoint Verification: Admin passcode verification required
@@ -94,6 +85,7 @@ export default async function AdminLayout({
         }}
       >
         {children}
+        <SessionSync />
       </main>
     </div>
   );

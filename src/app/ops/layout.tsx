@@ -3,8 +3,9 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import OpsSidebar from "@/components/ops/Sidebar";
-import PortalAccessDenied from "@/components/navigation/PortalAccessDenied";
+import SessionSync from "@/components/auth/SessionSync";
 import OpsMobileNav from "@/components/ops/MobileNavDrawer";
+import { getAuthorizedPortalUrl } from "@/lib/auth/portal-route";
 
 export const dynamic = "force-dynamic";
 
@@ -44,20 +45,15 @@ export default async function OpsLayout({
     (user.user_metadata?.role as string | undefined) ||
     (user.app_metadata?.role as string | undefined);
 
-  if (role !== "staff" && role !== "organizer" && role !== "admin" && role !== "spoc") {
-    return (
-      <PortalAccessDenied
-        portalTitle="Club Member Operations Desk"
-        requiredRoleLabel="Club Member / Operations Staff"
-        accentColor="cyan"
-        currentUser={{
-          id: user.id,
-          email: user.email,
-          role: role || "participant",
-          fullName: profile?.full_name || (user.user_metadata?.full_name as string | undefined),
-        }}
-      />
-    );
+  const isAuthorized =
+    role === "staff" ||
+    role === "organizer" ||
+    role === "admin" ||
+    role === "spoc";
+
+  if (!isAuthorized) {
+    const authorizedUrl = getAuthorizedPortalUrl(role);
+    redirect(`${authorizedUrl}?access_denied=1&portal=ops`);
   }
 
   return (
@@ -73,6 +69,7 @@ export default async function OpsLayout({
         >
         <div className="max-w-6xl mx-auto w-full">
           {children}
+        <SessionSync />
         </div>
       </main>
     </div>

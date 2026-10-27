@@ -25,6 +25,7 @@ export async function selectProblemStatement(statementId: string) {
     throw new Error("Too many selection attempts. Please try again later.");
   }
 
+  // Fetch the problem statement details
   const { data: statement, error } = await supabaseAdmin
     .from("problem_statements")
     .select("*")
@@ -57,6 +58,25 @@ export async function selectProblemStatement(statementId: string) {
     }
   }
 
+  // --- Capacity enforcement ---
+  // If a team limit is set, ensure the statement hasn't reached its quota.
+  // We count distinct teams already assigned to this statement, excluding the current team (if it already has an assignment).
+  if (statement.team_limit !== null && statement.team_limit !== undefined) {
+    const { data: existingAssignments, error: countError } = await supabaseAdmin
+      .from("team_problem_statement_assignments")
+      .select("team_id")
+      .eq("problem_statement_id", statementId);
+    if (countError) {
+      throw new Error("Failed to verify problem statement capacity.");
+    }
+    const assignedTeams = (existingAssignments || []).map((row: any) => row.team_id);
+    const otherTeamsCount = assignedTeams.filter((t: string) => t !== teamId).length;
+    if (otherTeamsCount >= statement.team_limit) {
+      throw new Error(`Problem statement capacity reached (limit ${statement.team_limit}).`);
+    }
+  }
+
+  // Attempt to allocate – upsert ensures a single assignment per team.
   const { error: assignmentError } = await supabaseAdmin
     .from("team_problem_statement_assignments")
     .upsert(

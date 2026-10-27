@@ -23,17 +23,17 @@ export default function ScannerDesk({
   onLookup,
 }: ScannerDeskProps) {
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+    <div className="grid grid-cols-1 lg:grid-cols-[65%_35%] gap-6">
       {/* Camera Box */}
-      <div className="glass-panel p-4 sm:p-6 border border-border-color space-y-4">
-        <div className="flex items-center justify-between">
-          <h2 className="font-heading text-lg text-text-primary uppercase m-0 flex items-center gap-2">
+      <div className="glass-panel p-4 sm:p-6 border border-border-color space-y-4 min-w-0">
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
+          <h2 className="font-heading text-lg text-text-primary uppercase m-0 flex items-center gap-2 shrink-0">
             <Camera className="text-accent-tertiary" size={18} />
             Live Camera Scanner
           </h2>
           <button
             onClick={scanning ? onStopScanner : onStartScanner}
-            className={`px-3 py-1.5 font-tech font-bold uppercase text-xs transition-colors ${
+            className={`px-3 py-1.5 font-tech font-bold uppercase text-xs transition-colors shrink-0 ${
               scanning
                 ? "bg-status-error hover:bg-status-error/80 text-white"
                 : "bg-accent-tertiary hover:bg-accent-tertiary/80 text-black"
@@ -43,7 +43,7 @@ export default function ScannerDesk({
           </button>
         </div>
 
-        <div className="relative w-full h-64 bg-surface-color border border-dashed border-border-color overflow-hidden rounded flex items-center justify-center">
+        <div className="relative w-full min-h-[420px] lg:min-h-[500px] lg:max-h-[650px] bg-surface-color border border-dashed border-border-color overflow-hidden rounded flex items-center justify-center">
           {/* html5-qrcode attaches and mutates DOM directly in this dedicated div. React must NOT have children here */}
           <div
             id="qr-reader-container"
@@ -52,7 +52,7 @@ export default function ScannerDesk({
 
           {!scanning && (
             <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none text-center text-text-secondary font-tech p-4 bg-surface-color/90">
-              <QrCode size={40} className="mx-auto mb-2 opacity-50" />
+              <QrCode size={48} className="mx-auto mb-2 opacity-50" />
               <p className="text-xs m-0">Click &quot;Launch Camera&quot; to scan QR badges</p>
             </div>
           )}
@@ -60,7 +60,7 @@ export default function ScannerDesk({
       </div>
 
       {/* Manual Entry Box */}
-      <div id="manual-lookup" className="glass-panel p-4 sm:p-6 border border-border-color space-y-4 flex flex-col justify-between scroll-mt-20">
+      <div id="manual-lookup" className="glass-panel p-4 sm:p-6 border border-border-color space-y-4 flex flex-col justify-between scroll-mt-20 min-w-0">
         <div>
           <h2 className="font-heading text-lg text-text-primary uppercase m-0 flex items-center gap-2">
             <Search className="text-accent-secondary" size={18} />

@@ -23,6 +23,7 @@ import {
 import type { ActionType } from "@/lib/validations/operations";
 import ScannerDesk from "@/components/ops/ScannerDesk";
 import LiveActivityStream from "@/components/ops/LiveActivityStream";
+import { CSRF_CONSTANTS } from "@/lib/csrf-constants";
 import { createClient } from "@/lib/supabase/client";
 import { playScanSuccess, playScanError } from "@/lib/feedback-sound";
 
@@ -60,10 +61,22 @@ export default function ScannerClientView() {
   const [liveStreamLogs, setLiveStreamLogs] = useState<LiveActivityFeedItem[]>([]);
   const [streamLoading, setStreamLoading] = useState(false);
   const [lastSyncTime, setLastSyncTime] = useState<Date | null>(null);
-  // Set initial sync timestamp on client after mount to avoid SSR mismatch
-  useEffect(() => {
-    setLastSyncTime(new Date());
-  }, []);
+const [csrfToken, setCsrfToken] = useState<string | undefined>(undefined);
+// Initialize last sync timestamp and fetch CSRF token on client mount
+useEffect(() => {
+  setLastSyncTime(new Date());
+  // Fetch CSRF token from server
+  void fetch("/api/csrf/init")
+    .then((res) => res.json())
+    .then((data) => {
+      if (data?.token) {
+        setCsrfToken(data.token);
+      }
+    })
+    .catch((err) => {
+      console.warn("CSRF init fetch failed:", err);
+    });
+}, []);
   const html5QrCodeRef = useRef<any>(null);
 
   // Fetch live activity audit stream across all club members
@@ -175,7 +188,7 @@ export default function ScannerClientView() {
         { facingMode: "environment" },
         {
           fps: 10,
-          qrbox: { width: 250, height: 250 },
+          qrbox: { width: 350, height: 350 },
         },
         (decodedText) => {
           handleDetectedCode(decodedText);
@@ -237,7 +250,7 @@ export default function ScannerClientView() {
       setActionLoading(`bulk-${op}`);
       setErrorMsg(null);
       try {
-        const res = await recordTeamBulkAction(teamId, op as ActionType);
+        const res = await recordTeamBulkAction(teamId, op as ActionType, csrfToken);
         playScanSuccess();
         setSuccessMsg(
           `Bulk Claim Complete: Distributed "${op.toUpperCase()}" to ${res.claimedCount} members.`
@@ -321,11 +334,12 @@ export default function ScannerClientView() {
     );
 
     try {
-      const res = await recordMemberAction({
-        team_id: teamData.team.id,
-        participant_id: participantId,
-        action_type: actionType,
-      });
+const res = await recordMemberAction({
+  team_id: teamData.team.id,
+  participant_id: participantId,
+  action_type: actionType,
+  [CSRF_CONSTANTS.HEADER_NAME]: csrfToken,
+});
 
       playScanSuccess();
       setSuccessMsg(
@@ -364,7 +378,7 @@ export default function ScannerClientView() {
     setErrorMsg(null);
 
     try {
-      const res = await recordTeamBulkAction(teamData.team.id, actionType);
+      const res = await recordTeamBulkAction(teamData.team.id, actionType, csrfToken);
       playScanSuccess();
       setSuccessMsg(
         `Bulk Claim Complete: Distributed "${actionType.toUpperCase()}" to ${res.claimedCount} members.`

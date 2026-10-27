@@ -3,7 +3,8 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import JudgeSidebar from "@/components/judge/Sidebar";
-import PortalAccessDenied from "@/components/navigation/PortalAccessDenied";
+import SessionSync from "@/components/auth/SessionSync";
+import { getAuthorizedPortalUrl } from "@/lib/auth/portal-route";
 
 export const dynamic = "force-dynamic";
 
@@ -43,20 +44,11 @@ export default async function JudgeLayout({
     (user.user_metadata?.role as string | undefined) ||
     (user.app_metadata?.role as string | undefined);
 
-  if (role !== "judge" && role !== "admin") {
-    return (
-      <PortalAccessDenied
-        portalTitle="Judge Evaluation Panel"
-        requiredRoleLabel="Judge / Jury Member"
-        accentColor="yellow"
-        currentUser={{
-          id: user.id,
-          email: user.email,
-          role: role || "participant",
-          fullName: profile?.full_name || (user.user_metadata?.full_name as string | undefined),
-        }}
-      />
-    );
+  const isAuthorized = role === "judge" || role === "admin";
+
+  if (!isAuthorized) {
+    const authorizedUrl = getAuthorizedPortalUrl(role);
+    redirect(`${authorizedUrl}?access_denied=1&portal=judge`);
   }
 
   return (
@@ -71,6 +63,7 @@ export default async function JudgeLayout({
       >
         <div className="max-w-7xl mx-auto w-full">
           {children}
+        <SessionSync />
         </div>
       </main>
     </div>

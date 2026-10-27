@@ -154,28 +154,30 @@ export default function TeamSidebar({
         </div>
       </div>
 
-      {/* Footer Team Context & Sign Out */}
-      <div className="px-4 py-4 border-t border-border-color mt-auto space-y-3 shrink-0">
-        <div className="p-3 bg-surface-color/50 border border-border-color rounded">
-          <p className="text-[10px] uppercase text-text-secondary tracking-wider font-bold mb-0.5">
-            Active Team
-          </p>
-          <p className="font-heading text-xs text-text-primary uppercase truncate m-0">
-            {teamName}
-          </p>
-          <div className="flex items-center justify-between text-[10px] text-text-secondary mt-1 font-mono">
-            <span>Track: {track}</span>
-            <span className="text-accent-tertiary">{isLeader ? "LEADER" : "MEMBER"}</span>
+        {/* Footer Team Context & Sign Out */}
+        <div className="px-4 py-4 border-t border-border-color mt-auto space-y-3 shrink-0">
+          <div className="p-3 bg-surface-color/50 border border-border-color rounded">
+            <p className="text-[10px] uppercase text-text-secondary tracking-wider font-bold mb-0.5">
+              Active Team
+            </p>
+            <p className="font-heading text-xs text-text-primary uppercase truncate m-0">
+              {teamName}
+            </p>
+            <div className="flex items-center justify-between text-[10px] text-text-secondary mt-1 font-mono">
+              <span>Track: {track}</span>
+              <span className="text-accent-tertiary">{isLeader ? "LEADER" : "MEMBER"}</span>
+            </div>
+          </div>
+
+          <SignOutButton variant="menu-item" label="Sign Out" />
+
+          <div className="pt-2 text-[10px] text-text-secondary/70 font-mono tracking-wider flex items-center justify-between">
+            <span>BUILD: ViceVerse v2.0</span>
+            <span>IVC 2026</span>
           </div>
         </div>
-
-        <SignOutButton variant="menu-item" label="Sign Out" />
-
-        <div className="pt-2 text-[10px] text-text-secondary/70 font-mono tracking-wider flex items-center justify-between">
-          <span>BUILD: ViceVerse v2.0</span>
-          <span>IVC 2026</span>
-        </div>
-      </div>
     </aside>
   );
 }
+export { TeamSidebar };
+

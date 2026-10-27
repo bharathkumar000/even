@@ -59,18 +59,18 @@ export async function verifyAdminPasscode(passcode: string, csrfToken?: string) 
   }
 
   // 3. Verify passcode against environment secret
-  const expectedSecret = process.env.ADMIN_PORTAL_SECRET || "2026VICEVERSE@IVC";
+  const expectedSecret = process.env.ADMIN_PORTAL_SECRET || "098890";
 
   if (passcode === expectedSecret) {
     // Reset failed attempts counter
     cookieStore.delete("admin_failed_attempts");
 
-    // Set verified session cookie (HttpOnly, SameSite=Lax, 8 hours expiration)
+    // Set verified session cookie (HttpOnly, SameSite=Lax, 10 minutes expiration)
     cookieStore.set("admin_session_verified", "true", {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "lax",
-      maxAge: 8 * 60 * 60, // 8 hours
+      maxAge: 10 * 60, // 10 minutes
       path: "/",
     });
 
