@@ -24,7 +24,7 @@ export default function Sidebar() {
         {/* Top Center Logo */}
         <div className="mb-3.5 relative flex items-center justify-center">
           <Image
-            src="/ivc-gear-logo.png"
+            src="/ivc-logo-transparent.png"
             alt="Innovators & Visionaries Club Logo"
             width={72}
             height={72}

@@ -90,6 +90,8 @@ export default function ScoringSlider({
           <div className="relative flex items-center">
             <input
               type="number"
+              inputMode="numeric"
+              pattern="[0-9]*"
               min="0"
               max={maxMarks}
               value={currentVal === 0 ? "" : currentVal}
@@ -97,6 +99,18 @@ export default function ScoringSlider({
               disabled={disabled}
               onChange={handleInputChange}
               className="w-24 h-10 bg-surface-color border border-border-color text-text-primary font-heading font-bold text-lg text-center px-2 focus:border-accent-secondary focus:shadow-[0_0_12px_rgba(255,0,127,0.25)] outline-none rounded"
+              onKeyDown={(e) => {
+                // Only allow: backspace, delete, tab, escape, enter, numbers, arrow keys
+                const allowedKeys = [
+                  "Backspace", "Delete", "Tab", "Escape", "Enter",
+                  "ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown",
+                  "Home", "End"
+                ];
+                const isNumber = e.key >= "0" && e.key <= "9";
+                if (!allowedKeys.includes(e.key) && !isNumber) {
+                  e.preventDefault();
+                }
+              }}
             />
           </div>
 

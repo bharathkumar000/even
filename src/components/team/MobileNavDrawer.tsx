@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Menu, X, LayoutDashboard, FileUp, QrCode, Trophy, ArrowLeft } from "lucide-react";
+import { Menu, X, LayoutDashboard, FileUp, QrCode, Trophy, ScrollText, ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
@@ -36,7 +36,7 @@ export default function TeamMobileNav() {
       {/* Mobile Top Header */}
       <header className="flex items-center justify-between px-4 py-3 bg-[#0c0c14]/95 backdrop-blur-md border-b border-border-color md:hidden w-full">
         <div className="flex items-center gap-2.5 min-w-0">
-          <Image src="/ivc-gear-logo.png" alt="IVC" width={32} height={32} className="object-contain shrink-0" />
+          <Image src="/ivc-logo-transparent.png" alt="IVC" width={32} height={32} className="object-contain shrink-0" />
           <h1 className="text-xs sm:text-sm font-heading uppercase text-text-primary tracking-wider m-0 truncate max-w-[200px]">
             {title}
           </h1>
@@ -76,7 +76,7 @@ export default function TeamMobileNav() {
             {/* Header: Title on Left, Working X Button on Right */}
             <div className="flex items-center justify-between pb-4 mb-5 border-b border-border-color">
               <div className="flex items-center gap-2.5 min-w-0">
-                <Image src="/ivc-gear-logo.png" alt="IVC" width={32} height={32} className="object-contain shrink-0" />
+                <Image src="/ivc-logo-transparent.png" alt="IVC" width={32} height={32} className="object-contain shrink-0" />
                 <h2 className="font-heading text-base uppercase text-text-primary m-0 tracking-wider truncate">
                   Team Portal
                 </h2>

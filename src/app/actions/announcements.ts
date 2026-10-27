@@ -2,6 +2,9 @@
 
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { revalidatePath } from "next/cache";
+import { requireAdmin } from "@/lib/auth/admin";
+import { requireOperationsRole } from "@/lib/auth/operations";
+import { validateCsrfToken, CSRF_CONSTANTS } from "@/lib/csrf-server";
 
 export interface AnnouncementItem {
   id: string;
@@ -45,19 +48,24 @@ export async function getActiveAnnouncements(
 }
 
 /**
- * Create a new announcement (organizers / admins)
+ * Create a new announcement (organizers / admins / staff)
  */
 export async function createAnnouncement({
   title,
   message,
   priority = "normal",
   target_audience = "all",
+  [CSRF_CONSTANTS.HEADER_NAME]: csrfToken,
 }: {
   title: string;
   message: string;
   priority?: "normal" | "important" | "urgent";
   target_audience?: "all" | "teams" | "judges" | "ops";
+  [CSRF_CONSTANTS.HEADER_NAME]?: string;
 }) {
+  const { user } = await requireOperationsRole();
+  await validateCsrfToken(csrfToken || null);
+
   const { data, error } = await supabaseAdmin
     .from("announcements")
     .insert({
@@ -65,6 +73,7 @@ export async function createAnnouncement({
       message: message.trim(),
       priority,
       target_audience,
+      created_by: user.id,
     })
     .select()
     .single();
@@ -83,7 +92,10 @@ export async function createAnnouncement({
 /**
  * Delete or toggle an announcement
  */
-export async function toggleAnnouncementActive(id: string, isActive: boolean) {
+export async function toggleAnnouncementActive(id: string, isActive: boolean, csrfToken?: string) {
+  const { user } = await requireOperationsRole();
+  await validateCsrfToken(csrfToken || null);
+
   const { error } = await supabaseAdmin
     .from("announcements")
     .update({ is_active: isActive })

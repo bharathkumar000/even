@@ -62,8 +62,9 @@ export default function GatewayClient({
         return { name: "Admin HQ", url: "/admin", accent: "text-pink-400" };
       case "judge":
         return { name: "Judge Portal", url: "/judge", accent: "text-accent-primary" };
-      case "staff":
-      case "organizer":
+        case "staff":
+        case "organizer":
+        case "spoc":
         return { name: "Club Member Ops", url: "/ops/scanner", accent: "text-accent-tertiary" };
       case "leader":
       case "participant":

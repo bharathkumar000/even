@@ -57,8 +57,9 @@ export default function PortalAccessDenied({
           border: "border-accent-primary/50",
           bg: "bg-accent-primary/10",
         };
-      case "staff":
-      case "organizer":
+        case "staff":
+        case "organizer":
+        case "spoc":
         return {
           name: "Club Member Operations Desk",
           url: "/ops/scanner",

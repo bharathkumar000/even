@@ -3,8 +3,10 @@
 import { requireAdmin } from "@/lib/auth/admin";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { revalidatePath } from "next/cache";
+import { validateCsrfToken, CSRF_CONSTANTS } from "@/lib/csrf-server";
+import { checkServerActionRateLimit, SERVER_ACTION_RATE_LIMITS } from "@/lib/rate-limit";
 
-export type AllowedUserRole = "admin" | "judge" | "staff" | "participant" | "leader";
+export type AllowedUserRole = "admin" | "judge" | "staff" | "spoc" | "participant" | "leader";
 
 export interface UserProfileItem {
   id: string;
@@ -260,8 +262,22 @@ export async function getUsersList(params?: {
 export async function updateUserRole(data: {
   userId: string;
   newRole: AllowedUserRole;
+  [CSRF_CONSTANTS.HEADER_NAME]?: string;
 }) {
   const { user } = await requireAdmin();
+  await validateCsrfToken(data[CSRF_CONSTANTS.HEADER_NAME] || null);
+
+  // Rate limiting for role changes
+  const rateLimit = checkServerActionRateLimit(
+    user.id,
+    "userRoleChange",
+    SERVER_ACTION_RATE_LIMITS.userRoleChange.maxRequests,
+    SERVER_ACTION_RATE_LIMITS.userRoleChange.windowMs
+  );
+
+  if (!rateLimit.success) {
+    throw new Error(`Too many role change attempts. Please try again in ${rateLimit.retryAfter} seconds.`);
+  }
 
   if (user.id === data.userId && data.newRole !== "admin") {
     throw new Error("Security Alert: You cannot demote your own active admin account.");
@@ -329,15 +345,30 @@ export async function createUser(data: {
   fullName: string;
   role: AllowedUserRole;
   username?: string;
+  [CSRF_CONSTANTS.HEADER_NAME]?: string;
 }) {
   const { user } = await requireAdmin();
+  await validateCsrfToken(data[CSRF_CONSTANTS.HEADER_NAME] || null);
 
   if (!data.email || !data.password || !data.fullName) {
     throw new Error("Missing required user fields (email, password, full name).");
   }
 
-  if (data.password.length < 6) {
-    throw new Error("Password must be at least 6 characters.");
+  // Strong password requirements
+  if (data.password.length < 12) {
+    throw new Error("Password must be at least 12 characters.");
+  }
+  if (!/[A-Z]/.test(data.password)) {
+    throw new Error("Password must contain at least one uppercase letter.");
+  }
+  if (!/[a-z]/.test(data.password)) {
+    throw new Error("Password must contain at least one lowercase letter.");
+  }
+  if (!/[0-9]/.test(data.password)) {
+    throw new Error("Password must contain at least one number.");
+  }
+  if (!/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(data.password)) {
+    throw new Error("Password must contain at least one special character.");
   }
 
   // 1. Create account via Supabase Admin API
@@ -393,8 +424,9 @@ export async function createUser(data: {
   return { success: true, user: newUser.user };
 }
 
-export async function deleteUser(userId: string) {
+export async function deleteUser(userId: string, csrfToken?: string) {
   const { user } = await requireAdmin();
+  await validateCsrfToken(csrfToken || null);
 
   if (user.id === userId) {
     throw new Error("Security Alert: You cannot delete your own admin account.");
@@ -451,8 +483,21 @@ export interface BulkImportUserRecord {
   username?: string;
 }
 
-export async function bulkImportUsers(records: BulkImportUserRecord[]) {
+export async function bulkImportUsers(records: BulkImportUserRecord[], csrfToken?: string) {
   const { user } = await requireAdmin();
+  await validateCsrfToken(csrfToken || null);
+
+  // Rate limiting for bulk operations
+  const rateLimit = checkServerActionRateLimit(
+    user.id,
+    "bulkOperations",
+    SERVER_ACTION_RATE_LIMITS.bulkOperations.maxRequests,
+    SERVER_ACTION_RATE_LIMITS.bulkOperations.windowMs
+  );
+
+  if (!rateLimit.success) {
+    throw new Error(`Too many bulk import attempts. Please try again in ${rateLimit.retryAfter} seconds.`);
+  }
 
   if (!records || records.length === 0) {
     throw new Error("No records provided for import.");
@@ -465,7 +510,27 @@ export async function bulkImportUsers(records: BulkImportUserRecord[]) {
     errors: [] as string[],
   };
 
-  const DEFAULT_PASSWORD = "123";
+  // Generate a strong random password for users without one
+  function generateStrongPassword(): string {
+    const upper = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    const lower = "abcdefghijklmnopqrstuvwxyz";
+    const numbers = "0123456789";
+    const special = "!@#$%^&*()_+-=[]{}|;:,.<>?";
+    const all = upper + lower + numbers + special;
+    
+    let password = "";
+    password += upper[Math.floor(Math.random() * upper.length)];
+    password += lower[Math.floor(Math.random() * lower.length)];
+    password += numbers[Math.floor(Math.random() * numbers.length)];
+    password += special[Math.floor(Math.random() * special.length)];
+    
+    for (let i = 4; i < 16; i++) {
+      password += all[Math.floor(Math.random() * all.length)];
+    }
+    
+    // Shuffle
+    return password.split("").sort(() => Math.random() - 0.5).join("");
+  }
 
   for (const item of records) {
      const rawEmail = item.email?.trim().toLowerCase();
@@ -483,7 +548,7 @@ export async function bulkImportUsers(records: BulkImportUserRecord[]) {
       rawRole = "participant";
     }
     const role: AllowedUserRole = (rawRole as AllowedUserRole) || "participant";
-    const password = item.password?.trim() || DEFAULT_PASSWORD;
+    const password = item.password?.trim() || generateStrongPassword();
 
     if (!email || !fullName) {
       results.errors.push(`Row skipped: missing email or full name (${JSON.stringify(item)})`);

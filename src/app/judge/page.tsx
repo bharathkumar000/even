@@ -11,6 +11,8 @@ import {
   Clock,
   AlertCircle,
 } from "lucide-react";
+import { slugify } from "@/lib/utils";
+
 import { getActiveAnnouncements } from "@/app/actions/announcements";
 import AnnouncementBanner from "@/components/AnnouncementBanner";
 import RealtimeRoundsListener from "@/components/RealtimeRoundsListener";
@@ -125,9 +127,9 @@ export default async function JudgeDashboardPage() {
       <AnnouncementBanner announcements={announcements} portalName="Judge Portal" />
 
       {/* Title */}
-      <div className="border-b border-border-color pb-6 flex flex-col md:flex-row md:items-end justify-between gap-4">
+      <div className="border-b border-border-color pb-6 flex flex-col sm:flex-row sm:items-end justify-between gap-4">
         <div>
-          <div className="flex items-center gap-2 mb-1">
+          <div className="flex items-center gap-2 mb-1 flex-wrap">
             <p className="font-tech text-xs uppercase tracking-[3px] text-accent-primary font-bold m-0">
               Official Judge Console // Team Roster
             </p>
@@ -142,16 +144,16 @@ export default async function JudgeDashboardPage() {
               </span>
             )}
           </div>
-          <h1 className="text-3xl md:text-5xl font-heading text-text-primary tracking-wider uppercase m-0">
+          <h1 className="text-2xl sm:text-3xl md:text-5xl font-heading text-text-primary tracking-wider uppercase m-0">
             Assigned Teams
           </h1>
-          <p className="font-tech text-text-secondary text-sm mt-2 max-w-2xl">
+          <p className="font-tech text-text-secondary text-xs sm:text-sm mt-2 max-w-2xl">
             Select an assigned team below to inspect their project submission, pitch decks, and record criterion marks.
           </p>
         </div>
 
         {activeRound && (
-          <div className="glass-panel px-4 py-2.5 border border-accent-primary/40 flex items-center gap-3">
+          <div className="glass-panel px-4 py-2.5 border border-accent-primary/40 flex items-center gap-3 self-start sm:self-auto shrink-0">
             <Layers className="text-accent-primary w-5 h-5" />
             <div>
               <p className="font-tech text-[10px] text-text-secondary uppercase font-bold m-0">
@@ -290,10 +292,10 @@ export default async function JudgeDashboardPage() {
                     <span>Evaluation</span>
                   </div>
 
-                  <Link
-                    href={`/judge/evaluate/${team.id}`}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-accent-primary hover:bg-accent-primary/80 text-black font-tech font-bold uppercase text-xs transition-colors"
-                  >
+                    <Link
+                      href={`/judge/evaluate/${team.name ? slugify(team.name) : team.id}`}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-accent-primary hover:bg-accent-primary/80 text-black font-tech font-bold uppercase text-xs transition-colors"
+                    >
                     <span>Evaluate</span>
                     <ArrowRight size={14} />
                   </Link>

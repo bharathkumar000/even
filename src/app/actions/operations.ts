@@ -7,6 +7,7 @@ import {
   type ScanActionInput,
   type ActionType,
 } from "@/lib/validations/operations";
+import { validateCsrfToken, CSRF_CONSTANTS } from "@/lib/csrf-server";
 
 export interface LiveActivityFeedItem {
   id: string;
@@ -38,8 +39,9 @@ export interface EnrichedActivityLog {
  * Record a single scan action (Registration, Goodies, Lunch, Snacks) for a participant.
  * Prevents duplicates, tracks scanner identity, and auto-rotates the team's QR token.
  */
-export async function recordMemberAction(data: ScanActionInput) {
+export async function recordMemberAction(data: ScanActionInput & { [CSRF_CONSTANTS.HEADER_NAME]?: string }) {
   const { user } = await requireOperationsRole();
+  await validateCsrfToken(data[CSRF_CONSTANTS.HEADER_NAME] || null);
   const validated = ScanActionSchema.parse(data);
 
   // 1. Duplicate check in event_activity_logs with scanner attribution
@@ -152,8 +154,9 @@ export async function recordMemberAction(data: ScanActionInput) {
 /**
  * Record an action for all eligible members of a team in one click (e.g., Team Kit/Goodies distribution)
  */
-export async function recordTeamBulkAction(teamId: string, actionType: ActionType) {
+export async function recordTeamBulkAction(teamId: string, actionType: ActionType, csrfToken?: string) {
   const { user } = await requireOperationsRole();
+  await validateCsrfToken(csrfToken || null);
 
   if (!teamId) {
     throw new Error("A valid Team ID is required for bulk claim");

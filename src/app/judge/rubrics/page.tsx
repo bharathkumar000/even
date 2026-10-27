@@ -229,7 +229,7 @@ export default async function JudgeRubricsPage() {
                   </div>
                 ) : (
                   <div className="overflow-x-auto">
-                    <table className="w-full text-left border-collapse text-xs">
+                    <table className="w-full min-w-[620px] text-left border-collapse text-xs">
                       <thead>
                         <tr className="border-b border-border-color bg-surface-color-light/40 text-text-secondary uppercase tracking-wider text-[11px]">
                           <th className="p-3 pl-5">#</th>

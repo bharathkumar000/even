@@ -44,7 +44,7 @@ export default async function OpsLayout({
     (user.user_metadata?.role as string | undefined) ||
     (user.app_metadata?.role as string | undefined);
 
-  if (role !== "staff" && role !== "organizer" && role !== "admin") {
+  if (role !== "staff" && role !== "organizer" && role !== "admin" && role !== "spoc") {
     return (
       <PortalAccessDenied
         portalTitle="Club Member Operations Desk"

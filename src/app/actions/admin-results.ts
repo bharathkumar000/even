@@ -4,11 +4,13 @@ import { requireAdmin } from "@/lib/auth/admin";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { ResultActionSchema } from "@/lib/validations/admin";
 import { z } from "zod";
+import { validateCsrfToken, CSRF_CONSTANTS } from "@/lib/csrf-server";
 
 export type ResultActionInput = z.infer<typeof ResultActionSchema>;
 
-export async function triggerResultsEngine(data: ResultActionInput) {
+export async function triggerResultsEngine(data: ResultActionInput & { [CSRF_CONSTANTS.HEADER_NAME]?: string }) {
   const { user } = await requireAdmin();
+  await validateCsrfToken(data[CSRF_CONSTANTS.HEADER_NAME] || null);
   const validated = ResultActionSchema.parse(data);
 
   if (validated.action === "recalculate") {

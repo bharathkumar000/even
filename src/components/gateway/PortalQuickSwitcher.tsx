@@ -109,31 +109,46 @@ export default function PortalQuickSwitcher({
       // Sign out current session first to ensure clean state
       await supabase.auth.signOut().catch(() => {});
 
-      // 1. Try primary mock account from MOCK_CREDENTIALS.md
+      // Try primary email with password first
+      const primaryEmail = account.email;
+      const fallbackEmail = account.fallbackEmail;
+      const primaryPassword = account.password;
+      const fallbackPassword = account.fallbackPassword;
+
+      // 1. Try primary email with primary password
       let authResult = await supabase.auth.signInWithPassword({
-        email: account.email,
-        password: account.password,
+        email: primaryEmail,
+        password: primaryPassword,
       });
 
-      // 2. If primary fails, fallback to seed.sql account
+      // 2. If primary fails, try fallback email with fallback password
       if (authResult.error) {
         authResult = await supabase.auth.signInWithPassword({
-          email: account.fallbackEmail,
-          password: account.fallbackPassword,
+          email: fallbackEmail,
+          password: fallbackPassword,
         });
       }
 
-      // 3. Fallback attempt with primary email and seed password or vice versa
+      // 3. If both fail, try primary email with fallback password
       if (authResult.error) {
         authResult = await supabase.auth.signInWithPassword({
-          email: account.email,
-          password: account.fallbackPassword,
+          email: primaryEmail,
+          password: fallbackPassword,
         });
       }
 
+      // 4. If all fail, try fallback email with primary password
+      if (authResult.error) {
+        authResult = await supabase.auth.signInWithPassword({
+          email: fallbackEmail,
+          password: primaryPassword,
+        });
+      }
+
+      // If all fail, show helpful error
       if (authResult.error) {
         throw new Error(
-          `Could not auto-login with credentials (${account.email} / ${account.fallbackEmail}). Please verify users are seeded or use manual login.`
+          `Demo account not configured. Please use the manual login page at /login with credentials from your administrator.`
         );
       }
 
@@ -149,12 +164,6 @@ export default function PortalQuickSwitcher({
       setActiveAccount(null);
       setStatusText(null);
     }
-  };
-
-  const handleCopyCredentials = (email: string, pass: string) => {
-    navigator.clipboard.writeText(`${email} | ${pass}`);
-    setCopiedEmail(email);
-    setTimeout(() => setCopiedEmail(null), 2500);
   };
 
   if (variant === "modal" && !isOpen) return null;
@@ -262,9 +271,9 @@ export default function PortalQuickSwitcher({
                     <span className="truncate max-w-[140px] text-text-primary">{acc.email}</span>
                     <button
                       type="button"
-                      onClick={() => handleCopyCredentials(acc.email, acc.password)}
+                      onClick={() => navigator.clipboard.writeText(acc.email).then(() => setCopiedEmail(acc.email))}
                       className="text-text-secondary hover:text-accent-primary p-0.5 transition-colors"
-                      title="Copy email & password"
+                      title="Copy email"
                     >
                       {copiedEmail === acc.email ? (
                         <Check size={11} className="text-status-success" />
@@ -273,7 +282,17 @@ export default function PortalQuickSwitcher({
                       )}
                     </button>
                   </div>
-                  <div className="text-text-secondary/70">PW: {acc.password}</div>
+                  <div className="flex items-center justify-between text-text-secondary">
+                    <span className="truncate max-w-[140px] text-text-primary">{acc.password}</span>
+                    <button
+                      type="button"
+                      onClick={() => navigator.clipboard.writeText(acc.password).then(() => setCopiedEmail(acc.password))}
+                      className="text-text-secondary hover:text-accent-primary p-0.5 transition-colors"
+                      title="Copy password"
+                    >
+                      <Copy size={11} />
+                    </button>
+                  </div>
                 </div>
               </div>
 

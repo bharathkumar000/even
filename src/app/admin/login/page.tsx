@@ -13,6 +13,7 @@ import {
   getAdminTrialStatus,
 } from "@/app/actions/admin-auth";
 
+
 export default function AdminPasscodePage() {
   const router = useRouter();
   const [passcode, setPasscode] = useState("");
@@ -21,23 +22,35 @@ export default function AdminPasscodePage() {
   const [isLocked, setIsLocked] = useState<boolean>(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  useEffect(() => {
-    // Read current trial status on initial mount
-    getAdminTrialStatus().then((status) => {
-      if (!status.authenticated) {
-        router.push("/login");
-        return;
+
+useEffect(() => {
+    // Initialize CSRF token first, then read trial status
+    const initCsrf = async () => {
+      try {
+        await fetch("/api/csrf/init", { method: "GET", credentials: "include" });
+      } catch (e) {
+        console.warn("CSRF init failed:", e);
       }
-      if (!status.isAdmin) {
-        router.push("/");
-        return;
-      }
-      if (status.verified) {
-        router.push("/admin");
-      } else {
-        setAttemptsRemaining(status.attemptsRemaining);
-        setIsLocked(status.isLocked);
-      }
+    };
+
+    initCsrf().then(() => {
+      // Read current trial status after CSRF init
+      getAdminTrialStatus().then((status) => {
+        if (!status.authenticated) {
+          router.push("/login");
+          return;
+        }
+        if (!status.isAdmin) {
+          router.push("/");
+          return;
+        }
+        if (status.verified) {
+          router.push("/admin");
+        } else {
+          setAttemptsRemaining(status.attemptsRemaining);
+          setIsLocked(status.isLocked);
+        }
+      });
     });
   }, [router]);
 

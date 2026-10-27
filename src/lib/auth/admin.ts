@@ -48,12 +48,12 @@ export async function requireAdmin() {
     throw new Error("Forbidden: Admin privileges required");
   }
 
-  // Verify admin session checkpoint cookie (TEMPORARILY BYPASS FOR TESTING - passcode lock disabled)
-  // const cookieStore = await cookies();
-  // const isPasscodeVerified = cookieStore.get("admin_session_verified")?.value === "true";
-  // if (!isPasscodeVerified) {
-  //   throw new Error("CheckpointRequired: Admin passcode verification required");
-  // }
+  // Verify admin session checkpoint cookie
+  const cookieStore = await cookies();
+  const isPasscodeVerified = cookieStore.get("admin_session_verified")?.value === "true";
+  if (!isPasscodeVerified) {
+    throw new Error("CheckpointRequired: Admin passcode verification required");
+  }
 
   return { user, profile };
 }

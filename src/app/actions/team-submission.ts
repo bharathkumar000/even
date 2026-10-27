@@ -6,10 +6,12 @@ import {
   TeamSubmissionSchema,
   type TeamSubmissionInput,
 } from "@/lib/validations/team";
+import { validateCsrfToken, CSRF_CONSTANTS } from "@/lib/csrf-server";
 
-export async function upsertTeamSubmission(data: TeamSubmissionInput) {
+export async function upsertTeamSubmission(data: TeamSubmissionInput & { [CSRF_CONSTANTS.HEADER_NAME]?: string }) {
   // 1. Authorize: user must be team leader of this specific team
   await requireTeamLeader(data.team_id);
+  await validateCsrfToken(data[CSRF_CONSTANTS.HEADER_NAME] || null);
 
   // 2. Validate input format
   const validated = TeamSubmissionSchema.parse(data);

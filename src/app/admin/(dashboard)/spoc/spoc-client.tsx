@@ -1,36 +1,23 @@
 "use client";
 
-import React, { useState, useTransition, useMemo, useRef } from "react";
+import { useState, useTransition, useMemo } from "react";
 import {
   UserCheck,
   Search,
   Plus,
-  Trash2,
-  Edit2,
-  Phone,
-  Mail,
-  Building,
   CheckCircle2,
   AlertCircle,
   X,
   Check,
-  Shield,
-  Layers,
   Sparkles,
-  Upload,
   MessageCircle,
   ExternalLink,
-  Camera,
 } from "lucide-react";
 import Image from "next/image";
 import {
   SpocItem,
   SpocTeamOption,
-  createSpoc,
-  updateSpoc,
-  deleteSpoc,
   updateSpocTeams,
-  uploadSpocAvatar,
   autoBalanceSpocAssignments,
   getSpocPortalData,
 } from "@/app/actions/admin-spoc";
@@ -54,27 +41,16 @@ export default function SpocClientView({
 
   // Search & Filter state
   const [spocSearch, setSpocSearch] = useState("");
+  const [assignedFilter, setAssignedFilter] = useState<
+    "all" | "assigned" | "unassigned"
+  >("all");
   const [teamSearch, setTeamSearch] = useState("");
   const [trackFilter, setTrackFilter] = useState("all");
   const [showOtherAssigned, setShowOtherAssigned] = useState(false);
 
-  // Modals state
+  // Assign SPOC modal state
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingSpoc, setEditingSpoc] = useState<SpocItem | null>(null);
-  const [spocToDelete, setSpocToDelete] = useState<SpocItem | null>(null);
-
-  // Form State
-  const [formData, setFormData] = useState({
-    name: "",
-    email: "",
-    phone: "",
-    department: "",
-    notes: "",
-    avatar_url: "",
-  });
-  const [formLoading, setFormLoading] = useState(false);
-  const [uploadingImage, setUploadingImage] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const [assignSearch, setAssignSearch] = useState("");
 
   const [isPending, startTransition] = useTransition();
   const [notification, setNotification] = useState<{
@@ -83,16 +59,13 @@ export default function SpocClientView({
   } | null>(null);
 
   // Pending stage state: map of spocId -> string[] of selected team IDs
-  const [pendingAssignedMap, setPendingAssignedMap] = useState<Record<string, string[]>>({});
-
-  // Sync initial allotments into pending state when SPOCs load or update
-  React.useEffect(() => {
-    const initialMap: Record<string, string[]> = {};
-    spocs.forEach((s) => {
-      initialMap[s.id] = [...s.assigned_team_ids];
-    });
-    setPendingAssignedMap(initialMap);
-  }, [spocs]);
+  const [pendingAssignedMap, setPendingAssignedMap] = useState<
+    Record<string, string[]>
+  >(() =>
+    Object.fromEntries(
+      initialSpocs.map((spoc) => [spoc.id, [...spoc.assigned_team_ids]])
+    )
+  );
 
   // Active selected SPOC
   const activeSpoc = useMemo(
@@ -126,18 +99,46 @@ export default function SpocClientView({
     return Array.from(set);
   }, [teams]);
 
+  // Staff SPOC metrics
+  const assignedSpocCount = useMemo(
+    () => spocs.filter((s) => s.assigned_team_ids.length > 0).length,
+    [spocs]
+  );
+  const unassignedSpocCount = spocs.length - assignedSpocCount;
+  const totalTeamsAllocated = useMemo(
+    () => spocs.reduce((sum, s) => sum + s.assigned_team_ids.length, 0),
+    [spocs]
+  );
+
   // Filtered SPOCs
   const filteredSpocs = useMemo(() => {
     return spocs.filter((s) => {
+      if (assignedFilter === "assigned" && s.assigned_team_ids.length === 0) {
+        return false;
+      }
+      if (assignedFilter === "unassigned" && s.assigned_team_ids.length > 0) {
+        return false;
+      }
+
       const q = spocSearch.toLowerCase().trim();
       if (!q) return true;
       return (
         s.name.toLowerCase().includes(q) ||
-        s.email?.toLowerCase().includes(q) ||
-        s.department?.toLowerCase().includes(q)
+        (s.email?.toLowerCase().includes(q) ?? false)
       );
     });
-  }, [spocs, spocSearch]);
+  }, [spocs, spocSearch, assignedFilter]);
+
+  // Staff list shown inside the Assign SPOC modal
+  const modalFilteredSpocs = useMemo(() => {
+    const q = assignSearch.toLowerCase().trim();
+    if (!q) return spocs;
+    return spocs.filter(
+      (s) =>
+        s.name.toLowerCase().includes(q) ||
+        (s.email?.toLowerCase().includes(q) ?? false)
+    );
+  }, [spocs, assignSearch]);
 
   // Filtered teams for allotment (Exclusive rule applied)
   const filteredTeams = useMemo(() => {
@@ -172,149 +173,16 @@ export default function SpocClientView({
     return `https://wa.me/${cleanNumber}?text=${text}`;
   };
 
-  // Open Create Modal
-  const handleOpenCreateModal = () => {
-    setEditingSpoc(null);
-    setFormData({ name: "", email: "", phone: "", department: "", notes: "", avatar_url: "" });
+  // Open the staff picker used to assign an SPOC
+  const handleOpenAssignModal = () => {
+    setAssignSearch("");
     setIsModalOpen(true);
   };
 
-  // Open Edit Modal
-  const handleOpenEditModal = (spoc: SpocItem, e: React.MouseEvent) => {
-    e.stopPropagation();
-    setEditingSpoc(spoc);
-    setFormData({
-      name: spoc.name,
-      email: spoc.email || "",
-      phone: spoc.phone || "",
-      department: spoc.department || "",
-      notes: spoc.notes || "",
-      avatar_url: spoc.avatar_url || "",
-    });
-    setIsModalOpen(true);
-  };
-
-  // Handle Image File Upload
-  const handleImageFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    setUploadingImage(true);
-    setNotification(null);
-    try {
-      const data = new FormData();
-      data.append("file", file);
-      const res = await uploadSpocAvatar(data);
-      if (res?.avatarUrl) {
-        setFormData((prev) => ({ ...prev, avatar_url: res.avatarUrl }));
-        setNotification({ type: "success", message: "SPOC image uploaded successfully!" });
-      }
-    } catch (err: unknown) {
-      setNotification({
-        type: "error",
-        message: err instanceof Error ? err.message : "Failed to upload image.",
-      });
-    } finally {
-      setUploadingImage(false);
-    }
-  };
-
-  // Save SPOC (Create or Update)
-  const handleSaveSpoc = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!formData.name.trim()) return;
-
-    const dataToSave = { ...formData };
+  const handleSelectStaffForAssignment = (spoc: SpocItem) => {
+    setSelectedSpocId(spoc.id);
     setIsModalOpen(false);
-    setNotification(null);
-
-    if (editingSpoc) {
-      const origId = editingSpoc.id;
-      // Optimistic update
-      setSpocs((prev) =>
-        prev.map((s) => (s.id === origId ? { ...s, ...dataToSave } : s))
-      );
-      setNotification({ type: "success", message: `SPOC ${dataToSave.name} updated.` });
-
-      try {
-        await updateSpoc({
-          id: origId,
-          ...dataToSave,
-        });
-      } catch (err: unknown) {
-        setNotification({
-          type: "error",
-          message: err instanceof Error ? err.message : "Failed to save SPOC.",
-        });
-      }
-    } else {
-      const tempId = crypto.randomUUID();
-      const newObj: SpocItem = {
-        id: tempId,
-        name: dataToSave.name,
-        email: dataToSave.email || null,
-        phone: dataToSave.phone || null,
-        department: dataToSave.department || null,
-        notes: dataToSave.notes || null,
-        avatar_url: dataToSave.avatar_url || null,
-        created_at: new Date().toISOString(),
-        assigned_team_ids: [],
-      };
-
-      // Optimistic create
-      setSpocs((prev) => [...prev, newObj]);
-      setSelectedSpocId(tempId);
-      setNotification({ type: "success", message: `SPOC ${dataToSave.name} created.` });
-
-      try {
-        const created = await createSpoc(dataToSave);
-        if (created?.id) {
-          setSpocs((prev) =>
-            prev.map((s) => (s.id === tempId ? { ...s, id: created.id, avatar_url: created.avatar_url } : s))
-          );
-          setSelectedSpocId(created.id);
-        }
-      } catch (err: unknown) {
-        setNotification({
-          type: "error",
-          message: err instanceof Error ? err.message : "Failed to create SPOC.",
-        });
-      }
-    }
-  };
-
-  // Delete SPOC
-  const handleDeleteSpoc = async () => {
-    if (!spocToDelete) return;
-    const target = spocToDelete;
-    setSpocToDelete(null);
-
-    startTransition(async () => {
-      try {
-        await deleteSpoc(target.id);
-        setSpocs((prev) => prev.filter((s) => s.id !== target.id));
-        setTeams((prev) =>
-          prev.map((t) =>
-            t.assigned_spoc_id === target.id
-              ? { ...t, assigned_spoc_id: null, assigned_spoc_name: null }
-              : t
-          )
-        );
-        if (selectedSpocId === target.id) {
-          const remaining = spocs.filter((s) => s.id !== target.id);
-          setSelectedSpocId(remaining[0]?.id || "");
-        }
-        setNotification({
-          type: "success",
-          message: `SPOC ${target.name} deleted successfully.`,
-        });
-      } catch (err: unknown) {
-        setNotification({
-          type: "error",
-          message: err instanceof Error ? err.message : "Failed to delete SPOC.",
-        });
-      }
-    });
+    setAssignSearch("");
   };
 
   // Toggle Team Allotment for active SPOC (Staging in pendingAssignedMap only)
@@ -407,6 +275,17 @@ export default function SpocClientView({
       })
     );
 
+    setPendingAssignedMap((prev) => {
+      const next: Record<string, string[]> = {};
+      for (const [id, teamIds] of Object.entries(prev)) {
+        next[id] =
+          id === activeSpoc.id
+            ? nextArray
+            : teamIds.filter((teamId) => !nextArray.includes(teamId));
+      }
+      return next;
+    });
+
     // Save to database
     startTransition(async () => {
       try {
@@ -429,11 +308,19 @@ export default function SpocClientView({
 
   const handleAutoBalance = () => {
     if (spocs.length === 0) {
-      setNotification({ type: "error", message: "Please create at least one SPOC before auto-balancing." });
+      setNotification({
+        type: "error",
+        message:
+          "No eligible Staff / Club Members found. Add staff accounts under User Management first.",
+      });
       return;
     }
 
-    if (!confirm("Auto-balance unassigned teams evenly across all active SPOCs?")) {
+    if (
+      !confirm(
+        "Auto-balance unassigned teams evenly across all eligible Staff / Club Member SPOCs?"
+      )
+    ) {
       return;
     }
 
@@ -443,14 +330,25 @@ export default function SpocClientView({
         const fresh = await getSpocPortalData();
         setSpocs(fresh.spocs);
         setTeams(fresh.teams);
+        setPendingAssignedMap(
+          Object.fromEntries(
+            fresh.spocs.map((spoc) => [
+              spoc.id,
+              [...spoc.assigned_team_ids],
+            ])
+          )
+        );
         setNotification({
           type: "success",
-          message: `Auto-balance complete! Distributed teams across ${res.spocsCount || spocs.length} SPOCs.`,
+          message:
+            res.message ||
+            `Auto-balance complete! Distributed ${res.allocatedTeamsCount} team(s) across ${res.spocsCount || spocs.length} Staff SPOCs.`,
         });
       } catch (err: unknown) {
         setNotification({
           type: "error",
-          message: err instanceof Error ? err.message : "Failed to auto-balance SPOCs.",
+          message:
+            err instanceof Error ? err.message : "Failed to auto-balance SPOCs.",
         });
       }
     });
@@ -484,6 +382,51 @@ export default function SpocClientView({
         </div>
       )}
 
+      {/* Staff SPOC Summary */}
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+        {[
+          {
+            label: "Total Staff",
+            value: spocs.length,
+            color: "text-accent-secondary",
+          },
+          {
+            label: "Eligible SPOCs",
+            value: spocs.length,
+            color: "text-accent-primary",
+          },
+          {
+            label: "Assigned SPOCs",
+            value: assignedSpocCount,
+            color: "text-status-success",
+          },
+          {
+            label: "Unassigned SPOCs",
+            value: unassignedSpocCount,
+            color: "text-status-warning",
+          },
+          {
+            label: "Teams Allocated",
+            value: totalTeamsAllocated,
+            color: "text-accent-tertiary",
+          },
+        ].map((metric) => (
+          <div
+            key={metric.label}
+            className="border border-border-color bg-surface-color/50 rounded-lg p-3"
+          >
+            <p className="text-[10px] uppercase tracking-[1.5px] text-text-secondary font-bold m-0">
+              {metric.label}
+            </p>
+            <p
+              className={`font-heading text-2xl m-0 mt-1 ${metric.color}`}
+            >
+              {metric.value}
+            </p>
+          </div>
+        ))}
+      </div>
+
       {/* Main Dual-Panel Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* Left Column: SPOC Directory (4 cols) */}
@@ -491,47 +434,69 @@ export default function SpocClientView({
           <div className="flex items-center justify-between pb-3 border-b border-border-color/60">
             <div className="flex items-center gap-2">
               <UserCheck className="w-5 h-5 text-accent-secondary" />
-              <h2 className="font-heading text-lg text-text-primary uppercase m-0">
-                SPOCs ({spocs.length})
-              </h2>
+              <div>
+                <h2 className="font-heading text-lg text-text-primary uppercase m-0">
+                  Staff SPOCs ({spocs.length})
+                </h2>
+                <p className="text-[10px] text-text-secondary font-mono m-0 mt-0.5">
+                  {assignedSpocCount} assigned · {unassignedSpocCount} unassigned
+                </p>
+              </div>
             </div>
             <div className="flex items-center gap-2">
               <button
                 onClick={handleAutoBalance}
-                disabled={isPending}
-                title="Automatically distribute teams across SPOCs evenly"
+                disabled={isPending || spocs.length === 0}
+                title="Automatically distribute teams across eligible Staff SPOCs evenly"
                 className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-surface-color-light border border-accent-tertiary/50 hover:border-accent-tertiary text-accent-tertiary font-tech font-bold uppercase tracking-wider text-[11px] rounded transition-all hover:bg-accent-tertiary/10 cursor-pointer disabled:opacity-50"
               >
                 <Sparkles size={12} />
                 <span>Auto-Balance</span>
               </button>
               <button
-                onClick={handleOpenCreateModal}
+                onClick={handleOpenAssignModal}
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-accent-secondary to-accent-primary text-black font-tech font-bold uppercase tracking-wider text-xs rounded transition-all hover:opacity-90 cursor-pointer shadow-[0_0_15px_rgba(255,0,127,0.3)]"
               >
                 <Plus size={14} />
-                <span>Add SPOC</span>
+                <span>Assign SPOC</span>
               </button>
             </div>
           </div>
 
-          {/* SPOC Search */}
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-secondary" />
-            <input
-              type="text"
-              placeholder="Search SPOC by name/dept..."
-              value={spocSearch}
-              onChange={(e) => setSpocSearch(e.target.value)}
-              className="w-full pl-9 pr-3 py-2 bg-surface-color border border-border-color rounded text-xs text-text-primary placeholder:text-text-secondary/60 focus:border-accent-secondary outline-none font-mono"
-            />
+          {/* SPOC Search & Filter */}
+          <div className="space-y-2">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-secondary" />
+              <input
+                type="text"
+                placeholder="Search staff by name or email..."
+                value={spocSearch}
+                onChange={(e) => setSpocSearch(e.target.value)}
+                className="w-full pl-9 pr-3 py-2 bg-surface-color border border-border-color rounded text-xs text-text-primary placeholder:text-text-secondary/60 focus:border-accent-secondary outline-none font-mono"
+              />
+            </div>
+            <select
+              value={assignedFilter}
+              onChange={(e) =>
+                setAssignedFilter(
+                  e.target.value as "all" | "assigned" | "unassigned"
+                )
+              }
+              className="w-full bg-surface-color border border-border-color rounded text-xs text-text-primary px-3 py-2 font-mono outline-none focus:border-accent-secondary uppercase"
+            >
+              <option value="all">All Staff</option>
+              <option value="assigned">Assigned</option>
+              <option value="unassigned">Unassigned</option>
+            </select>
           </div>
 
           {/* SPOC List */}
           <div className="space-y-2 overflow-y-auto max-h-[620px] pr-1">
             {filteredSpocs.length === 0 ? (
               <div className="p-6 text-center text-text-secondary text-xs">
-                No SPOCs found. Click &quot;Add SPOC&quot; above to create one.
+                {spocs.length === 0
+                  ? "No Staff / Club Members found. Add them under User Management first."
+                  : "No staff members match your search or filter."}
               </div>
             ) : (
               filteredSpocs.map((s) => {
@@ -571,64 +536,38 @@ export default function SpocClientView({
                         <p className="font-heading text-sm text-text-primary m-0 uppercase tracking-wide">
                           {s.name}
                         </p>
-                        {s.department && (
-                          <p className="text-[11px] text-accent-tertiary font-mono m-0 truncate max-w-[150px]">
-                            {s.department}
+                        {s.email && (
+                          <p className="text-[10px] text-text-secondary font-mono m-0 truncate max-w-[150px]">
+                            {s.email}
                           </p>
                         )}
-                        <div className="flex items-center gap-2">
-                          {s.phone && (
-                            <span className="text-[10px] text-text-secondary font-mono">
-                              📞 {s.phone}
-                            </span>
-                          )}
-                          {waLink && (
-                            <a
-                              href={waLink}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              onClick={(e) => e.stopPropagation()}
-                              className="inline-flex items-center gap-1 text-[10px] text-[#25D366] hover:underline font-bold"
-                              title="Chat on WhatsApp"
-                            >
-                              <MessageCircle size={11} className="stroke-[2.5]" />
-                              <span>WhatsApp</span>
-                            </a>
-                          )}
-                        </div>
+                        {waLink && (
+                          <a
+                            href={waLink}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            onClick={(e) => e.stopPropagation()}
+                            className="inline-flex items-center gap-1 text-[10px] text-[#25D366] hover:underline font-bold"
+                            title="Chat on WhatsApp"
+                          >
+                            <MessageCircle size={11} className="stroke-[2.5]" />
+                            <span>WhatsApp</span>
+                          </a>
+                        )}
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-2">
-                      <span
-                        className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider font-mono ${
-                          count > 0
-                            ? "bg-accent-primary/20 text-accent-primary border border-accent-primary/40"
-                            : "bg-surface-color-light text-text-secondary border border-border-color"
-                        }`}
-                      >
-                        {count} {count === 1 ? "Team" : "Teams"}
-                      </span>
-
-                      {/* Action buttons */}
-                      <button
-                        onClick={(e) => handleOpenEditModal(s, e)}
-                        className="p-1 hover:text-accent-tertiary text-text-secondary/60 transition-colors cursor-pointer"
-                        title="Edit SPOC"
-                      >
-                        <Edit2 size={13} />
-                      </button>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setSpocToDelete(s);
-                        }}
-                        className="p-1 hover:text-status-error text-text-secondary/60 transition-colors cursor-pointer"
-                        title="Delete SPOC"
-                      >
-                        <Trash2 size={13} />
-                      </button>
-                    </div>
+                    <span
+                      className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider font-mono ${
+                        count > 0
+                          ? "bg-accent-primary/20 text-accent-primary border border-accent-primary/40"
+                          : "bg-surface-color-light text-text-secondary border border-border-color"
+                      }`}
+                    >
+                      {count > 0
+                        ? `${count} ${count === 1 ? "Team" : "Teams"}`
+                        : "Unassigned"}
+                    </span>
                   </div>
                 );
               })
@@ -660,15 +599,10 @@ export default function SpocClientView({
                   </div>
                   <div>
                     <span className="font-tech text-[10px] uppercase tracking-[2px] text-accent-secondary font-bold block mb-0.5">
-                      Active SPOC Allotment Console
+                      Staff SPOC Allotment Console
                     </span>
                     <h2 className="font-heading text-xl text-text-primary uppercase m-0 flex items-center gap-2">
                       {activeSpoc.name}
-                      {activeSpoc.department && (
-                        <span className="text-xs font-mono text-accent-primary normal-case">
-                          [{activeSpoc.department}]
-                        </span>
-                      )}
                     </h2>
                     <div className="flex flex-wrap items-center gap-3 mt-1 text-xs">
                       {activeSpoc.phone && (
@@ -794,7 +728,7 @@ export default function SpocClientView({
               </div>
 
               {/* Teams Grid */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 overflow-y-auto max-h-[580px] pr-1">
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3 overflow-y-auto max-h-[580px] pr-1">
                 {filteredTeams.length === 0 ? (
                   <div className="sm:col-span-2 p-10 text-center text-text-secondary text-xs">
                     No unassigned teams available for allotment. All teams are allotted or filtered.
@@ -878,20 +812,26 @@ export default function SpocClientView({
             </>
           ) : (
             <div className="p-16 text-center text-text-secondary font-tech">
-              Please create or select a SPOC on the left to configure team allotments.
+              Please select a Staff / Club Member on the left to configure team
+              allotments.
             </div>
           )}
         </div>
       </div>
 
-      {/* Modal: Create or Edit SPOC */}
+      {/* Modal: Assign SPOC from the Staff directory */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-          <div className="bg-surface-color border border-border-color rounded-lg w-full max-w-md p-6 space-y-5 animate-fade-in shadow-2xl">
+          <div className="bg-surface-color border border-border-color rounded-lg w-full max-w-lg p-6 space-y-4 animate-fade-in shadow-2xl">
             <div className="flex items-center justify-between border-b border-border-color pb-3">
-              <h3 className="font-heading text-lg text-text-primary uppercase m-0">
-                {editingSpoc ? "Edit SPOC" : "Add New SPOC"}
-              </h3>
+              <div>
+                <h3 className="font-heading text-lg text-text-primary uppercase m-0">
+                  Assign SPOC
+                </h3>
+                <p className="text-[11px] text-text-secondary font-mono m-0 mt-1">
+                  Select a Staff / Club Member to manage their team allotment.
+                </p>
+              </div>
               <button
                 onClick={() => setIsModalOpen(false)}
                 className="text-text-secondary hover:text-text-primary cursor-pointer"
@@ -900,177 +840,91 @@ export default function SpocClientView({
               </button>
             </div>
 
-            <form onSubmit={handleSaveSpoc} className="space-y-4">
-              <div>
-                <label className="block text-xs uppercase tracking-wider text-text-secondary mb-1">
-                  SPOC Full Name *
-                </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. Prof. Ramesh Kumar"
-                  value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  className="w-full px-3 py-2 bg-surface-color-light border border-border-color rounded text-xs text-text-primary focus:border-accent-secondary outline-none font-mono"
-                />
-              </div>
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-secondary" />
+              <input
+                type="text"
+                placeholder="Search staff by name or email..."
+                value={assignSearch}
+                onChange={(e) => setAssignSearch(e.target.value)}
+                className="w-full pl-9 pr-3 py-2 bg-surface-color border border-border-color rounded text-xs text-text-primary placeholder:text-text-secondary/60 focus:border-accent-secondary outline-none font-mono"
+                autoFocus
+              />
+            </div>
 
-              <div>
-                <label className="block text-xs uppercase tracking-wider text-text-secondary mb-1">
-                  Department / Organization
-                </label>
-                <input
-                  type="text"
-                  placeholder="e.g. Dept. of CSE / Student Affairs"
-                  value={formData.department}
-                  onChange={(e) => setFormData({ ...formData, department: e.target.value })}
-                  className="w-full px-3 py-2 bg-surface-color-light border border-border-color rounded text-xs text-text-primary focus:border-accent-secondary outline-none font-mono"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs uppercase tracking-wider text-text-secondary mb-1">
-                    Phone Number
-                  </label>
-                  <input
-                    type="tel"
-                    placeholder="+91 9876543210"
-                    value={formData.phone}
-                    onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                    className="w-full px-3 py-2 bg-surface-color-light border border-border-color rounded text-xs text-text-primary focus:border-accent-secondary outline-none font-mono"
-                  />
+            <div className="space-y-2 overflow-y-auto max-h-[360px] pr-1">
+              {modalFilteredSpocs.length === 0 ? (
+                <div className="p-6 text-center text-text-secondary text-xs">
+                  {spocs.length === 0
+                    ? "No Staff / Club Members found. Add them under User Management first."
+                    : "No staff members match your search."}
                 </div>
-                <div>
-                  <label className="block text-xs uppercase tracking-wider text-text-secondary mb-1">
-                    Email Address
-                  </label>
-                  <input
-                    type="email"
-                    placeholder="spoc@example.com"
-                    value={formData.email}
-                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                    className="w-full px-3 py-2 bg-surface-color-light border border-border-color rounded text-xs text-text-primary focus:border-accent-secondary outline-none font-mono"
-                  />
-                </div>
-              </div>
+              ) : (
+                modalFilteredSpocs.map((s) => {
+                  const isSelected = s.id === selectedSpocId;
 
-              {/* SPOC Avatar / Image Upload */}
-              <div>
-                <label className="block text-xs uppercase tracking-wider text-text-secondary mb-1">
-                  Profile Photo / Avatar
-                </label>
-                <div className="flex items-center gap-3">
-                  <div className="relative w-14 h-14 rounded-full overflow-hidden border border-border-color bg-surface-color-light flex items-center justify-center shrink-0">
-                    {formData.avatar_url ? (
-                        <Image
-                          src={formData.avatar_url}
-                          alt="Preview"
-                          width={56}
-                          height={56}
-                          className="w-full h-full object-cover"
-                        />
-                    ) : (
-                      <Camera size={22} className="text-text-secondary/60" />
-                    )}
-                  </div>
-                  <div className="flex-1 space-y-1.5">
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="file"
-                        ref={fileInputRef}
-                        accept="image/*"
-                        onChange={handleImageFileChange}
-                        className="hidden"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => fileInputRef.current?.click()}
-                        disabled={uploadingImage}
-                        className="px-3 py-1.5 bg-surface-color-light border border-border-color hover:border-accent-secondary text-text-primary text-xs uppercase font-bold tracking-wider rounded transition-colors disabled:opacity-50 cursor-pointer flex items-center gap-1.5"
+                  return (
+                    <button
+                      key={s.id}
+                      type="button"
+                      onClick={() => handleSelectStaffForAssignment(s)}
+                      className={`w-full text-left p-3 rounded border transition-all cursor-pointer flex items-center justify-between ${
+                        isSelected
+                          ? "bg-accent-secondary/[0.06] border-accent-secondary/50"
+                          : "bg-surface-color/40 border-border-color/70 hover:border-accent-secondary/40 hover:bg-surface-color"
+                      }`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="w-9 h-9 rounded-full overflow-hidden border border-border-color bg-surface-color-light flex items-center justify-center shrink-0">
+                          {s.avatar_url ? (
+                            <Image
+                              src={s.avatar_url}
+                              alt={s.name}
+                              width={36}
+                              height={36}
+                              className="w-full h-full object-cover"
+                            />
+                          ) : (
+                            <span className="font-heading text-xs text-accent-secondary uppercase font-bold">
+                              {s.name.slice(0, 2)}
+                            </span>
+                          )}
+                        </div>
+                        <div>
+                          <p className="font-heading text-sm text-text-primary m-0 uppercase tracking-wide">
+                            {s.name}
+                          </p>
+                          {s.email && (
+                            <p className="text-[10px] text-text-secondary font-mono m-0">
+                              {s.email}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                      <span
+                        className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider font-mono ${
+                          s.assigned_team_ids.length > 0
+                            ? "bg-accent-primary/20 text-accent-primary border border-accent-primary/40"
+                            : "bg-surface-color-light text-text-secondary border border-border-color"
+                        }`}
                       >
-                        <Upload size={13} />
-                        <span>{uploadingImage ? "Uploading..." : "Upload Image"}</span>
-                      </button>
-                      {formData.avatar_url && (
-                        <button
-                          type="button"
-                          onClick={() => setFormData({ ...formData, avatar_url: "" })}
-                          className="text-[11px] text-status-error hover:underline uppercase font-mono cursor-pointer"
-                        >
-                          Remove
-                        </button>
-                      )}
-                    </div>
-                    <input
-                      type="url"
-                      placeholder="Or paste image URL (https://...)"
-                      value={formData.avatar_url}
-                      onChange={(e) => setFormData({ ...formData, avatar_url: e.target.value })}
-                      className="w-full px-2.5 py-1.5 bg-surface-color-light border border-border-color rounded text-[11px] text-text-primary focus:border-accent-secondary outline-none font-mono"
-                    />
-                  </div>
-                </div>
-              </div>
+                        {s.assigned_team_ids.length > 0
+                          ? `${s.assigned_team_ids.length} Teams`
+                          : "Assign"}
+                      </span>
+                    </button>
+                  );
+                })
+              )}
+            </div>
 
-              <div>
-                <label className="block text-xs uppercase tracking-wider text-text-secondary mb-1">
-                  Notes / Designation
-                </label>
-                <textarea
-                  rows={2}
-                  placeholder="Internal coordinator notes..."
-                  value={formData.notes}
-                  onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                  className="w-full px-3 py-2 bg-surface-color-light border border-border-color rounded text-xs text-text-primary focus:border-accent-secondary outline-none font-mono"
-                />
-              </div>
-
-              <div className="flex justify-end gap-2 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setIsModalOpen(false)}
-                  className="px-4 py-2 border border-border-color text-text-secondary text-xs uppercase font-bold rounded hover:text-text-primary cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={formLoading}
-                  className="px-5 py-2 bg-gradient-to-r from-accent-secondary to-accent-primary text-black text-xs uppercase font-bold tracking-wider rounded hover:opacity-90 disabled:opacity-50 cursor-pointer shadow-[0_0_15px_rgba(255,0,127,0.3)]"
-                >
-                  {formLoading ? "Saving..." : editingSpoc ? "Update SPOC" : "Create SPOC"}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Confirmation Modal: Delete SPOC */}
-      {spocToDelete && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-          <div className="bg-surface-color border border-status-error/40 rounded-lg w-full max-w-sm p-6 space-y-4 animate-fade-in shadow-2xl">
-            <h3 className="font-heading text-lg text-status-error uppercase m-0">
-              Confirm Deletion
-            </h3>
-            <p className="text-xs text-text-secondary font-mono leading-relaxed">
-              Are you sure you want to delete SPOC{" "}
-              <span className="text-text-primary font-bold">{spocToDelete.name}</span>? Any
-              allotted teams will be unassigned automatically.
-            </p>
-            <div className="flex justify-end gap-2 pt-2">
+            <div className="flex justify-end border-t border-border-color pt-3">
               <button
-                onClick={() => setSpocToDelete(null)}
-                className="px-4 py-2 border border-border-color text-text-secondary text-xs uppercase font-bold rounded cursor-pointer"
+                type="button"
+                onClick={() => setIsModalOpen(false)}
+                className="px-4 py-2 border border-border-color text-text-secondary text-xs uppercase font-bold rounded hover:text-text-primary cursor-pointer"
               >
-                Cancel
-              </button>
-              <button
-                onClick={handleDeleteSpoc}
-                className="px-4 py-2 bg-status-error text-white text-xs uppercase font-bold rounded hover:bg-status-error/90 cursor-pointer"
-              >
-                Delete SPOC
+                Close
               </button>
             </div>
           </div>

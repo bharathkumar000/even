@@ -55,7 +55,7 @@ export default async function AdminDashboardPage() {
       const profiles = profilesRes.value.data;
       participantCount = profiles.filter((p) => p.role === "participant").length;
       judgeCount = profiles.filter((p) => p.role === "judge").length;
-      staffCount = profiles.filter((p) => p.role === "staff" || p.role === "organizer").length;
+      staffCount = profiles.filter((p) => p.role === "staff" || p.role === "organizer" || p.role === "spoc").length;
       const profileLeaders = profiles.filter((p) => p.role === "leader").length;
       const tmLeaders = teamMembersRes.status === "fulfilled" && typeof teamMembersRes.value.count === "number" ? teamMembersRes.value.count : 0;
       leaderCount = Math.max(profileLeaders, tmLeaders);

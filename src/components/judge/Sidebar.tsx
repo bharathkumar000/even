@@ -43,7 +43,7 @@ export default function JudgeSidebar() {
       <header className="md:hidden sticky top-0 z-40 bg-[#0c0c14]/95 backdrop-blur-md border-b border-border-color px-4 py-2.5 flex items-center justify-between font-tech shrink-0">
         <Link href="/judge" className="flex items-center gap-2.5 text-left">
           <Image
-            src="/ivc-gear-logo.png"
+            src="/ivc-logo-transparent.png"
             alt="IVC Logo"
             width={32}
             height={32}
@@ -88,7 +88,7 @@ export default function JudgeSidebar() {
             {/* Top Center Logo */}
             <div className="mb-3.5 relative flex items-center justify-center">
               <Image
-                src="/ivc-gear-logo.png"
+                src="/ivc-logo-transparent.png"
                 alt="Innovators & Visionaries Club Logo"
                 width={72}
                 height={72}
@@ -153,29 +153,19 @@ export default function JudgeSidebar() {
                     <span
                       className={`text-[13px] font-medium tracking-normal transition-colors duration-200 ${
                         isActive ? "text-white font-semibold" : "text-[#94A3B8] group-hover:text-white"
-                      }`}
+}`}
                     >
                       {item.label}
                     </span>
                   </div>
-                  {item.badge && (
-                    <span
-                      className={`text-[10px] px-2 py-0.5 rounded-full font-mono font-bold tracking-wider ${
-                        isActive
-                          ? "bg-white/20 text-white border border-white/30"
-                          : "bg-surface-color text-text-secondary border border-border-color/60"
-                      }`}
-                    >
-                      {item.badge}
-                    </span>
-                  )}
                 </Link>
               );
             })}
           </div>
-        </div>
 
-        {/* Footer Judge Context & Sign Out */}
+         </div>
+
+         {/* Footer Judge Context & Sign Out */}
         <div className="px-4 py-4 border-t border-border-color mt-auto space-y-3 shrink-0">
           <div className="p-3 bg-surface-color/50 border border-border-color rounded">
             <p className="text-[10px] uppercase text-text-secondary tracking-wider font-bold mb-0.5">
@@ -214,7 +204,7 @@ export default function JudgeSidebar() {
               <Link
                 key={item.href}
                 href={item.href}
-                className={`relative flex flex-col items-center justify-center py-2 px-1 rounded-xl transition-all duration-200 active:scale-95 text-center ${
+                className={`relative flex flex-col items-center justify-center py-2 px-1 rounded-xl transition-all duration-200 active:scale-95 text-center select-none ${
                   isActive
                     ? "bg-gradient-to-t from-accent-secondary/25 via-accent-secondary/10 to-transparent border border-accent-secondary/50 text-white shadow-[0_0_18px_rgba(255,0,127,0.3)]"
                     : "text-text-secondary/80 border border-transparent hover:text-text-primary hover:bg-white/[0.03]"
@@ -239,18 +229,6 @@ export default function JudgeSidebar() {
                 >
                   {item.label}
                 </span>
-
-                {item.badge && (
-                  <span
-                    className={`mt-1 text-[8px] font-mono uppercase px-1.5 py-0.2 rounded-full border leading-tight ${
-                      isActive
-                        ? "bg-accent-secondary/20 text-accent-secondary border-accent-secondary/40 font-bold"
-                        : "bg-surface-color-light/70 text-text-secondary/70 border-border-color/60"
-                    }`}
-                  >
-                    {item.badge}
-                  </span>
-                )}
               </Link>
             );
           })}

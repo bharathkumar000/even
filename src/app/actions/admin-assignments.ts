@@ -4,6 +4,7 @@ import { requireAdmin } from "@/lib/auth/admin";
 import { requireOperationsRole } from "@/lib/auth/operations";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { revalidatePath } from "next/cache";
+import { validateCsrfToken, CSRF_CONSTANTS } from "@/lib/csrf-server";
 
 export interface JudgeOption {
   id: string;
@@ -107,8 +108,10 @@ export async function getJudgeAssignmentsData(): Promise<JudgeAssignmentsData> {
 export async function updateJudgeTeams(data: {
   judgeId: string;
   teamIds: string[];
+  [CSRF_CONSTANTS.HEADER_NAME]?: string;
 }) {
   const { user } = await requireAdmin();
+  await validateCsrfToken(data[CSRF_CONSTANTS.HEADER_NAME] || null);
 
   // 1. Delete all existing assignments for this judge
   const { error: deleteError } = await supabaseAdmin
@@ -164,8 +167,10 @@ export async function toggleSingleAssignment(data: {
   judgeId: string;
   teamId: string;
   assign: boolean;
+  [CSRF_CONSTANTS.HEADER_NAME]?: string;
 }) {
   const { user } = await requireAdmin();
+  await validateCsrfToken(data[CSRF_CONSTANTS.HEADER_NAME] || null);
 
   if (data.assign) {
     const { error } = await supabaseAdmin
@@ -213,8 +218,10 @@ export async function toggleSingleAssignment(data: {
 export async function autoBalanceJudgeAssignments(options: {
   judgesPerTeam?: number;
   clearExisting?: boolean;
+  [CSRF_CONSTANTS.HEADER_NAME]?: string;
 } = {}) {
   const { user } = await requireAdmin();
+  await validateCsrfToken(options[CSRF_CONSTANTS.HEADER_NAME] || null);
   const judgesPerTeam = Math.max(1, options.judgesPerTeam || 2);
 
   // 1. Fetch judges and teams

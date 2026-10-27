@@ -57,16 +57,30 @@ export default function AssignmentsClientView({
   );
 
   // Pending stage state: map of judgeId -> string[] of selected team IDs
-  const [pendingAssignedMap, setPendingAssignedMap] = useState<Record<string, string[]>>({});
-
-  // Initialize pending map when judges load or change
-  useEffect(() => {
+  const [pendingAssignedMapState, setPendingAssignedMap] = useState<Record<string, string[]>>(() => {
     const initialMap: Record<string, string[]> = {};
     judges.forEach((j) => {
       initialMap[j.id] = [...j.assigned_team_ids];
     });
-    setPendingAssignedMap(initialMap);
+    return initialMap;
+  });
+
+  // Derive pending map directly from judges using useMemo - no useEffect needed
+  const pendingAssignedMapFromJudges = useMemo(() => {
+    const initialMap: Record<string, string[]> = {};
+    judges.forEach((j) => {
+      initialMap[j.id] = [...j.assigned_team_ids];
+    });
+    return initialMap;
   }, [judges]);
+
+  // Sync state with judges when they change
+  useEffect(() => {
+    setPendingAssignedMap(pendingAssignedMapFromJudges);
+  }, [pendingAssignedMapFromJudges]);
+
+  // Use the state for both reading and staging
+  const pendingAssignedMap = pendingAssignedMapState;
 
   // Current staged team IDs for active judge
   const stagedTeamIds = useMemo(() => {

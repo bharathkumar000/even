@@ -33,7 +33,13 @@ export async function middleware(request: NextRequest) {
           },
         });
         cookiesToSet.forEach(({ name, value, options }) => {
-          response.cookies.set(name, value, options);
+          response.cookies.set(name, value, {
+            ...options,
+            httpOnly: true,
+            secure: process.env.NODE_ENV === "production",
+            sameSite: "lax",
+            path: "/",
+          });
         });
       },
     },
@@ -98,26 +104,8 @@ export async function middleware(request: NextRequest) {
     if (pathname.startsWith("/admin") || pathname.startsWith("/judge") || pathname.startsWith("/team")) {
       return NextResponse.redirect(new URL("/ops/scanner", request.url));
     }
-  } else if (pathname === "/") {
-    // Root path is the public landing and central gateway.
-    // Unauthenticated visitors and crawlers receive HTTP 200 with public event details.
-    // Authenticated users are not forced away so they can view the central gateway and quick-switch portals.
-  } else if (pathname === "/login") {
-    // Redirect authenticated users away from /login
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (user) {
-      const role = (user.user_metadata?.role as string | undefined) || (user.app_metadata?.role as string | undefined);
-      let target = "/team";
-      if (role === "admin") target = "/admin";
-      else if (role === "judge") target = "/judge";
-      else if (role === "staff" || role === "organizer") target = "/ops/scanner";
-      else if (role === "participant" || role === "leader") target = "/team";
-
-      return NextResponse.redirect(new URL(target, request.url));
-    }
+  } else if (pathname === "/" || pathname === "/login") {
+    // Both / and /login directly serve the unified authentication portal
   }
 
   // Apply strict HTTP security headers
@@ -126,6 +114,27 @@ export async function middleware(request: NextRequest) {
   response.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
   response.headers.set("X-XSS-Protection", "1; mode=block");
   response.headers.set("Permissions-Policy", "camera=(self), microphone=(), geolocation=()");
+  
+  // Content Security Policy
+  const csp = [
+    "default-src 'self'",
+    "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.googletagmanager.com https://www.google-analytics.com",
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+    "font-src 'self' https://fonts.gstatic.com data:",
+    "img-src 'self' data: https: blob:",
+    "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://www.google-analytics.com https://www.googletagmanager.com",
+    "frame-ancestors 'none'",
+    "base-uri 'self'",
+    "form-action 'self'",
+    "object-src 'none'",
+  ].join("; ");
+  
+  response.headers.set("Content-Security-Policy", csp);
+  
+  // HSTS (only in production with HTTPS)
+  if (process.env.NODE_ENV === "production") {
+    response.headers.set("Strict-Transport-Security", "max-age=31536000; includeSubDomains; preload");
+  }
 
   // Prevent indexing of private, dashboard, and administrative portals
   if (

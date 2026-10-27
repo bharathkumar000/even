@@ -8,14 +8,16 @@ import {
   UpdateCriterionSchema,
 } from "@/lib/validations/admin";
 import { z } from "zod";
+import { validateCsrfToken, CSRF_CONSTANTS } from "@/lib/csrf-server";
 
 export type RoundInput = z.infer<typeof RoundSchema>;
 export type CriterionInput = z.infer<typeof CriterionSchema>;
 export type UpdateCriterionInput = z.infer<typeof UpdateCriterionSchema>;
 export type RoundStatus = z.infer<typeof RoundSchema>["status"];
 
-export async function createRound(data: RoundInput) {
+export async function createRound(data: RoundInput & { [CSRF_CONSTANTS.HEADER_NAME]?: string }) {
   const { user } = await requireAdmin();
+  await validateCsrfToken(data[CSRF_CONSTANTS.HEADER_NAME] || null);
   const validated = RoundSchema.parse(data);
 
   const { data: round, error } = await supabaseAdmin
@@ -47,8 +49,9 @@ export async function createRound(data: RoundInput) {
   return round;
 }
 
-export async function updateRoundStatus(roundId: string, status: RoundStatus) {
+export async function updateRoundStatus(roundId: string, status: RoundStatus, csrfToken?: string) {
   const { user } = await requireAdmin();
+  await validateCsrfToken(csrfToken || null);
   const validStatus = RoundSchema.shape.status.parse(status);
 
   // Fetch previous status for diffing
@@ -87,8 +90,9 @@ export async function updateRoundStatus(roundId: string, status: RoundStatus) {
   return round;
 }
 
-export async function updateRound(roundId: string, data: { title: string; sequence_order: number; status: RoundStatus }) {
+export async function updateRound(roundId: string, data: { title: string; sequence_order: number; status: RoundStatus; [CSRF_CONSTANTS.HEADER_NAME]?: string }) {
   const { user } = await requireAdmin();
+  await validateCsrfToken(data[CSRF_CONSTANTS.HEADER_NAME] || null);
 
   const { data: round, error } = await supabaseAdmin
     .from("evaluation_rounds")
@@ -120,8 +124,9 @@ export async function updateRound(roundId: string, data: { title: string; sequen
   return round;
 }
 
-export async function deleteRound(roundId: string) {
+export async function deleteRound(roundId: string, csrfToken?: string) {
   const { user } = await requireAdmin();
+  await validateCsrfToken(csrfToken || null);
 
   // Clean up evaluations and criteria associated with this round to prevent foreign key errors
   await supabaseAdmin.from("evaluations").delete().eq("round_id", roundId);
@@ -151,8 +156,9 @@ export async function deleteRound(roundId: string) {
   return { success: true };
 }
 
-export async function createCriterion(data: CriterionInput) {
+export async function createCriterion(data: CriterionInput & { [CSRF_CONSTANTS.HEADER_NAME]?: string }) {
   const { user } = await requireAdmin();
+  await validateCsrfToken(data[CSRF_CONSTANTS.HEADER_NAME] || null);
   const validated = CriterionSchema.parse(data);
 
   const { data: criterion, error } = await supabaseAdmin
@@ -184,8 +190,9 @@ export async function createCriterion(data: CriterionInput) {
   return criterion;
 }
 
-export async function updateCriterion(criterionId: string, data: UpdateCriterionInput) {
+export async function updateCriterion(criterionId: string, data: UpdateCriterionInput & { [CSRF_CONSTANTS.HEADER_NAME]?: string }) {
   const { user } = await requireAdmin();
+  await validateCsrfToken(data[CSRF_CONSTANTS.HEADER_NAME] || null);
   const validated = UpdateCriterionSchema.parse(data);
 
   const { data: criterion, error } = await supabaseAdmin
@@ -214,8 +221,9 @@ export async function updateCriterion(criterionId: string, data: UpdateCriterion
   return criterion;
 }
 
-export async function deleteCriterion(criterionId: string) {
+export async function deleteCriterion(criterionId: string, csrfToken?: string) {
   const { user } = await requireAdmin();
+  await validateCsrfToken(csrfToken || null);
 
   const { error } = await supabaseAdmin
     .from("evaluation_criteria")

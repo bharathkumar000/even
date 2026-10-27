@@ -15,6 +15,15 @@ export function createClient() {
     throw new Error("Missing env var: NEXT_PUBLIC_SUPABASE_ANON_KEY. Set it in your .env file.");
   }
 
-  clientInstance = createBrowserClient(supabaseUrl, supabaseAnonKey);
+  clientInstance = createBrowserClient(supabaseUrl, supabaseAnonKey, {
+    auth: {
+      flowType: "pkce",
+      detectSessionInUrl: true,
+    },
+    cookieOptions: {
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+    },
+  });
   return clientInstance;
 }

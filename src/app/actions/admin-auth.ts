@@ -3,8 +3,14 @@
 import { cookies } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
+import { validateCsrfToken, CSRF_CONSTANTS } from "@/lib/csrf-server";
+import { checkServerActionRateLimit, SERVER_ACTION_RATE_LIMITS } from "@/lib/rate-limit";
 
-export async function verifyAdminPasscode(passcode: string) {
+export async function verifyAdminPasscode(passcode: string, csrfToken?: string) {
+  if (csrfToken) {
+    await validateCsrfToken(csrfToken);
+  }
+
   // 1. Verify user is authenticated and has admin profile role
   const supabase = await createClient();
   const {
@@ -24,6 +30,18 @@ export async function verifyAdminPasscode(passcode: string) {
 
   if (!profile || (profile as { role?: string }).role !== "admin") {
     throw new Error("Forbidden: Admin privileges required.");
+  }
+
+  // Rate limiting for admin passcode attempts
+  const rateLimit = checkServerActionRateLimit(
+    user.id,
+    "adminPasscode",
+    SERVER_ACTION_RATE_LIMITS.adminPasscode.maxRequests,
+    SERVER_ACTION_RATE_LIMITS.adminPasscode.windowMs
+  );
+
+  if (!rateLimit.success) {
+    throw new Error(`Too many passcode attempts. Please try again in ${rateLimit.retryAfter} seconds.`);
   }
 
   const cookieStore = await cookies();
@@ -122,11 +140,14 @@ export async function getAdminTrialStatus() {
     };
   }
 
-  // TEMPORARILY BYPASS FOR TESTING: Auto-treat admin as verified
+  // Check if admin passcode has been verified
+  const cookieStore = await cookies();
+  const isPasscodeVerified = cookieStore.get("admin_session_verified")?.value === "true";
+
   return {
     authenticated: true,
     isAdmin: true,
-    verified: true,
+    verified: isPasscodeVerified,
     isLocked: false,
     attemptsRemaining: 3,
   };

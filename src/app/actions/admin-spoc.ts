@@ -3,7 +3,14 @@
 import { requireAdmin } from "@/lib/auth/admin";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { revalidatePath } from "next/cache";
+import { validateCsrfToken, CSRF_CONSTANTS } from "@/lib/csrf-server";
 
+/**
+ * Staff / Club Members are the source of truth for SPOC identities.
+ * `SpocItem.id` is always the `public.profiles.id` of the staff member.
+ * The `public.spocs` table is retained as the assignment record so that
+ * existing `team_spoc_assignments` remain valid.
+ */
 export interface SpocItem {
   id: string;
   name: string;
@@ -21,6 +28,7 @@ export interface SpocTeamOption {
   name: string;
   code?: string | null;
   track?: string | null;
+  /** Staff profile ID of the assigned SPOC. Null when unassigned */
   assigned_spoc_id?: string | null;
   assigned_spoc_name?: string | null;
 }
@@ -30,7 +38,113 @@ export interface SpocPortalData {
   teams: SpocTeamOption[];
 }
 
-// 1. Fetch SPOCs and Teams data
+interface StaffProfile {
+  id: string;
+  role: string;
+  full_name: string | null;
+  email: string | null;
+  created_at: string;
+}
+
+interface SpocRow {
+  id: string;
+  staff_id: string | null;
+  name: string | null;
+  email: string | null;
+  phone: string | null;
+  avatar_url: string | null;
+  created_at: string;
+}
+
+interface TeamRow {
+  id: string;
+  name: string;
+  code?: string | null;
+  track?: string | null;
+}
+
+function getDisplayName(profile: {
+  full_name?: string | null;
+  email?: string | null;
+}): string {
+  const name = profile.full_name?.trim();
+  if (name) return name;
+
+  const email = profile.email?.trim();
+  if (email) return email.split("@")[0];
+
+  return "Staff Member";
+}
+
+async function getEligibleStaff(staffId: string): Promise<StaffProfile> {
+  const { data, error } = await supabaseAdmin
+    .from("profiles")
+    .select("id, role, full_name, email, created_at")
+    .eq("id", staffId)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(`Failed to verify staff member: ${error.message}`);
+  }
+
+  if (!data) {
+    throw new Error("Selected staff member was not found.");
+  }
+
+  if (data.role !== "staff") {
+    throw new Error("Selected user is not a Staff / Club Member.");
+  }
+
+  return data as StaffProfile;
+}
+
+async function ensureSpocRowForStaff(
+  staff: StaffProfile
+): Promise<{ id: string }> {
+  const { data: existing, error: fetchError } = await supabaseAdmin
+    .from("spocs")
+    .select("id")
+    .eq("staff_id", staff.id)
+    .maybeSingle();
+
+  if (fetchError) {
+    throw new Error(`Failed to load SPOC record: ${fetchError.message}`);
+  }
+
+  if (existing) return existing;
+
+  const { data: inserted, error: insertError } = await supabaseAdmin
+    .from("spocs")
+    .insert([
+      {
+        staff_id: staff.id,
+        name: getDisplayName(staff),
+        email: staff.email,
+      },
+    ])
+    .select("id")
+    .single();
+
+  if (insertError) {
+    // A concurrent request may have created the row between the select and insert.
+    const { data: retry } = await supabaseAdmin
+      .from("spocs")
+      .select("id")
+      .eq("staff_id", staff.id)
+      .maybeSingle();
+
+    if (retry) return retry;
+
+    throw new Error(`Failed to create SPOC record: ${insertError.message}`);
+  }
+
+  return inserted;
+}
+
+/**
+ * Load every eligible Staff / Club Member as an available SPOC, together with
+ * their real team assignments.
+ */
 export async function getSpocPortalData(): Promise<SpocPortalData> {
   try {
     await requireAdmin();
@@ -40,11 +154,15 @@ export async function getSpocPortalData(): Promise<SpocPortalData> {
   }
 
   const fetchData = async (): Promise<SpocPortalData> => {
-    const [spocsRes, teamsRes, assignmentsRes] = await Promise.all([
+    const [profilesRes, spocsRes, teamsRes, assignmentsRes] = await Promise.all([
+      supabaseAdmin
+        .from("profiles")
+        .select("id, role, full_name, email, created_at")
+        .eq("role", "staff")
+        .order("full_name", { ascending: true }),
       supabaseAdmin
         .from("spocs")
-        .select("*")
-        .order("name", { ascending: true }),
+        .select("id, staff_id, name, email, phone, avatar_url, created_at"),
       supabaseAdmin
         .from("teams")
         .select("id, name, code, track")
@@ -54,47 +172,85 @@ export async function getSpocPortalData(): Promise<SpocPortalData> {
         .select("spoc_id, team_id"),
     ]);
 
-    const spocsList = spocsRes.data || [];
-    const teamsList = teamsRes.data || [];
-    const assignments = assignmentsRes.data || [];
-
-    // Map spoc_id -> team_id[]
-    const spocToTeams = new Map<string, string[]>();
-    // Map team_id -> spoc_id
-    const teamToSpoc = new Map<string, string>();
-
-    for (const a of assignments) {
-      if (!spocToTeams.has(a.spoc_id)) spocToTeams.set(a.spoc_id, []);
-      spocToTeams.get(a.spoc_id)!.push(a.team_id);
-      teamToSpoc.set(a.team_id, a.spoc_id);
+    if (profilesRes.error) {
+      console.error(
+        "Failed to load staff profiles for SPOC management:",
+        profilesRes.error.message
+      );
+      return { spocs: [], teams: [] };
     }
 
-    const spocNameMap = new Map<string, string>();
-    spocsList.forEach((s) => {
-      spocNameMap.set(s.id, s.name);
+    const staffProfiles = (profilesRes.data || []) as StaffProfile[];
+    const spocRows = (spocsRes.data || []) as SpocRow[];
+    const teamsList = (teamsRes.data || []) as TeamRow[];
+    const assignments = assignmentsRes.data || [];
+
+    const spocByStaffId = new Map<string, SpocRow>();
+    const spocIdToStaffId = new Map<string, string>();
+    const spocNameById = new Map<string, string>();
+
+    for (const row of spocRows) {
+      if (row.staff_id) {
+        spocByStaffId.set(row.staff_id, row);
+        spocIdToStaffId.set(row.id, row.staff_id);
+      }
+      if (row.name) {
+        spocNameById.set(row.id, row.name);
+      }
+    }
+
+    const spocToTeams = new Map<string, string[]>();
+    const teamToSpoc = new Map<string, string>();
+
+    for (const assignment of assignments) {
+      if (!spocToTeams.has(assignment.spoc_id)) {
+        spocToTeams.set(assignment.spoc_id, []);
+      }
+      spocToTeams.get(assignment.spoc_id)!.push(assignment.team_id);
+      teamToSpoc.set(assignment.team_id, assignment.spoc_id);
+    }
+
+    const staffNameById = new Map<string, string>();
+
+    const spocs: SpocItem[] = staffProfiles.map((profile) => {
+      const name = getDisplayName(profile);
+      staffNameById.set(profile.id, name);
+
+      const spocRow = spocByStaffId.get(profile.id);
+
+      return {
+        id: profile.id,
+        name,
+        email: profile.email,
+        phone: spocRow?.phone || null,
+        department: null,
+        notes: null,
+        avatar_url: spocRow?.avatar_url || null,
+        created_at:
+          profile.created_at || spocRow?.created_at || new Date().toISOString(),
+        assigned_team_ids: spocRow
+          ? spocToTeams.get(spocRow.id) || []
+          : [],
+      };
     });
 
-    const spocs: SpocItem[] = spocsList.map((s) => ({
-      id: s.id,
-      name: s.name,
-      email: s.email,
-      phone: s.phone,
-      department: s.department,
-      notes: s.notes,
-      avatar_url: s.avatar_url || null,
-      created_at: s.created_at,
-      assigned_team_ids: spocToTeams.get(s.id) || [],
-    }));
+    const teams: SpocTeamOption[] = teamsList.map((team) => {
+      const assignedSpocRowId = teamToSpoc.get(team.id) || null;
+      const assignedStaffId = assignedSpocRowId
+        ? spocIdToStaffId.get(assignedSpocRowId) || null
+        : null;
 
-    const teams: SpocTeamOption[] = teamsList.map((t) => {
-      const assignedSpocId = teamToSpoc.get(t.id) || null;
       return {
-        id: t.id,
-        name: t.name,
-        code: t.code,
-        track: t.track,
-        assigned_spoc_id: assignedSpocId,
-        assigned_spoc_name: assignedSpocId ? spocNameMap.get(assignedSpocId) || "SPOC" : null,
+        id: team.id,
+        name: team.name,
+        code: team.code,
+        track: team.track,
+        assigned_spoc_id: assignedStaffId,
+        assigned_spoc_name: assignedStaffId
+          ? staffNameById.get(assignedStaffId) ||
+            spocNameById.get(assignedSpocRowId!) ||
+            "SPOC"
+          : null,
       };
     });
 
@@ -102,234 +258,75 @@ export async function getSpocPortalData(): Promise<SpocPortalData> {
   };
 
   const timeoutPromise = new Promise<SpocPortalData>((resolve) =>
-    setTimeout(() => resolve({ spocs: [], teams: [] }), 3000)
+    setTimeout(() => resolve({ spocs: [], teams: [] }), 5000)
   );
 
   return Promise.race([fetchData(), timeoutPromise]);
 }
 
-// 2. Create SPOC
-export async function createSpoc(data: {
-  name: string;
-  email?: string;
-  phone?: string;
-  department?: string;
-  notes?: string;
-  avatar_url?: string;
-}) {
-  const { user } = await requireAdmin();
-
-  if (!data.name || data.name.trim() === "") {
-    throw new Error("SPOC name is required.");
-  }
-
-  const { data: newSpoc, error } = await supabaseAdmin
-    .from("spocs")
-    .insert([
-      {
-        name: data.name.trim(),
-        email: data.email?.trim() || null,
-        phone: data.phone?.trim() || null,
-        department: data.department?.trim() || null,
-        notes: data.notes?.trim() || null,
-        avatar_url: data.avatar_url?.trim() || null,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      },
-    ])
-    .select()
-    .single();
-
-  if (error) {
-    throw new Error(`Failed to create SPOC: ${error.message}`);
-  }
-
-  // Audit log (non-blocking)
-  void supabaseAdmin.from("audit_logs").insert([
-    {
-      action: "CREATE_SPOC",
-      entity_type: "spoc",
-      entity_id: newSpoc.id,
-      admin_id: user.id,
-      details: { name: newSpoc.name, email: newSpoc.email, department: newSpoc.department },
-      created_at: new Date().toISOString(),
-    },
-  ]);
-
-  revalidatePath("/admin/spoc");
-  revalidatePath("/team");
-  return newSpoc;
-}
-
-// 3. Update SPOC Details
-export async function updateSpoc(data: {
-  id: string;
-  name: string;
-  email?: string;
-  phone?: string;
-  department?: string;
-  notes?: string;
-  avatar_url?: string;
-}) {
-  const { user } = await requireAdmin();
-
-  const updatePayload: Record<string, any> = {
-    name: data.name.trim(),
-    email: data.email?.trim() || null,
-    phone: data.phone?.trim() || null,
-    department: data.department?.trim() || null,
-    notes: data.notes?.trim() || null,
-    updated_at: new Date().toISOString(),
-  };
-
-  if (data.avatar_url !== undefined) {
-    updatePayload.avatar_url = data.avatar_url ? data.avatar_url.trim() : null;
-  }
-
-  const { data: updatedSpoc, error } = await supabaseAdmin
-    .from("spocs")
-    .update(updatePayload)
-    .eq("id", data.id)
-    .select()
-    .single();
-
-  if (error) {
-    throw new Error(`Failed to update SPOC: ${error.message}`);
-  }
-
-  // Audit log (non-blocking)
-  void supabaseAdmin.from("audit_logs").insert([
-    {
-      action: "UPDATE_SPOC",
-      entity_type: "spoc",
-      entity_id: data.id,
-      admin_id: user.id,
-      details: data,
-      created_at: new Date().toISOString(),
-    },
-  ]);
-
-  revalidatePath("/admin/spoc");
-  revalidatePath("/team");
-  return updatedSpoc;
-}
-
-// 3b. Upload SPOC Avatar Image
-export async function uploadSpocAvatar(formData: FormData) {
-  await requireAdmin();
-
-  const file = formData.get("file") as File | null;
-  if (!file) {
-    throw new Error("No image file provided for upload");
-  }
-
-  const allowedTypes = ["image/jpeg", "image/png", "image/webp", "image/gif", "image/svg+xml"];
-  if (file.type && !allowedTypes.includes(file.type)) {
-    throw new Error("Only image files (JPG, PNG, WebP, GIF, SVG) are allowed.");
-  }
-
-  if (file.size > 5 * 1024 * 1024) {
-    throw new Error("Avatar image must not exceed 5MB.");
-  }
-
-  const bucketName = "spoc-avatars";
-  const { data: bucketData, error: bucketError } = await supabaseAdmin.storage.getBucket(bucketName);
-  if (bucketError || !bucketData) {
-    await supabaseAdmin.storage.createBucket(bucketName, {
-      public: true,
-      fileSizeLimit: 10485760,
-    });
-  }
-
-  const cleanFileName = (file.name || "avatar.jpg").replace(/[^a-zA-Z0-9._-]/g, "_");
-  const filePath = `avatars/${Date.now()}_${cleanFileName}`;
-  const arrayBuffer = await file.arrayBuffer();
-  const buffer = Buffer.from(arrayBuffer);
-
-  const { error: uploadError } = await supabaseAdmin.storage
-    .from(bucketName)
-    .upload(filePath, buffer, {
-      contentType: file.type || "image/jpeg",
-      upsert: true,
-    });
-
-  if (uploadError) {
-    const base64 = buffer.toString("base64");
-    const mime = file.type || "image/jpeg";
-    return { avatarUrl: `data:${mime};base64,${base64}` };
-  }
-
-  const { data: publicUrlData } = supabaseAdmin.storage
-    .from(bucketName)
-    .getPublicUrl(filePath);
-
-  return { avatarUrl: publicUrlData.publicUrl };
-}
-
-// 4. Delete SPOC
-export async function deleteSpoc(spocId: string) {
-  const { user } = await requireAdmin();
-
-  // 1. Fetch info for audit log
-  const { data: spoc } = await supabaseAdmin
-    .from("spocs")
-    .select("name, email")
-    .eq("id", spocId)
-    .maybeSingle();
-
-  // 2. Delete SPOC (team_spoc_assignments cascade delete)
-  const { error } = await supabaseAdmin
-    .from("spocs")
-    .delete()
-    .eq("id", spocId);
-
-  if (error) {
-    throw new Error(`Failed to delete SPOC: ${error.message}`);
-  }
-
-  // Audit log (non-blocking)
-  void supabaseAdmin.from("audit_logs").insert([
-    {
-      action: "DELETE_SPOC",
-      entity_type: "spoc",
-      entity_id: spocId,
-      admin_id: user.id,
-      details: { name: spoc?.name, email: spoc?.email },
-      created_at: new Date().toISOString(),
-    },
-  ]);
-
-  revalidatePath("/admin/spoc");
-  return { success: true };
-}
-
-// 5. Update SPOC Team Allotments
+/**
+ * Replace the full set of team assignments for a staff SPOC.
+ * `data.spocId` is the staff `profiles.id`, not the internal spocs row id.
+ */
 export async function updateSpocTeams(data: {
   spocId: string;
   teamIds: string[];
+  [CSRF_CONSTANTS.HEADER_NAME]?: string;
 }) {
   const { user } = await requireAdmin();
+  await validateCsrfToken(data[CSRF_CONSTANTS.HEADER_NAME] || null);
 
-  // 1. Delete all existing allotments for this SPOC
+  const staff = await getEligibleStaff(data.spocId);
+  const spocRow = await ensureSpocRowForStaff(staff);
+
+  const uniqueTeamIds = Array.from(
+    new Set((data.teamIds || []).filter(Boolean))
+  );
+
+  if (uniqueTeamIds.length > 0) {
+    const { data: validTeams, error: teamError } = await supabaseAdmin
+      .from("teams")
+      .select("id")
+      .in("id", uniqueTeamIds);
+
+    if (teamError) {
+      throw new Error(`Failed to validate selected teams: ${teamError.message}`);
+    }
+
+    if ((validTeams || []).length !== uniqueTeamIds.length) {
+      throw new Error(
+        "One or more selected teams no longer exist. Refresh and try again."
+      );
+    }
+  }
+
   const { error: deleteError } = await supabaseAdmin
     .from("team_spoc_assignments")
     .delete()
-    .eq("spoc_id", data.spocId);
+    .eq("spoc_id", spocRow.id);
 
   if (deleteError) {
-    throw new Error(`Failed to reset existing SPOC allotments: ${deleteError.message}`);
+    throw new Error(
+      `Failed to reset existing SPOC allotments: ${deleteError.message}`
+    );
   }
 
-  // 2. If assigning new teams, delete any prior allotments for these specific teams (exclusive allotment)
-  if (data.teamIds.length > 0) {
-    await supabaseAdmin
+  if (uniqueTeamIds.length > 0) {
+    // Exclusive allocation: a team can belong to only one SPOC.
+    const { error: deleteTeamError } = await supabaseAdmin
       .from("team_spoc_assignments")
       .delete()
-      .in("team_id", data.teamIds);
+      .in("team_id", uniqueTeamIds);
 
-    const rows = data.teamIds.map((tId) => ({
-      spoc_id: data.spocId,
-      team_id: tId,
+    if (deleteTeamError) {
+      throw new Error(
+        `Failed to release teams from previous SPOCs: ${deleteTeamError.message}`
+      );
+    }
+
+    const rows = uniqueTeamIds.map((teamId) => ({
+      spoc_id: spocRow.id,
+      team_id: teamId,
       allotted_at: new Date().toISOString(),
     }));
 
@@ -338,11 +335,12 @@ export async function updateSpocTeams(data: {
       .insert(rows);
 
     if (insertError) {
-      throw new Error(`Failed to save SPOC team allotments: ${insertError.message}`);
+      throw new Error(
+        `Failed to save SPOC team allotments: ${insertError.message}`
+      );
     }
   }
 
-  // Audit log (non-blocking)
   void supabaseAdmin.from("audit_logs").insert([
     {
       action: "UPDATE_SPOC_ASSIGNMENTS",
@@ -350,103 +348,186 @@ export async function updateSpocTeams(data: {
       entity_id: data.spocId,
       admin_id: user.id,
       details: {
-        spoc_id: data.spocId,
-        allotted_team_ids: data.teamIds,
-        count: data.teamIds.length,
+        staff_profile_id: staff.id,
+        spoc_id: spocRow.id,
+        allotted_team_ids: uniqueTeamIds,
+        count: uniqueTeamIds.length,
       },
       created_at: new Date().toISOString(),
     },
   ]);
 
   revalidatePath("/admin/spoc");
+  revalidatePath("/team");
   return { success: true };
 }
 
 /**
- * Smart Auto-Allotment Algorithm for SPOCs
- * Distributes teams evenly across active SPOCs using 1-to-1 exclusive team mapping.
+ * Distribute teams evenly across all eligible Staff / Club Member SPOCs.
+ * Teams currently assigned to legacy/unlinked SPOC rows are treated as
+ * unassigned so they can be brought under staff-based coordination.
  */
-export async function autoBalanceSpocAssignments(options: {
-  clearExisting?: boolean;
-} = {}) {
+export async function autoBalanceSpocAssignments(
+  options: { clearExisting?: boolean; [CSRF_CONSTANTS.HEADER_NAME]?: string } = {}
+) {
   const { user } = await requireAdmin();
+  await validateCsrfToken(options[CSRF_CONSTANTS.HEADER_NAME] || null);
 
-  const [spocsRes, teamsRes] = await Promise.all([
-    supabaseAdmin.from("spocs").select("id, name").order("name", { ascending: true }),
-    supabaseAdmin.from("teams").select("id, name, track").order("name", { ascending: true }),
+  const [profilesRes, spocsRes, teamsRes] = await Promise.all([
+    supabaseAdmin
+      .from("profiles")
+      .select("id, role, full_name, email, created_at")
+      .eq("role", "staff")
+      .order("full_name", { ascending: true }),
+    supabaseAdmin.from("spocs").select("id, staff_id"),
+    supabaseAdmin
+      .from("teams")
+      .select("id, name, track")
+      .order("name", { ascending: true }),
   ]);
 
-  const spocs = spocsRes.data || [];
-  const teams = teamsRes.data || [];
-
-  if (spocs.length === 0) {
-    throw new Error("No SPOCs found to allocate. Please create SPOCs first.");
+  if (profilesRes.error) {
+    throw new Error(
+      `Failed to load staff members: ${profilesRes.error.message}`
+    );
   }
+
+  const staffProfiles = (profilesRes.data || []) as StaffProfile[];
+  const spocRows = (spocsRes.data || []) as Array<{
+    id: string;
+    staff_id: string | null;
+  }>;
+  const teams = (teamsRes.data || []) as TeamRow[];
+
+  const staffIds = new Set(staffProfiles.map((p) => p.id));
+  const spocRowByStaffId = new Map<string, string>();
+
+  for (const row of spocRows) {
+    if (row.staff_id && staffIds.has(row.staff_id)) {
+      spocRowByStaffId.set(row.staff_id, row.id);
+    }
+  }
+
+  // Ensure every eligible staff member has an internal SPOC row.
+  for (const staff of staffProfiles) {
+    if (!spocRowByStaffId.has(staff.id)) {
+      const row = await ensureSpocRowForStaff(staff);
+      spocRowByStaffId.set(staff.id, row.id);
+    }
+  }
+
+  if (spocRowByStaffId.size === 0) {
+    throw new Error(
+      "No eligible Staff / Club Members found. Add staff accounts under User Management first."
+    );
+  }
+
   if (teams.length === 0) {
     throw new Error("No teams found to allocate.");
   }
 
-  // Clear existing if requested
-  if (options.clearExisting) {
-    await supabaseAdmin.from("team_spoc_assignments").delete().neq("id", "00000000-0000-0000-0000-000000000000");
-  } else {
-    // Only allocate unassigned teams
-    const { data: existing } = await supabaseAdmin.from("team_spoc_assignments").select("team_id");
-    const assignedTeamIds = new Set((existing || []).map((e) => e.team_id));
-    const unassignedTeams = teams.filter((t) => !assignedTeamIds.has(t.id));
+  const eligibleSpocIds = Array.from(spocRowByStaffId.values());
+  const eligibleSpocIdSet = new Set(eligibleSpocIds);
 
-    if (unassignedTeams.length === 0) {
-      return { success: true, message: "All teams are already assigned to SPOCs.", count: 0 };
+  if (options.clearExisting) {
+    const { error: clearError } = await supabaseAdmin
+      .from("team_spoc_assignments")
+      .delete()
+      .in("spoc_id", eligibleSpocIds);
+
+    if (clearError) {
+      throw new Error(
+        `Failed to clear existing SPOC assignments: ${clearError.message}`
+      );
     }
   }
 
-  // Fetch current load per SPOC
-  const { data: currentAssignments } = await supabaseAdmin
-    .from("team_spoc_assignments")
-    .select("spoc_id");
+  const { data: currentAssignments, error: assignmentsError } =
+    await supabaseAdmin
+      .from("team_spoc_assignments")
+      .select("spoc_id, team_id");
+
+  if (assignmentsError) {
+    throw new Error(
+      `Failed to load current SPOC assignments: ${assignmentsError.message}`
+    );
+  }
 
   const spocLoads = new Map<string, number>();
-  spocs.forEach((s) => spocLoads.set(s.id, 0));
-  (currentAssignments || []).forEach((a) => {
-    spocLoads.set(a.spoc_id, (spocLoads.get(a.spoc_id) || 0) + 1);
-  });
+  eligibleSpocIds.forEach((id) => spocLoads.set(id, 0));
 
-  const { data: alreadyAssigned } = await supabaseAdmin.from("team_spoc_assignments").select("team_id");
-  const assignedSet = new Set((alreadyAssigned || []).map((e) => e.team_id));
-  const teamsToAssign = teams.filter((t) => !assignedSet.has(t.id));
+  const eligibleAssignedTeamIds = new Set<string>();
 
-  const newRows: Array<{ spoc_id: string; team_id: string; allotted_at: string }> = [];
+  for (const assignment of currentAssignments || []) {
+    if (eligibleSpocIdSet.has(assignment.spoc_id)) {
+      eligibleAssignedTeamIds.add(assignment.team_id);
+      spocLoads.set(
+        assignment.spoc_id,
+        (spocLoads.get(assignment.spoc_id) || 0) + 1
+      );
+    }
+  }
+
+  const teamsToAssign = teams.filter(
+    (team) => !eligibleAssignedTeamIds.has(team.id)
+  );
+
+  if (teamsToAssign.length === 0) {
+    revalidatePath("/admin/spoc");
+    return {
+      success: true,
+      message: "All teams are already assigned to eligible Staff SPOCs.",
+      spocsCount: eligibleSpocIds.length,
+      allocatedTeamsCount: 0,
+    };
+  }
+
+  const newRows: Array<{
+    spoc_id: string;
+    team_id: string;
+    allotted_at: string;
+  }> = [];
 
   for (const team of teamsToAssign) {
-    // Pick SPOC with lowest current load
-    const targetSpoc = [...spocs].sort((a, b) => (spocLoads.get(a.id) || 0) - (spocLoads.get(b.id) || 0))[0];
+    let targetSpocId = eligibleSpocIds[0];
+    let lowestLoad = spocLoads.get(targetSpocId) || 0;
+
+    for (const spocId of eligibleSpocIds) {
+      const load = spocLoads.get(spocId) || 0;
+      if (load < lowestLoad) {
+        lowestLoad = load;
+        targetSpocId = spocId;
+      }
+    }
+
     newRows.push({
-      spoc_id: targetSpoc.id,
+      spoc_id: targetSpocId,
       team_id: team.id,
       allotted_at: new Date().toISOString(),
     });
-    spocLoads.set(targetSpoc.id, (spocLoads.get(targetSpoc.id) || 0) + 1);
+
+    spocLoads.set(targetSpocId, lowestLoad + 1);
   }
 
-  if (newRows.length > 0) {
-    const { error: insertError } = await supabaseAdmin
-      .from("team_spoc_assignments")
-      .upsert(newRows, { onConflict: "team_id" });
+  const { error: upsertError } = await supabaseAdmin
+    .from("team_spoc_assignments")
+    .upsert(newRows, { onConflict: "team_id" });
 
-    if (insertError) {
-      throw new Error(`Failed to save auto-balanced SPOC allotments: ${insertError.message}`);
-    }
+  if (upsertError) {
+    throw new Error(
+      `Failed to save auto-balanced SPOC allotments: ${upsertError.message}`
+    );
   }
 
-  // Audit log
   void supabaseAdmin.from("audit_logs").insert([
     {
       action: "AUTO_BALANCE_SPOC_ASSIGNMENTS",
       entity_type: "team_spoc_assignments",
       admin_id: user.id,
       details: {
-        spocs_count: spocs.length,
+        staff_spoc_count: eligibleSpocIds.length,
         allocated_teams_count: newRows.length,
+        clear_existing: !!options.clearExisting,
       },
       created_at: new Date().toISOString(),
     },
@@ -457,8 +538,7 @@ export async function autoBalanceSpocAssignments(options: {
 
   return {
     success: true,
-    spocsCount: spocs.length,
+    spocsCount: eligibleSpocIds.length,
     allocatedTeamsCount: newRows.length,
   };
 }
-

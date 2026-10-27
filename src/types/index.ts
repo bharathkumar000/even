@@ -6,7 +6,7 @@ export type UserRole =
   | "admin"
   | "judge"
   | "staff"
-  | "organizer"
+  | "spoc"
   | "leader"
   | "participant";
 

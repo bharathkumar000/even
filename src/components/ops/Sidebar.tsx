@@ -66,7 +66,7 @@ export default function OpsSidebar() {
           {/* Top Center Logo */}
           <div className="mb-3.5 relative flex items-center justify-center">
             <Image
-              src="/ivc-gear-logo.png"
+              src="/ivc-logo-transparent.png"
               alt="Innovators & Visionaries Club Logo"
               width={72}
               height={72}
@@ -134,19 +134,8 @@ export default function OpsSidebar() {
                     }`}
                   >
                     {item.label}
-                  </span>
+</span>
                 </div>
-                {item.badge && (
-                  <span
-                    className={`text-[10px] px-2 py-0.5 rounded-full font-mono font-bold tracking-wider ${
-                      isActive
-                        ? "bg-white/20 text-white border border-white/30"
-                        : "bg-surface-color text-text-secondary border border-border-color/60"
-                    }`}
-                  >
-                    {item.badge}
-                  </span>
-                )}
               </Link>
             );
           })}

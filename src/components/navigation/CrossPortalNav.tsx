@@ -126,7 +126,7 @@ export default function CrossPortalNav({
           >
             <div className="relative flex items-center justify-center">
               <Image
-                src="/ivc-gear-logo.png"
+                src="/ivc-logo-transparent.png"
                 alt="IVC Logo"
                 width={36}
                 height={36}

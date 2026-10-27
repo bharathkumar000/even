@@ -63,16 +63,21 @@ const roleBadges: Record<
     badgeClass: "bg-accent-tertiary/15 text-accent-tertiary border-accent-tertiary/40",
     icon: Gavel,
   },
-  staff: {
+  spoc: {
+    label: "SPOC / Staff",
+    badgeClass: "bg-status-success/15 text-status-success border-status-success/40",
+    icon: Shield,
+  },
+   staff: {
     label: "Staff / Club",
     badgeClass: "bg-status-success/15 text-status-success border-status-success/40",
     icon: Shield,
   },
-  leader: {
-    label: "Team Leader",
-    badgeClass: "bg-accent-primary/15 text-accent-primary border-accent-primary/40",
-    icon: Crown,
-  },
+    leader: {
+        label: "Team Leader",
+        badgeClass: "bg-accent-primary/15 text-accent-primary border-accent-primary/40",
+        icon: Crown,
+    },
   participant: {
     label: "Participant",
     badgeClass: "bg-surface-color-light text-text-secondary border-border-color",

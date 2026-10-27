@@ -33,6 +33,7 @@ export default function AdminSidebar() {
     { href: "/admin/evaluations", icon: FileCheck2, label: "Evaluations & Overrides" },
     { href: "/admin/results", icon: Award, label: "Results Engine" },
     { href: "/admin/audit-logs", icon: ScrollText, label: "Audit Logs" },
+    { href: "/admin/content-releases", icon: FileCheck2, label: "Content Release" },
   ];
 
   const [pendingHref, setPendingHref] = useState<string | null>(null);
@@ -47,7 +48,7 @@ export default function AdminSidebar() {
         {/* Top Center Logo */}
         <div className="mb-3.5 relative flex items-center justify-center">
           <Image
-            src="/ivc-gear-logo.png"
+            src="/ivc-logo-transparent.png"
             alt="Innovators & Visionaries Club Logo"
             width={72}
             height={72}
