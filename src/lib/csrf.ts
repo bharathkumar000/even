@@ -20,7 +20,7 @@ function generateToken(): string {
  */
 export async function getCsrfToken(): Promise<string> {
   const { cookies } = await import('next/headers');
-  const cookieStore = cookies();
+  const cookieStore = await cookies();
   let token = cookieStore.get(CSRF_COOKIE_NAME)?.value;
 
   if (!token) {
@@ -43,7 +43,7 @@ export async function getCsrfToken(): Promise<string> {
  */
 export async function validateCsrfToken(requestToken: string | null): Promise<void> {
   const { cookies } = await import('next/headers');
-  const cookieStore = cookies();
+  const cookieStore = await cookies();
   const cookieToken = cookieStore.get(CSRF_COOKIE_NAME)?.value;
 
   if (!cookieToken) {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import type { FormEvent } from "react";
 import type { LucideIcon } from "lucide-react";
 import {
@@ -28,6 +28,7 @@ import {
   Plus,
   Search,
   Send,
+  Timer,
   Trash2,
   Upload,
   X,
@@ -45,7 +46,8 @@ import {
   removeContentFile,
   unpublishContentItem,
   updateContentItem,
-  scheduleContentItem,
+  scheduleContentActivity,
+  cancelActivitySchedule,
 } from "@/app/actions/admin-content-hub";
 import type {
   ActivityType,
@@ -220,6 +222,21 @@ function downloadBlob(name: string, content: string, mime: string) {
   URL.revokeObjectURL(url);
 }
 
+function formatCountdown(totalSeconds: number): string {
+  if (totalSeconds <= 0) return "00:00:00";
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  if (hours > 0) {
+    return `${hours.toString().padStart(2, "0")}:${minutes
+      .toString()
+      .padStart(2, "0")}:${seconds.toString().padStart(2, "0")}`;
+  }
+  return `${minutes.toString().padStart(2, "0")}:${seconds
+    .toString()
+    .padStart(2, "0")}`;
+}
+
 function renderBody(body: string) {
   const lines = body.split(/\r?\n/);
   return lines.map((line, index) => {
@@ -295,10 +312,18 @@ export default function ContentHubClientView({
     "all" | "published" | "draft"
   >("all");
 
-  const [scheduleModalOpen, setScheduleModalOpen] = useState(false);
-  const [scheduleItem, setScheduleItem] = useState<ContentItem | null>(null);
-  const [scheduleDate, setScheduleDate] = useState<string>('');
-  const [scheduleTimezone, setScheduleTimezone] = useState<string>('UTC');
+  const [activityModalOpen, setActivityModalOpen] = useState(false);
+
+  // Activity-Level Timer & Scheduled Publication State
+  const [activityTimerModalOpen, setActivityTimerModalOpen] = useState(false);
+  const [activityTimerEnd, setActivityTimerEnd] = useState<string | null>(null);
+  const [activityTimerRemaining, setActivityTimerRemaining] = useState<number>(0);
+  const [activityTimerMode, setActivityTimerMode] = useState<"countdown" | "datetime">("countdown");
+  const [activityTimerMinutes, setActivityTimerMinutes] = useState<number>(30);
+  const [activityTimerDate, setActivityTimerDate] = useState<string>("");
+  const [activityTimerTimezone, setActivityTimerTimezone] = useState<string>("UTC");
+  const [activityTimerAutoPublish, setActivityTimerAutoPublish] = useState<boolean>(true);
+  const [schedulingActivity, setSchedulingActivity] = useState<boolean>(false);
   const [activityForm, setActivityForm] = useState<{
     title: string;
     description: string;
@@ -430,6 +455,168 @@ export default function ContentHubClientView({
       });
     } finally {
       setCreatingActivity(false);
+    }
+  };
+
+  // Sync Activity Timer when selectedActivity changes
+  useEffect(() => {
+    if (!selectedActivityId) {
+      setActivityTimerEnd(null);
+      setActivityTimerRemaining(0);
+      return;
+    }
+
+    try {
+      const stored = localStorage.getItem(`activity_timer_${selectedActivityId}`);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        const end = new Date(parsed.endTime).getTime();
+        const diff = Math.max(0, Math.floor((end - Date.now()) / 1000));
+        if (diff > 0) {
+          setActivityTimerEnd(parsed.endTime);
+          setActivityTimerRemaining(diff);
+          if (parsed.autoPublish !== undefined) {
+            setActivityTimerAutoPublish(parsed.autoPublish);
+          }
+          if (parsed.timezone) {
+            setActivityTimerTimezone(parsed.timezone);
+          }
+        } else {
+          localStorage.removeItem(`activity_timer_${selectedActivityId}`);
+          setActivityTimerEnd(null);
+          setActivityTimerRemaining(0);
+        }
+      } else {
+        setActivityTimerEnd(null);
+        setActivityTimerRemaining(0);
+      }
+    } catch {
+      setActivityTimerEnd(null);
+      setActivityTimerRemaining(0);
+    }
+  }, [selectedActivityId]);
+
+  // Interval ticker for live countdown and auto-publish trigger
+  useEffect(() => {
+    if (!activityTimerEnd || !selectedActivityId) return;
+
+    const interval = setInterval(() => {
+      const end = new Date(activityTimerEnd).getTime();
+      const diff = Math.max(0, Math.floor((end - Date.now()) / 1000));
+      setActivityTimerRemaining(diff);
+
+      if (diff <= 0) {
+        clearInterval(interval);
+        const timerKey = `activity_timer_${selectedActivityId}`;
+        localStorage.removeItem(timerKey);
+        setActivityTimerEnd(null);
+
+        if (activityTimerAutoPublish) {
+          startTransition(async () => {
+            try {
+              const res = await publishAllContentItems(selectedActivityId);
+              setNotification({
+                type: "success",
+                message: `Activity timer finished! ${res.publishedCount ?? 0} draft(s) published automatically.`,
+              });
+              setTimeout(() => {
+                window.location.reload();
+              }, 1200);
+            } catch (err) {
+              setNotification({
+                type: "error",
+                message: err instanceof Error ? err.message : "Auto-publish failed on timer completion.",
+              });
+            }
+          });
+        } else {
+          setNotification({
+            type: "success",
+            message: "Activity timer finished! (Auto-publish was disabled)",
+          });
+        }
+      }
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [activityTimerEnd, selectedActivityId, activityTimerAutoPublish]);
+
+  const handleStartActivityTimer = async () => {
+    if (!selectedActivity) return;
+    try {
+      setSchedulingActivity(true);
+      let targetDate: Date;
+      if (activityTimerMode === "countdown") {
+        const mins = Number(activityTimerMinutes) || 30;
+        targetDate = new Date(Date.now() + mins * 60 * 1000);
+      } else {
+        if (!activityTimerDate) {
+          setNotification({ type: "error", message: "Please select a publication date and time." });
+          return;
+        }
+        targetDate = new Date(activityTimerDate);
+        if (targetDate.getTime() <= Date.now()) {
+          setNotification({ type: "error", message: "Scheduled time must be in the future." });
+          return;
+        }
+      }
+
+      const iso = targetDate.toISOString();
+      await scheduleContentActivity(selectedActivity.id, iso, activityTimerTimezone || "UTC");
+
+      const diff = Math.max(0, Math.floor((targetDate.getTime() - Date.now()) / 1000));
+      setActivityTimerEnd(iso);
+      setActivityTimerRemaining(diff);
+
+      try {
+        localStorage.setItem(
+          `activity_timer_${selectedActivity.id}`,
+          JSON.stringify({
+            activityId: selectedActivity.id,
+            endTime: iso,
+            timezone: activityTimerTimezone,
+            autoPublish: activityTimerAutoPublish,
+          })
+        );
+      } catch {
+        // localStorage errors ignored
+      }
+
+      setActivityTimerModalOpen(false);
+      setNotification({
+        type: "success",
+        message: `Activity timer set for “${selectedActivity.title}”! Scheduled release for ${targetDate.toLocaleTimeString()} (${targetDate.toLocaleDateString()}).`,
+      });
+    } catch (err: unknown) {
+      setNotification({
+        type: "error",
+        message: err instanceof Error ? err.message : "Failed to set activity timer.",
+      });
+    } finally {
+      setSchedulingActivity(false);
+    }
+  };
+
+  const handleCancelActivityTimer = async () => {
+    if (!selectedActivity) return;
+    try {
+      await cancelActivitySchedule(selectedActivity.id);
+      try {
+        localStorage.removeItem(`activity_timer_${selectedActivity.id}`);
+      } catch {
+        // ignore
+      }
+      setActivityTimerEnd(null);
+      setActivityTimerRemaining(0);
+      setNotification({
+        type: "success",
+        message: `Activity timer cancelled for “${selectedActivity.title}”.`,
+      });
+    } catch (err: unknown) {
+      setNotification({
+        type: "error",
+        message: err instanceof Error ? err.message : "Failed to cancel activity timer.",
+      });
     }
   };
 
@@ -1023,33 +1210,111 @@ export default function ContentHubClientView({
             </div>
           </div>
 
-          <button
-            onClick={openCreateItem}
-            className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-accent-secondary to-accent-primary text-black font-tech font-bold uppercase tracking-wider text-xs rounded transition-all hover:opacity-90 shadow-[0_0_18px_rgba(255,0,127,0.28)]"
-          >
-            <Plus size={15} />
-            <span>New Content</span>
-          </button>
-          {/* Bulk publish button – publishes all draft items in the current activity */}
-          <button
-            onClick={async () => {
-              startTransition(async () => {
-                try {
-                  await publishAllContentItems(selectedActivity.id);
-                  // Refresh activity items by reloading the page data.
-                  window.location.reload();
-                } catch (err) {
-                  setNotification({ type: "error", message: err instanceof Error ? err.message : "Bulk publish failed" });
-                }
-              });
-            }}
-            className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-accent-primary to-accent-secondary text-black font-tech font-bold uppercase tracking-wider text-xs rounded transition-all hover:opacity-90 shadow-[0_0_18px_rgba(0,255,127,0.28)]"
-          >
-            <Send size={15} />
-            <span>Publish All Drafts</span>
-          </button>
+          <div className="flex flex-wrap items-center gap-3">
+            {/* Activity-Level Timer button */}
+            <button
+              type="button"
+              onClick={() => setActivityTimerModalOpen(true)}
+              className={`inline-flex items-center justify-center gap-2 px-4 py-2.5 border rounded font-tech font-bold uppercase tracking-wider text-xs transition-all ${
+                activityTimerEnd
+                  ? "border-accent-secondary bg-accent-secondary/15 text-accent-secondary shadow-[0_0_15px_rgba(255,0,127,0.3)] hover:bg-accent-secondary/25"
+                  : "border-border-color bg-surface-color text-text-primary hover:border-accent-secondary hover:text-accent-secondary"
+              }`}
+              title="Activity Release Timer"
+            >
+              <Timer size={15} className={activityTimerEnd ? "animate-pulse" : ""} />
+              <span>
+                {activityTimerEnd
+                  ? `Timer: ${formatCountdown(activityTimerRemaining)}`
+                  : "Activity Timer"}
+              </span>
+            </button>
 
+            <button
+              onClick={openCreateItem}
+              className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-accent-secondary to-accent-primary text-black font-tech font-bold uppercase tracking-wider text-xs rounded transition-all hover:opacity-90 shadow-[0_0_18px_rgba(255,0,127,0.28)]"
+            >
+              <Plus size={15} />
+              <span>New Content</span>
+            </button>
+
+            {/* Bulk publish button – publishes all draft items in the current activity */}
+            <button
+              onClick={async () => {
+                startTransition(async () => {
+                  try {
+                    await publishAllContentItems(selectedActivity.id);
+                    // Refresh activity items by reloading the page data.
+                    window.location.reload();
+                  } catch (err) {
+                    setNotification({
+                      type: "error",
+                      message: err instanceof Error ? err.message : "Bulk publish failed",
+                    });
+                  }
+                });
+              }}
+              className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-accent-primary to-accent-secondary text-black font-tech font-bold uppercase tracking-wider text-xs rounded transition-all hover:opacity-90 shadow-[0_0_18px_rgba(0,255,127,0.28)]"
+            >
+              <Send size={15} />
+              <span>Publish All Drafts</span>
+            </button>
+          </div>
         </div>
+
+        {/* Live Activity Countdown Banner when timer is active */}
+        {activityTimerEnd && (
+          <div className="p-4 rounded-xl border border-accent-secondary/50 bg-[#070709] backdrop-blur-md flex flex-col md:flex-row items-center justify-between gap-4 shadow-[0_0_25px_rgba(255,0,127,0.18)]">
+            <div className="flex items-center gap-3.5">
+              <div className="p-3 rounded-xl bg-accent-secondary/15 text-accent-secondary border border-accent-secondary/40 shadow-[0_0_15px_rgba(255,0,127,0.3)]">
+                <Timer size={24} className="animate-pulse text-accent-secondary" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] uppercase font-bold tracking-[2px] text-accent-secondary">
+                    Activity Release Countdown
+                  </span>
+                  <span className="px-2 py-0.5 rounded text-[9px] font-bold uppercase bg-status-success/15 text-status-success border border-status-success/30">
+                    Live
+                  </span>
+                </div>
+                <p className="text-xs text-text-secondary m-0 mt-0.5">
+                  Scheduled release for <span className="text-text-primary font-bold">{selectedActivity.title}</span>.
+                  {activityTimerAutoPublish
+                    ? " All drafts will auto-publish when the countdown reaches 00:00."
+                    : " Timer running (manual publish)."}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3 sm:gap-4">
+              <div className="text-center md:text-right px-4 py-1.5 rounded-lg bg-surface-color-light/40 border border-border-color">
+                <span className="text-[9px] uppercase tracking-widest text-text-secondary block font-bold">
+                  Time Remaining
+                </span>
+                <span className="font-heading text-2xl md:text-3xl tracking-widest text-accent-primary font-bold">
+                  {formatCountdown(activityTimerRemaining)}
+                </span>
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => setActivityTimerModalOpen(true)}
+                  className="px-3 py-1.5 border border-border-color bg-surface-color text-text-secondary hover:text-text-primary rounded text-[10px] uppercase font-bold tracking-wider transition-colors"
+                >
+                  Adjust Timer
+                </button>
+                <button
+                  type="button"
+                  onClick={handleCancelActivityTimer}
+                  className="px-3 py-1.5 border border-status-error/40 text-status-error hover:bg-status-error/15 rounded text-[10px] uppercase font-bold tracking-wider transition-colors"
+                >
+                  Cancel Timer
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         <div className="grid grid-cols-3 gap-3">
           <div className="border border-border-color bg-surface-color/50 rounded p-3">
@@ -1190,21 +1455,6 @@ export default function ContentHubClientView({
                     >
                       <FileJson size={14} />
                     </button>
-                      <button
-                        onClick={() => {
-                          setScheduleItem(item);
-                          // Set default datetime to now + 1 hour for convenience
-                          const defaultDate = new Date(Date.now() + 60 * 60 * 1000);
-                          // datetime-local expects format YYYY-MM-DDTHH:MM
-                          setScheduleDate(defaultDate.toISOString().slice(0,16));
-                          setScheduleTimezone('UTC');
-                          setScheduleModalOpen(true);
-                        }}
-                        className="ml-2 p-2 border border-border-color rounded text-text-secondary hover:text-accent-primary hover:border-accent-primary/50 transition-colors"
-                        title="Schedule publication"
-                      >
-                        <CalendarClock size={14} />
-                      </button>
                      <button
                        onClick={() => togglePublish(item)}
                        disabled={isPending}
@@ -1263,62 +1513,213 @@ export default function ContentHubClientView({
 
       {selectedActivity ? renderWorkspace() : renderHub()}
 
-      {scheduleModalOpen && scheduleItem && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-          <div className="bg-surface-color border border-border-color rounded-lg w-full max-w-md p-6 space-y-4 shadow-2xl">
-            <div className="flex items-start justify-between border-b border-border-color pb-3">
-              <h3 className="font-heading text-lg text-text-primary uppercase m-0">
-                Schedule Publication
-              </h3>
-              <button onClick={() => setScheduleModalOpen(false)} className="text-text-secondary hover:text-text-primary">
+      {activityTimerModalOpen && selectedActivity && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-4">
+          <div className="bg-[#0a0a0c] border border-border-color rounded-xl w-full max-w-lg p-6 space-y-5 shadow-[0_0_50px_rgba(0,0,0,0.8)] text-text-primary">
+            {/* Header */}
+            <div className="flex items-start justify-between border-b border-border-color pb-4">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 rounded-lg bg-accent-secondary/15 border border-accent-secondary/40 text-accent-secondary">
+                  <Timer size={20} />
+                </div>
+                <div>
+                  <h3 className="font-heading text-lg uppercase tracking-wider text-text-primary m-0">
+                    Activity Release Timer
+                  </h3>
+                  <p className="text-xs text-text-secondary m-0 mt-0.5">
+                    Release countdown for all drafts in{" "}
+                    <span className="text-accent-tertiary font-bold">
+                      {selectedActivity.title}
+                    </span>
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setActivityTimerModalOpen(false)}
+                className="text-text-secondary hover:text-text-primary p-1 rounded hover:bg-white/5 transition-colors"
+              >
                 <X size={18} />
               </button>
             </div>
-            <div className="space-y-4">
-              <label className="block text-[10px] uppercase tracking-wider text-text-secondary mb-1.5">
-                Publication Date &amp; Time (UTC)
-              </label>
+
+            {/* Mode selection tabs */}
+            <div className="grid grid-cols-2 gap-2 p-1 bg-surface-color-light/50 border border-border-color rounded-lg">
+              <button
+                type="button"
+                onClick={() => setActivityTimerMode("countdown")}
+                className={`py-2 px-3 rounded text-xs font-bold uppercase tracking-wider transition-all ${
+                  activityTimerMode === "countdown"
+                    ? "bg-accent-secondary text-black shadow-md"
+                    : "text-text-secondary hover:text-text-primary"
+                }`}
+              >
+                Countdown Duration
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setActivityTimerMode("datetime");
+                  if (!activityTimerDate) {
+                    const d = new Date(Date.now() + 60 * 60 * 1000);
+                    setActivityTimerDate(d.toISOString().slice(0, 16));
+                  }
+                }}
+                className={`py-2 px-3 rounded text-xs font-bold uppercase tracking-wider transition-all ${
+                  activityTimerMode === "datetime"
+                    ? "bg-accent-secondary text-black shadow-md"
+                    : "text-text-secondary hover:text-text-primary"
+                }`}
+              >
+                Date &amp; Time
+              </button>
+            </div>
+
+            {/* Countdown Mode Form */}
+            {activityTimerMode === "countdown" ? (
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-[10px] uppercase tracking-wider text-text-secondary mb-2 font-bold">
+                    Select Preset Duration
+                  </label>
+                  <div className="grid grid-cols-4 gap-2">
+                    {[5, 15, 30, 45, 60, 90, 120, 180].map((mins) => (
+                      <button
+                        key={mins}
+                        type="button"
+                        onClick={() => setActivityTimerMinutes(mins)}
+                        className={`py-2 px-2 text-xs font-mono font-bold rounded border transition-all ${
+                          activityTimerMinutes === mins
+                            ? "border-accent-secondary bg-accent-secondary/20 text-accent-secondary shadow-[0_0_10px_rgba(255,0,127,0.2)]"
+                            : "border-border-color bg-surface-color text-text-secondary hover:text-text-primary hover:border-text-secondary"
+                        }`}
+                      >
+                        {mins >= 60 ? `${mins / 60}h` : `${mins}m`}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-[10px] uppercase tracking-wider text-text-secondary mb-1.5 font-bold">
+                    Or Custom Minutes
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="number"
+                      min="1"
+                      max="10080"
+                      value={activityTimerMinutes}
+                      onChange={(e) =>
+                        setActivityTimerMinutes(
+                          Math.max(1, parseInt(e.target.value) || 1)
+                        )
+                      }
+                      className="w-full px-3 py-2.5 bg-surface-color-light border border-border-color rounded text-sm text-text-primary focus:border-accent-secondary outline-none font-mono"
+                      placeholder="30"
+                    />
+                    <span className="absolute right-3 top-2.5 text-xs text-text-secondary">
+                      minutes
+                    </span>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              /* Date & Time Mode Form */
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-[10px] uppercase tracking-wider text-text-secondary mb-1.5 font-bold">
+                    Scheduled Date &amp; Time
+                  </label>
+                  <input
+                    type="datetime-local"
+                    value={activityTimerDate}
+                    onChange={(e) => setActivityTimerDate(e.target.value)}
+                    className="w-full px-3 py-2.5 bg-surface-color-light border border-border-color rounded text-xs text-text-primary focus:border-accent-secondary outline-none font-mono"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[10px] uppercase tracking-wider text-text-secondary mb-1.5 font-bold">
+                    Timezone
+                  </label>
+                  <input
+                    type="text"
+                    value={activityTimerTimezone}
+                    onChange={(e) => setActivityTimerTimezone(e.target.value)}
+                    placeholder="e.g. UTC, Asia/Kolkata"
+                    className="w-full px-3 py-2.5 bg-surface-color-light border border-border-color rounded text-xs text-text-primary focus:border-accent-secondary outline-none"
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Auto-publish checkbox toggle */}
+            <div className="flex items-start gap-3 p-3 rounded-lg border border-border-color/60 bg-surface-color-light/30">
               <input
-                type="datetime-local"
-                value={scheduleDate}
-                onChange={e => setScheduleDate(e.target.value)}
-                className="w-full px-3 py-2.5 bg-surface-color-light border border-border-color rounded text-xs text-text-primary focus:border-accent-secondary outline-none"
+                type="checkbox"
+                id="activityAutoPublishToggle"
+                checked={activityTimerAutoPublish}
+                onChange={(e) => setActivityTimerAutoPublish(e.target.checked)}
+                className="mt-0.5 h-4 w-4 rounded border-border-color accent-accent-secondary cursor-pointer"
               />
-              <label className="block text-[10px] uppercase tracking-wider text-text-secondary mb-1.5">
-                Timezone
+              <label
+                htmlFor="activityAutoPublishToggle"
+                className="text-xs text-text-primary cursor-pointer select-none"
+              >
+                <span className="font-bold block">
+                  Auto-publish when timer reaches zero
+                </span>
+                <span className="text-[11px] text-text-secondary block mt-0.5">
+                  Automatically publish all {selectedActivity.draft_count} draft
+                  item(s) in this activity upon completion.
+                </span>
               </label>
-              <input
-                type="text"
-                value={scheduleTimezone}
-                onChange={e => setScheduleTimezone(e.target.value)}
-                placeholder="e.g. UTC"
-                className="w-full px-3 py-2.5 bg-surface-color-light border border-border-color rounded text-xs text-text-primary focus:border-accent-secondary outline-none"
-              />
-              <div className="flex justify-end gap-2">
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex items-center justify-between pt-3 border-t border-border-color">
+              {activityTimerEnd ? (
                 <button
                   type="button"
-                  onClick={() => setScheduleModalOpen(false)}
-                  className="px-4 py-2 border border-border-color text-text-secondary text-xs uppercase font-bold rounded hover:text-text-primary"
+                  onClick={handleCancelActivityTimer}
+                  className="px-3 py-2 border border-status-error/40 text-status-error hover:bg-status-error/15 text-xs uppercase font-bold rounded transition-colors"
                 >
-                  Cancel
+                  Cancel Active Timer
+                </button>
+              ) : (
+                <div />
+              )}
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setActivityTimerModalOpen(false)}
+                  className="px-4 py-2 border border-border-color text-text-secondary text-xs uppercase font-bold rounded hover:text-text-primary transition-colors"
+                >
+                  Close
                 </button>
                 <button
                   type="button"
-                  onClick={async () => {
-                    if (!scheduleItem) return;
-                    try {
-                      const iso = new Date(scheduleDate).toISOString();
-                      await scheduleContentItem(scheduleItem.id, iso, scheduleTimezone || 'UTC');
-                      setNotification({ type: 'success', message: `Scheduled “${scheduleItem.title}” for ${new Date(iso).toLocaleString()}.` });
-                      setScheduleModalOpen(false);
-                      setScheduleItem(null);
-                    } catch (e) {
-                      setNotification({ type: 'error', message: e instanceof Error ? e.message : 'Failed to schedule.' });
-                    }
-                  }}
-                  className="px-4 py-2 bg-gradient-to-r from-accent-secondary to-accent-primary text-black text-xs uppercase font-bold rounded hover:opacity-90"
+                  disabled={schedulingActivity}
+                  onClick={handleStartActivityTimer}
+                  className="inline-flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-accent-secondary to-accent-primary text-black text-xs uppercase font-bold rounded hover:opacity-90 transition-all shadow-[0_0_15px_rgba(255,0,127,0.3)] disabled:opacity-50"
                 >
-                  Schedule
+                  {schedulingActivity ? (
+                    <>
+                      <Loader2 size={14} className="animate-spin" />
+                      <span>Saving...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Timer size={14} />
+                      <span>
+                        {activityTimerEnd
+                          ? "Update Timer"
+                          : "Start Activity Timer"}
+                      </span>
+                    </>
+                  )}
                 </button>
               </div>
             </div>

@@ -1564,6 +1564,122 @@ export async function scheduleContentItem(
   return data as ContentScheduledPublicationRow;
 }
 
+export async function scheduleContentActivity(
+  activityId: string,
+  scheduledAt: string,
+  timezone = "UTC"
+) {
+  const { user } = await requireAdmin();
+  const scheduledDate = new Date(scheduledAt);
+  if (Number.isNaN(scheduledDate.getTime())) {
+    throw new Error("Enter a valid publication date and time.");
+  }
+  if (scheduledDate.getTime() <= Date.now()) {
+    throw new Error("Scheduled publication must be in the future.");
+  }
+
+  const { data: rawRows, error } = await supabaseAdmin
+    .from("problem_statements")
+    .select("id, status, resource_links");
+
+  if (error) {
+    throw new Error(`Failed to load activity items: ${error.message}`);
+  }
+
+  const items = (rawRows || [])
+    .filter((row) => {
+      const marker = getItemMarker(row.resource_links);
+      return marker?.activity_id === activityId;
+    })
+    .filter((row) => normalizeStatus(row.status) !== "published");
+
+  let scheduledCount = 0;
+  for (const item of items) {
+    await supabaseAdmin
+      .from("content_scheduled_publications")
+      .delete()
+      .eq("item_id", item.id)
+      .eq("status", "pending");
+
+    const { error: insErr } = await supabaseAdmin
+      .from("content_scheduled_publications")
+      .insert({
+        item_id: item.id,
+        scheduled_at: scheduledDate.toISOString(),
+        timezone: timezone.trim() || "UTC",
+        status: "pending",
+        created_by: user.id,
+      });
+
+    if (!insErr) {
+      scheduledCount++;
+    }
+  }
+
+  await writeAudit({
+    statementId: activityId,
+    action: "scheduled",
+    previousStatus: "draft",
+    newStatus: "scheduled",
+    userId: user.id,
+    details: {
+      activity_id: activityId,
+      scheduled_at: scheduledDate.toISOString(),
+      timezone: timezone.trim() || "UTC",
+      scheduled_count: scheduledCount,
+    },
+  });
+
+  revalidateHub();
+  return {
+    scheduledCount,
+    scheduledAt: scheduledDate.toISOString(),
+    message: `Scheduled ${scheduledCount} draft item${
+      scheduledCount === 1 ? "" : "s"
+    } for publication at ${scheduledDate.toLocaleString()}.`,
+  };
+}
+
+export async function cancelActivitySchedule(activityId: string) {
+  const { user } = await requireAdmin();
+  const { data: rawRows } = await supabaseAdmin
+    .from("problem_statements")
+    .select("id, resource_links");
+
+  const itemIds = (rawRows || [])
+    .filter((row) => {
+      const marker = getItemMarker(row.resource_links);
+      return marker?.activity_id === activityId;
+    })
+    .map((row) => row.id);
+
+  if (itemIds.length > 0) {
+    await supabaseAdmin
+      .from("content_scheduled_publications")
+      .update({
+        status: "cancelled",
+        executed_at: new Date().toISOString(),
+      })
+      .in("item_id", itemIds)
+      .eq("status", "pending");
+  }
+
+  await writeAudit({
+    statementId: activityId,
+    action: "cancelled",
+    previousStatus: "scheduled",
+    newStatus: "draft",
+    userId: user.id,
+    details: {
+      activity_id: activityId,
+      cancelled_items_count: itemIds.length,
+    },
+  });
+
+  revalidateHub();
+  return { success: true };
+}
+
 export async function cancelScheduledPublication(publicationId: string) {
   const { user } = await requireAdmin();
   const { data: schedule, error } = await supabaseAdmin
