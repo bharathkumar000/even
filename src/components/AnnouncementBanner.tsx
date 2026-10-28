@@ -34,6 +34,11 @@ export default function AnnouncementBanner({
   const [isExpanded, setIsExpanded] = useState(false);
   const [dismissedIds, setDismissedIds] = useState<string[]>([]);
   const [lastRefreshed, setLastRefreshed] = useState<Date>(new Date());
+  const [isMounted, setIsMounted] = useState(false);
+
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
 
   // Keep state synced with server props
   useEffect(() => {
@@ -187,7 +192,7 @@ export default function AnnouncementBanner({
           <div className="truncate">
             <div className="flex items-center gap-2 flex-wrap">
               <span className="text-[10px] uppercase font-bold tracking-wider px-1.5 py-0.2 border bg-surface-color font-mono">
-                {latest.priority.toUpperCase()} BROADCAST
+                {(latest.priority || "normal").toUpperCase()} BROADCAST
               </span>
 
               {isPinned && (
@@ -197,7 +202,7 @@ export default function AnnouncementBanner({
                 </span>
               )}
 
-              {publishedDate && (
+              {isMounted && publishedDate && (
                 <span className="text-[10px] text-text-secondary font-mono flex items-center gap-1">
                   <Clock size={10} />
                   {new Date(publishedDate).toLocaleDateString([], {
