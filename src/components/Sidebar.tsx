@@ -14,7 +14,8 @@ export default function Sidebar() {
     { href: '/admin/evaluations', icon: Gavel, label: 'Judges Portal' },
     { href: '/team/submission', icon: Users, label: 'Participants Portal' },
     { href: '/event-flow', icon: Calendar, label: 'Event Flow' },
-    { href: '/event-details', icon: Settings, label: 'Event Details' }
+    { href: '/event-details', icon: Settings, label: 'Event Details' },
+    { href: '/admin/settings', icon: Settings, label: 'Settings' },
   ];
 
   return (
@@ -23,7 +24,7 @@ export default function Sidebar() {
         {/* Top Center Logo */}
         <div className="mb-3.5 relative flex items-center justify-center">
           <Image
-            src="/ivc-gear-logo.png"
+            src="/ivc-logo-transparent.png"
             alt="Innovators & Visionaries Club Logo"
             width={72}
             height={72}
@@ -35,7 +36,7 @@ export default function Sidebar() {
         {/* Portal Heading Below Logo */}
         <div className="flex flex-col items-center">
           <h2 className="font-heading text-[1.4rem] tracking-[2px] m-0 text-text-primary uppercase animate-flicker leading-tight">
-            Vice Verse Portal
+            Eventra Portal
           </h2>
           <p className="font-tech text-xs text-accent-secondary m-0 font-bold tracking-[1.5px] uppercase mt-1">
             Ideathon Console

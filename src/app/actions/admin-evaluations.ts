@@ -4,11 +4,13 @@ import { requireAdmin } from "@/lib/auth/admin";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { EvaluationOverrideSchema } from "@/lib/validations/admin";
 import { z } from "zod";
+import { validateCsrfToken, CSRF_CONSTANTS } from "@/lib/csrf-server";
 
 export type EvaluationOverrideInput = z.infer<typeof EvaluationOverrideSchema>;
 
-export async function overrideEvaluationStatus(data: EvaluationOverrideInput) {
+export async function overrideEvaluationStatus(data: EvaluationOverrideInput & { [CSRF_CONSTANTS.HEADER_NAME]?: string }) {
   const { user } = await requireAdmin();
+  await validateCsrfToken(data[CSRF_CONSTANTS.HEADER_NAME] || null);
   const validated = EvaluationOverrideSchema.parse(data);
 
   // 1. Fetch current evaluation record for audit diffing

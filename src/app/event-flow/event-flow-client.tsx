@@ -59,14 +59,14 @@ export default function EventFlow() {
   return (
     <>
       <div className="animate-fade-in relative">
-        <header className="flex justify-between items-start mb-6">
+        <header className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
           <div>
-            <h1 className="text-text-primary text-[3rem] font-heading tracking-[2px] leading-[1.1] uppercase m-0 mb-2">Event Flow</h1>
-            <p className="text-text-secondary leading-[1.6] m-0">Manage and track the schedule for Vice Verse 1.0.</p>
+            <h1 className="text-text-primary text-2xl sm:text-3xl md:text-[3rem] font-heading tracking-[2px] leading-[1.1] uppercase m-0 mb-2">Event Flow</h1>
+            <p className="text-text-secondary text-xs sm:text-sm leading-[1.6] m-0">Manage and track the schedule for Eventra 1.0.</p>
           </div>
-          <div className="flex items-center gap-3">
-            <button className="inline-flex items-center justify-center gap-2 px-6 py-3 font-bold font-tech uppercase tracking-[1px] cursor-pointer transition-all duration-200 border-none text-base bg-accent-primary text-black hover:bg-accent-primary-hover hover:shadow-[0_0_15px_rgba(251,200,21,0.4)] animate-glow" onClick={() => openModal()}>
-              <Plus size={18} /> Add Schedule Item
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3 w-full sm:w-auto">
+            <button className="flex-1 sm:flex-none inline-flex items-center justify-center gap-2 px-4 sm:px-6 py-2.5 sm:py-3 font-bold font-tech uppercase tracking-[1px] cursor-pointer transition-all duration-200 border-none text-xs sm:text-base bg-accent-primary text-black hover:bg-accent-primary-hover hover:shadow-[0_0_15px_rgba(251,200,21,0.4)] animate-glow" onClick={() => openModal()}>
+              <Plus size={16} /> Add Schedule Item
             </button>
             <SignOutButton variant="button" label="Sign Out" />
           </div>
@@ -80,20 +80,20 @@ export default function EventFlow() {
               <p className="text-text-secondary">No items in schedule. Add one to get started.</p>
             )}
             {schedule.map((item, index) => (
-              <div key={item.id} className="flex gap-6 mb-6" style={{ opacity: item.status === 'completed' ? 0.6 : 1 }}>
-                <div className={`w-[120px] flex items-center gap-2 ${item.status === 'active' ? 'text-accent-primary font-bold' : 'text-text-secondary font-normal'}`}>
+              <div key={item.id} className="flex flex-col sm:flex-row gap-3 sm:gap-6 mb-6" style={{ opacity: item.status === 'completed' ? 0.6 : 1 }}>
+                <div className={`sm:w-[120px] flex items-center gap-2 shrink-0 ${item.status === 'active' ? 'text-accent-primary font-bold' : 'text-text-secondary font-normal'}`}>
                   <Clock size={16} />
-                  {item.time}
+                  <span>{item.time}</span>
                 </div>
                 
-                <div className="relative flex flex-col items-center">
+                <div className="hidden sm:flex relative flex-col items-center">
                   <div className={`w-4 h-4 rounded-full z-[2] ${item.status === 'active' ? 'bg-accent-primary border-2 border-accent-primary shadow-[0_0_10px_var(--accent-primary)]' : item.status === 'completed' ? 'bg-status-success border-2 border-status-success shadow-none' : 'bg-surface-color-light border-2 border-border-color shadow-none'}`}></div>
                   {index < schedule.length - 1 && (
                     <div className={`w-0.5 h-full absolute top-4 z-[1] ${item.status === 'completed' ? 'bg-status-success' : 'bg-border-color'}`}></div>
                   )}
                 </div>
                 
-                <div className={`flex-1 p-4 rounded-lg -mt-3 flex justify-between items-start ${item.status === 'active' ? 'bg-[rgba(251,200,21,0.1)] border border-[rgba(251,200,21,0.3)]' : 'bg-transparent border border-transparent'}`}>
+                <div className={`flex-1 p-3.5 sm:p-4 rounded-lg sm:-mt-3 flex justify-between items-start gap-3 ${item.status === 'active' ? 'bg-[rgba(251,200,21,0.1)] border border-[rgba(251,200,21,0.3)]' : 'bg-surface-color-light/20 sm:bg-transparent border border-border-color sm:border-transparent'}`}>
                   <div>
                     <h3 className="m-0 mb-2 text-[1.1rem] text-text-primary font-heading tracking-[2px] leading-[1.1] uppercase">
                       {item.title}

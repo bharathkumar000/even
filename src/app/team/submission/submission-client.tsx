@@ -7,7 +7,7 @@ import {
   AlertCircle,
 } from "lucide-react";
 import { upsertTeamSubmission } from "@/app/actions/team-submission";
-import { uploadPresentationFile } from "@/app/actions/upload-deliverable";
+
 import SubmissionForm from "@/components/team/SubmissionForm";
 
 export interface ActiveRoundInfo {
@@ -37,20 +37,22 @@ export default function TeamSubmissionClientView({
   currentSubmission,
   isLocked,
   isLeader,
+  finalHoursOpen,
 }: {
   teamId: string;
   activeRound: ActiveRoundInfo | null;
   currentSubmission: CurrentSubmissionInfo | null;
   isLocked: boolean;
   isLeader: boolean;
+  finalHoursOpen: boolean;
 }) {
   const [problemStatement, setProblemStatement] = useState(currentSubmission?.problem_statement || "");
   const [problemDescription, setProblemDescription] = useState(currentSubmission?.problem_description || "");
   const [proposedSolution, setProposedSolution] = useState(currentSubmission?.proposed_solution || "");
   const [solutionDescription, setSolutionDescription] = useState(currentSubmission?.solution_description || "");
   const [pptUrl, setPptUrl] = useState(currentSubmission?.ppt_url || "");
-  const [pptFileName, setPptFileName] = useState("");
-  const [fileUploading, setFileUploading] = useState(false);
+
+
   const [githubUrl, setGithubUrl] = useState(currentSubmission?.github_url || "");
   const [pitchDeckUrl, setPitchDeckUrl] = useState(currentSubmission?.pitch_deck_url || "");
   const [prototypeUrl, setPrototypeUrl] = useState(currentSubmission?.prototype_url || "");
@@ -60,26 +62,7 @@ export default function TeamSubmissionClientView({
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  const handleFileUpload = async (file: File) => {
-    setErrorMsg(null);
-    setSuccessMsg(null);
-    setFileUploading(true);
 
-    try {
-      const formData = new FormData();
-      formData.append("team_id", teamId);
-      formData.append("file", file);
-
-      const res = await uploadPresentationFile(formData);
-      setPptUrl(res.fileUrl);
-      setPptFileName(res.fileName);
-      setSuccessMsg(`File "${res.fileName}" uploaded successfully! Complete any remaining fields and click "Submit Deliverables" below.`);
-    } catch (err: unknown) {
-      setErrorMsg(err instanceof Error ? err.message : "File upload failed");
-    } finally {
-      setFileUploading(false);
-    }
-  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -109,7 +92,7 @@ export default function TeamSubmissionClientView({
     }
 
     if (!pptUrl) {
-      setErrorMsg("Please upload your presentation file (.ppt, .pptx, .pdf, or .docx) before submitting.");
+      setErrorMsg("Please provide a Canva PPT link before submitting.");
       return;
     }
 
@@ -142,6 +125,14 @@ export default function TeamSubmissionClientView({
 
   return (
     <div className="space-y-6">
+      {/* Final Hours locked notice */}
+      {!finalHoursOpen && (
+        <div className="p-4 bg-status-warning/15 border border-status-warning text-status-warning font-tech text-sm rounded">
+          <h2 className="text-2xl font-heading text-status-warning mb-2">Project Submission Is Not Open Yet</h2>
+          <p>Final project submission will become available when the event administrator opens the Final Hours window.</p>
+        </div>
+      )}
+
       {/* Round & Lock Status Header */}
       <div className="glass-panel p-4 border border-border-color flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
@@ -197,9 +188,6 @@ export default function TeamSubmissionClientView({
         onProposedSolutionChange={setProposedSolution}
         onSolutionDescriptionChange={setSolutionDescription}
         pptUrl={pptUrl}
-        pptFileName={pptFileName}
-        fileUploading={fileUploading}
-        onFileSelect={handleFileUpload}
         githubUrl={githubUrl}
         pitchDeckUrl={pitchDeckUrl}
         prototypeUrl={prototypeUrl}

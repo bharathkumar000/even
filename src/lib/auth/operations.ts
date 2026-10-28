@@ -21,7 +21,7 @@ export async function requireOperationsRole() {
     (user.user_metadata?.role as string | undefined) ||
     (user.app_metadata?.role as string | undefined);
 
-  if (metaRole && ["admin", "staff", "organizer"].includes(metaRole)) {
+  if (metaRole && ["admin", "staff", "organizer", "spoc"].includes(metaRole)) {
     return { user, profile: { role: metaRole } };
   }
 
@@ -32,7 +32,7 @@ export async function requireOperationsRole() {
     .maybeSingle();
 
   const role = profile?.role || metaRole;
-  if (!role || !["admin", "staff", "organizer"].includes(role)) {
+  if (!role || !["admin", "staff", "organizer", "spoc"].includes(role)) {
     throw new Error("Forbidden: Operational staff privileges required");
   }
 
