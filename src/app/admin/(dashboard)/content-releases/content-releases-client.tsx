@@ -546,7 +546,7 @@ export default function ContentHubClientView({
     return () => clearInterval(interval);
   }, [activityTimerEnd, selectedActivityId, activityTimerAutoPublish]);
 
-  const handleStartActivityTimer = async () => {
+  const handleStartActivityTimer = async (mode: "reading" | "selection") => {
     if (!selectedActivity) return;
     try {
       setSchedulingActivity(true);
@@ -567,7 +567,8 @@ export default function ContentHubClientView({
       }
 
       const iso = targetDate.toISOString();
-      await scheduleContentActivity(selectedActivity.id, iso, activityTimerTimezone || "UTC");
+       const enableSelection = mode === "selection";
+       await scheduleContentActivity(selectedActivity.id, iso, activityTimerTimezone || "UTC", enableSelection);
 
       const diff = Math.max(0, Math.floor((targetDate.getTime() - Date.now()) / 1000));
       setActivityTimerEnd(iso);
@@ -1718,7 +1719,7 @@ export default function ContentHubClientView({
                 <button
                   type="button"
                   disabled={schedulingActivity}
-                  onClick={handleStartActivityTimer}
+                  onClick={() => handleStartActivityTimer('reading')}
                   className="inline-flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-accent-secondary to-accent-primary text-black text-xs uppercase font-bold rounded hover:opacity-90 transition-all shadow-[0_0_15px_rgba(255,0,127,0.3)] disabled:opacity-50"
                 >
                   {schedulingActivity ? (
@@ -1729,11 +1730,25 @@ export default function ContentHubClientView({
                   ) : (
                     <>
                       <Timer size={14} />
-                      <span>
-                        {activityTimerEnd
-                          ? "Update Timer"
-                          : "Start Activity Timer"}
-                      </span>
+                      <span>PUBLISH FOR READING</span>
+                    </>
+                  )}
+                </button>
+                <button
+                  type="button"
+                  disabled={schedulingActivity}
+                  onClick={() => handleStartActivityTimer('selection')}
+                  className="inline-flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-accent-primary to-accent-secondary text-black text-xs uppercase font-bold rounded hover:opacity-90 transition-all shadow-[0_0_15px_rgba(255,0,127,0.3)] disabled:opacity-50"
+                >
+                  {schedulingActivity ? (
+                    <>
+                      <Loader2 size={14} className="animate-spin" />
+                      <span>Saving...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Timer size={14} />
+                      <span>PUBLISH FOR SELECTION</span>
                     </>
                   )}
                 </button>
