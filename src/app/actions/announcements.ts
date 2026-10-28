@@ -121,9 +121,20 @@ function mapAnnouncementToDb(data: Partial<any>): Record<string, any> {
   if (data.scheduled_at !== undefined) row.scheduled_at = data.scheduled_at || null;
   if (data.published_at !== undefined) row.published_at = data.published_at || null;
   if (data.expires_at !== undefined) row.expires_at = data.expires_at || null;
-  if (data.attachment_url !== undefined) row.attachment_url = data.attachment_url || null;
-  if (data.attachment_name !== undefined) row.attachment_name = data.attachment_name || null;
-  if (data.resource_links !== undefined) row.resource_links = data.resource_links;
+
+  // Store attachments/links in actual 'attachments' JSON column
+  if (data.attachments !== undefined) {
+    row.attachments = data.attachments;
+  } else if (data.attachment_url || data.attachment_name || (data.resource_links && data.resource_links.length > 0)) {
+    const list: any[] = [];
+    if (data.attachment_url) {
+      list.push({ url: data.attachment_url, name: data.attachment_name || "Attachment" });
+    }
+    if (Array.isArray(data.resource_links)) {
+      list.push(...data.resource_links);
+    }
+    row.attachments = list;
+  }
 
   return row;
 }

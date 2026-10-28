@@ -306,6 +306,14 @@ export default function AnnouncementsClient({
     });
   };
 
+  const cleanErrorMsg = (err: any, fallback: string) => {
+    const msg = err?.message || "";
+    if (!msg || msg.includes("Minified React error #441") || msg.includes("Server Components render")) {
+      return `${fallback}: Database or authorization error. Please refresh and check your permissions.`;
+    }
+    return msg;
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -327,7 +335,7 @@ export default function AnnouncementsClient({
       closeModal();
       fetchData();
     } catch (err: any) {
-      setNotification({ type: "error", message: err.message || "Operation failed" });
+      setNotification({ type: "error", message: cleanErrorMsg(err, "Failed to save announcement") });
     }
   };
 
@@ -337,7 +345,7 @@ export default function AnnouncementsClient({
       setNotification({ type: "success", message: "Announcement published" });
       fetchData();
     } catch (err: any) {
-      setNotification({ type: "error", message: err.message || "Failed to publish" });
+      setNotification({ type: "error", message: cleanErrorMsg(err, "Failed to publish") });
     }
   };
 
@@ -347,7 +355,7 @@ export default function AnnouncementsClient({
       setNotification({ type: "success", message: "Announcement unpublished" });
       fetchData();
     } catch (err: any) {
-      setNotification({ type: "error", message: err.message || "Failed to unpublish" });
+      setNotification({ type: "error", message: cleanErrorMsg(err, "Failed to unpublish") });
     }
   };
 
@@ -357,7 +365,7 @@ export default function AnnouncementsClient({
       setNotification({ type: "success", message: "Announcement archived" });
       fetchData();
     } catch (err: any) {
-      setNotification({ type: "error", message: err.message || "Failed to archive" });
+      setNotification({ type: "error", message: cleanErrorMsg(err, "Failed to archive") });
     }
   };
 
@@ -375,7 +383,7 @@ export default function AnnouncementsClient({
       setConfirmAction(null);
       fetchData();
     } catch (err: any) {
-      setNotification({ type: "error", message: err.message || "Failed to delete" });
+      setNotification({ type: "error", message: cleanErrorMsg(err, "Failed to delete") });
     }
   };
 
