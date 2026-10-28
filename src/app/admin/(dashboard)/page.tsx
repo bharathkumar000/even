@@ -13,8 +13,9 @@ import {
 import Link from "next/link";
 import StatCard from "@/components/admin/StatCard";
 import AdminAnnouncementModal from "@/components/admin/AdminAnnouncementModal";
-
+import AnnouncementBanner from "@/components/AnnouncementBanner";
 import { getActiveAnnouncements } from "@/app/actions/announcements";
+import type { AnnouncementItem } from "@/app/actions/announcements";
 
 export const dynamic = "force-dynamic";
 
@@ -30,6 +31,7 @@ export default async function AdminDashboardPage() {
   let activeRounds = 0;
   let pendingEvaluations = 0;
   let isResultsPublished = false;
+  let announcements: AnnouncementItem[] = [];
 
   try {
     const [
@@ -39,7 +41,7 @@ export default async function AdminDashboardPage() {
       roundsRes,
       evalsRes,
       resultsRes,
-
+      announcementsRes,
     ] = await Promise.allSettled([
       supabaseAdmin.from("profiles").select("role"),
       supabaseAdmin.from("team_members").select("id", { count: "exact", head: true }).eq("role", "leader"),
@@ -47,7 +49,7 @@ export default async function AdminDashboardPage() {
       supabaseAdmin.from("evaluation_rounds").select("id", { count: "exact", head: true }).eq("status", "open"),
       supabaseAdmin.from("evaluations").select("id", { count: "exact", head: true }).eq("status", "draft"),
       supabaseAdmin.from("event_results").select("is_published").eq("is_published", true).limit(1),
-      getActiveAnnouncements("all"),
+      getActiveAnnouncements("admin"),
     ]);
 
     if (profilesRes.status === "fulfilled" && Array.isArray(profilesRes.value.data)) {
@@ -76,6 +78,9 @@ export default async function AdminDashboardPage() {
       resultsRes.value.data.length > 0
     ) {
       isResultsPublished = true;
+    }
+    if (announcementsRes.status === "fulfilled" && Array.isArray(announcementsRes.value)) {
+      announcements = announcementsRes.value;
     }
 
   } catch (err) {
@@ -119,9 +124,6 @@ export default async function AdminDashboardPage() {
 
   return (
     <div className="space-y-12 animate-fade-in font-tech max-w-7xl mx-auto pb-12">
-      {/* Live Announcement Banner (Only shows when an actual announcement exists) */}
-
-
       {/* Header Banner: Actions at the top row */}
       <div className="space-y-4 border-b border-border-color pb-8">
         {/* Top Control Bar */}
@@ -156,6 +158,13 @@ export default async function AdminDashboardPage() {
           </p>
         </div>
       </div>
+
+      {/* Official Announcements Section (Placed prominently near top of main content) */}
+      <AnnouncementBanner
+        announcements={announcements}
+        portalName="Admin HQ"
+        audience="admin"
+      />
 
       {/* SECTION 1: User Roles Overview (Interactive Stat Cards) */}
       <section className="space-y-6">

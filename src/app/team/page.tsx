@@ -23,7 +23,7 @@ import {
 import { requireAuthenticatedTeamUser } from "@/lib/auth/team";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { getActiveAnnouncements } from "@/app/actions/announcements";
-
+import AnnouncementBanner from "@/components/AnnouncementBanner";
 import PitchAlertListener from "@/components/team/PitchAlertListener";
 import { getTeamRegistrationByEmail } from "@/lib/googleSheet";
 
@@ -180,6 +180,13 @@ export default async function TeamDashboardPage() {
           </div>
         </div>
       </div>
+
+      {/* Broadcast Announcements */}
+      <AnnouncementBanner
+        announcements={announcements}
+        portalName="Team Portal"
+        audience="teams"
+      />
 
       {/* Primary KPI Row: Team Status & Submission State */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">

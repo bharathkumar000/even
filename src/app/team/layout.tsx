@@ -80,10 +80,10 @@ export default async function TeamLayout({
   const teamData = (memberRow as any)?.teams;
   const effectiveTeam = teamData ?? googleTeam;
   const teamName = effectiveTeam?.name || "Innovation Team";
-  const track = effectiveTeam?.track || "Innovation";
   const leaderName = effectiveTeam?.leader_name || user.email?.split("@")[0] || "Leader";
 
-  return (
+  const track = effectiveTeam?.track || "Innovation";
+      return (
     <div className="flex flex-col md:flex-row min-h-screen md:h-screen md:overflow-hidden bg-[#050508] text-text-primary">
       <div className="hidden md:block">
         <TeamSidebar
