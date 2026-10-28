@@ -67,13 +67,6 @@ export default async function AdminLayout({
     redirect(`${authorizedUrl}?access_denied=1&portal=admin`);
   }
 
-  // 2. Checkpoint Verification: Admin passcode verification required
-  // const cookieStore = await cookies();
-  // const isVerified = cookieStore.get("admin_session_verified")?.value === "true";
-  // if (!isVerified) {
-  //   redirect("/admin/login");
-  // }
-
   return (
     <div className="flex flex-col md:flex-row min-h-screen md:h-screen md:overflow-hidden bg-[#050508]">
       <AdminSidebar />

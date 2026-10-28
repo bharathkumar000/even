@@ -1,6 +1,7 @@
 import ScannerClientView from "./scanner-client";
 import { getActiveAnnouncements } from "@/app/actions/announcements";
 import AnnouncementBanner from "@/components/AnnouncementBanner";
+
 import RealtimeRoundsListener from "@/components/RealtimeRoundsListener";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { Layers, ArrowRight } from "lucide-react";
@@ -25,7 +26,7 @@ export default async function OpsScannerPage() {
   return (
     <div className="space-y-6 animate-fade-in font-tech">
       <RealtimeRoundsListener channelName="ops-scanner-rounds" />
-      <AnnouncementBanner announcements={announcements} portalName="Operations Desk" />
+
 
       <div className="border-b border-border-color pb-6 flex flex-col md:flex-row md:items-end justify-between gap-4">
         <div>
@@ -71,6 +72,12 @@ export default async function OpsScannerPage() {
           </Link>
         )}
       </div>
+
+      <AnnouncementBanner
+        announcements={announcements}
+        portalName="Ops Desk"
+        audience="ops"
+      />
 
       <ScannerClientView />
     </div>
