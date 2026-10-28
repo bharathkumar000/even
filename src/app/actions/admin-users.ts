@@ -3,8 +3,10 @@
 import { requireAdmin } from "@/lib/auth/admin";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { revalidatePath } from "next/cache";
+import { validateCsrfToken, CSRF_CONSTANTS } from "@/lib/csrf-server";
+import { checkServerActionRateLimit, SERVER_ACTION_RATE_LIMITS } from "@/lib/rate-limit";
 
-export type AllowedUserRole = "admin" | "judge" | "staff" | "participant" | "leader";
+export type AllowedUserRole = "admin" | "judge" | "staff" | "spoc" | "participant" | "leader";
 
 export interface UserProfileItem {
   id: string;
@@ -14,6 +16,7 @@ export interface UserProfileItem {
   created_at: string;
   team_name?: string | null;
   team_role?: string | null;
+  username?: string | null;
 }
 
 export interface MemberHierarchyItem {
@@ -182,42 +185,57 @@ export async function getUsersList(params?: {
       return [];
     }
 
-    // Fetch team memberships for team name display
+    // Fetch team memberships and auth users metadata in parallel
     const userIds = profiles.map((p) => p.id);
-  const { data: teamMembers } = await supabaseAdmin
-    .from("team_members")
-    .select(`
-      user_id,
-      role,
-      teams (
-        name,
-        code
-      )
-    `)
-    .in("user_id", userIds);
+    const [teamMembersRes, authUsersRes] = await Promise.all([
+      supabaseAdmin
+        .from("team_members")
+        .select(`
+          user_id,
+          role,
+          teams (
+            name,
+            code
+          )
+        `)
+        .in("user_id", userIds),
+      supabaseAdmin.auth.admin.listUsers({ perPage: 1000 }).catch(() => ({ data: null })),
+    ]);
 
-  const teamMap = new Map<string, { team_name: string; team_role: string }>();
-  if (teamMembers) {
-    (
-      teamMembers as unknown as Array<{
-        user_id: string;
-        role?: string | null;
-        teams?:
-          | { name?: string | null; code?: string | null }
-          | Array<{ name?: string | null; code?: string | null }>
-          | null;
-      }>
-    ).forEach((tm) => {
-      const teamObj = Array.isArray(tm.teams) ? tm.teams[0] : tm.teams;
-      teamMap.set(tm.user_id, {
-        team_name: teamObj?.name || teamObj?.code || "",
-        team_role: tm.role || "",
+    const teamMembers = teamMembersRes.data;
+    const teamMap = new Map<string, { team_name: string; team_role: string }>();
+    if (teamMembers) {
+      (
+        teamMembers as unknown as Array<{
+          user_id: string;
+          role?: string | null;
+          teams?:
+            | { name?: string | null; code?: string | null }
+            | Array<{ name?: string | null; code?: string | null }>
+            | null;
+        }>
+      ).forEach((tm) => {
+        const teamObj = Array.isArray(tm.teams) ? tm.teams[0] : tm.teams;
+        teamMap.set(tm.user_id, {
+          team_name: teamObj?.name || teamObj?.code || "",
+          team_role: tm.role || "",
+        });
       });
-    });
-  }
+    }
+
+    const usernameMap = new Map<string, string>();
+    if (authUsersRes?.data?.users) {
+      for (const u of authUsersRes.data.users) {
+        if (u.user_metadata?.username) {
+          usernameMap.set(u.id, String(u.user_metadata.username));
+        }
+      }
+    }
 
     return profiles.map((p) => {
       const tm = teamMap.get(p.id);
+      const explicitUsername = usernameMap.get(p.id);
+      const fallbackUsername = p.email ? p.email.split("@")[0] : null;
       return {
         id: p.id,
         email: p.email,
@@ -226,15 +244,16 @@ export async function getUsersList(params?: {
         created_at: p.created_at,
         team_name: tm?.team_name || null,
         team_role: tm?.team_role || null,
+        username: explicitUsername || fallbackUsername,
       };
     });
   };
 
   const timeoutPromise = new Promise<UserProfileItem[]>((resolve) =>
     setTimeout(() => {
-      console.warn("getUsersList timed out after 3000ms. Returning fallback empty list.");
+      console.warn("getUsersList timed out after 8000ms. Returning fallback empty list.");
       resolve([]);
-    }, 3000)
+    }, 8000)
   );
 
   return Promise.race([fetchUsers(), timeoutPromise]);
@@ -243,8 +262,22 @@ export async function getUsersList(params?: {
 export async function updateUserRole(data: {
   userId: string;
   newRole: AllowedUserRole;
+  [CSRF_CONSTANTS.HEADER_NAME]?: string;
 }) {
   const { user } = await requireAdmin();
+  await validateCsrfToken(data[CSRF_CONSTANTS.HEADER_NAME] || null);
+
+  // Rate limiting for role changes
+  const rateLimit = checkServerActionRateLimit(
+    user.id,
+    "userRoleChange",
+    SERVER_ACTION_RATE_LIMITS.userRoleChange.maxRequests,
+    SERVER_ACTION_RATE_LIMITS.userRoleChange.windowMs
+  );
+
+  if (!rateLimit.success) {
+    throw new Error(`Too many role change attempts. Please try again in ${rateLimit.retryAfter} seconds.`);
+  }
 
   if (user.id === data.userId && data.newRole !== "admin") {
     throw new Error("Security Alert: You cannot demote your own active admin account.");
@@ -311,27 +344,44 @@ export async function createUser(data: {
   password: string;
   fullName: string;
   role: AllowedUserRole;
+  username?: string;
+  [CSRF_CONSTANTS.HEADER_NAME]?: string;
 }) {
   const { user } = await requireAdmin();
+  await validateCsrfToken(data[CSRF_CONSTANTS.HEADER_NAME] || null);
 
   if (!data.email || !data.password || !data.fullName) {
     throw new Error("Missing required user fields (email, password, full name).");
   }
 
-  if (data.password.length < 6) {
-    throw new Error("Password must be at least 6 characters.");
+  // Strong password requirements
+  if (data.password.length < 12) {
+    throw new Error("Password must be at least 12 characters.");
+  }
+  if (!/[A-Z]/.test(data.password)) {
+    throw new Error("Password must contain at least one uppercase letter.");
+  }
+  if (!/[a-z]/.test(data.password)) {
+    throw new Error("Password must contain at least one lowercase letter.");
+  }
+  if (!/[0-9]/.test(data.password)) {
+    throw new Error("Password must contain at least one number.");
+  }
+  if (!/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(data.password)) {
+    throw new Error("Password must contain at least one special character.");
   }
 
   // 1. Create account via Supabase Admin API
-  const { data: newUser, error: createError } = await supabaseAdmin.auth.admin.createUser({
-    email: data.email,
-    password: data.password,
-    email_confirm: true,
-    user_metadata: {
-      full_name: data.fullName,
-      role: data.role,
-    },
-  });
+    const { data: newUser, error: createError } = await supabaseAdmin.auth.admin.createUser({
+      email: data.email,
+      password: data.password,
+      email_confirm: true,
+      user_metadata: {
+        full_name: data.fullName,
+        role: data.role,
+        username: data.username,
+      },
+    });
 
   if (createError || !newUser?.user) {
     throw new Error(`Failed to create user: ${createError?.message || "Unknown error"}`);
@@ -374,8 +424,9 @@ export async function createUser(data: {
   return { success: true, user: newUser.user };
 }
 
-export async function deleteUser(userId: string) {
+export async function deleteUser(userId: string, csrfToken?: string) {
   const { user } = await requireAdmin();
+  await validateCsrfToken(csrfToken || null);
 
   if (user.id === userId) {
     throw new Error("Security Alert: You cannot delete your own admin account.");
@@ -420,410 +471,6 @@ export async function deleteUser(userId: string) {
   return { success: true };
 }
 
-export async function seedMockDataServerAction() {
-  await requireAdmin();
-
-  const results: {
-    judges: number;
-    spocs: number;
-    staff: number;
-    teams: number;
-    participants: number;
-    assignments: number;
-  } = {
-    judges: 0,
-    spocs: 0,
-    staff: 0,
-    teams: 0,
-    participants: 0,
-    assignments: 0,
-  };
-
-  const DEFAULT_PASSWORD = "Password@123";
-
-  // 1. Create or ensure 5 Judges
-  const mockJudges = [
-    { name: "Dr. Arvind Raman", email: "judge.arvind@ivc.pulse" },
-    { name: "Prof. Neha Deshmukh", email: "judge.neha@ivc.pulse" },
-    { name: "Vikramaditya Roy", email: "judge.vikram@ivc.pulse" },
-    { name: "Dr. Shreya Sengupta", email: "judge.shreya@ivc.pulse" },
-    { name: "Karthik Venkatesh", email: "judge.karthik@ivc.pulse" },
-  ];
-
-  const createdJudgeIds: string[] = [];
-
-  for (const j of mockJudges) {
-    try {
-      const { data: userRes } = await supabaseAdmin.auth.admin.createUser({
-        email: j.email,
-        password: DEFAULT_PASSWORD,
-        email_confirm: true,
-        user_metadata: { full_name: j.name, role: "judge" },
-      });
-      const uid = userRes?.user?.id;
-      if (uid) {
-        await supabaseAdmin.from("profiles").upsert({
-          id: uid,
-          email: j.email,
-          full_name: j.name,
-          role: "judge",
-        });
-        createdJudgeIds.push(uid);
-        results.judges++;
-      } else {
-        const { data: existing } = await supabaseAdmin
-          .from("profiles")
-          .select("id")
-          .eq("email", j.email)
-          .maybeSingle();
-        if (existing) createdJudgeIds.push(existing.id);
-      }
-    } catch (e) {
-      console.warn("Judge seed note:", e);
-    }
-  }
-
-  // 2. Create or ensure 5 Club Members (Staff / Organizers)
-  const mockStaff = [
-    { name: "Aman Verma", email: "staff.aman@ivc.pulse" },
-    { name: "Pooja Hegde", email: "staff.pooja@ivc.pulse" },
-    { name: "Rohan Kulkarni", email: "staff.rohan@ivc.pulse" },
-    { name: "Tanvi Mathur", email: "staff.tanvi@ivc.pulse" },
-    { name: "Siddharth Rao", email: "staff.siddharth@ivc.pulse" },
-  ];
-
-  for (const s of mockStaff) {
-    try {
-      const { data: userRes } = await supabaseAdmin.auth.admin.createUser({
-        email: s.email,
-        password: DEFAULT_PASSWORD,
-        email_confirm: true,
-        user_metadata: { full_name: s.name, role: "staff" },
-      });
-      const uid = userRes?.user?.id;
-      if (uid) {
-        await supabaseAdmin.from("profiles").upsert({
-          id: uid,
-          email: s.email,
-          full_name: s.name,
-          role: "staff",
-        });
-        results.staff++;
-      }
-    } catch (e) {
-      console.warn("Staff seed note:", e);
-    }
-  }
-
-  // 3. Create or ensure 5 SPOCs in public.spocs
-  const mockSpocs = [
-    {
-      name: "Dr. Rajesh Iyer",
-      email: "spoc.iyer@ivc.pulse",
-      phone: "+91 98765 43210",
-      department: "Computer Science & AI",
-      notes: "Primary coordinator for AI & IoT Tracks",
-    },
-    {
-      name: "Prof. Sunita Reddy",
-      email: "spoc.sunita@ivc.pulse",
-      phone: "+91 98450 12345",
-      department: "Electronics & Robotics",
-      notes: "Coordination lead for Robotics & Automation",
-    },
-    {
-      name: "Ananya Mukherjee",
-      email: "spoc.ananya@ivc.pulse",
-      phone: "+91 98123 45678",
-      department: "Cyber Security & Networks",
-      notes: "Point of contact for Web3 & FinTech Tracks",
-    },
-    {
-      name: "Gaurav Malhotra",
-      email: "spoc.gaurav@ivc.pulse",
-      phone: "+91 99234 56789",
-      department: "Data Engineering",
-      notes: "Logistics liaison for HealthTech Teams",
-    },
-    {
-      name: "Meera Krishnan",
-      email: "spoc.meera@ivc.pulse",
-      phone: "+91 97345 67890",
-      department: "Product Design & Innovation",
-      notes: "Support lead for Sustainability & CleanTech",
-    },
-  ];
-
-  const createdSpocIds: string[] = [];
-
-  for (const sp of mockSpocs) {
-    try {
-      const { data: existing } = await supabaseAdmin
-        .from("spocs")
-        .select("id")
-        .eq("email", sp.email)
-        .maybeSingle();
-
-      if (existing) {
-        createdSpocIds.push(existing.id);
-      } else {
-        const { data: inserted } = await supabaseAdmin
-          .from("spocs")
-          .insert([sp])
-          .select("id")
-          .single();
-        if (inserted) {
-          createdSpocIds.push(inserted.id);
-          results.spocs++;
-        }
-      }
-    } catch (e) {
-      console.warn("SPOC seed note:", e);
-    }
-  }
-
-  // 4. Create 20 Teams (3 members each: 1 team lead + 2 members = 60 participants)
-  const tracks = ["Artificial Intelligence", "Web3 & FinTech", "Healthcare & BioTech", "CleanTech & Green Energy", "Robotics & IoT"];
-
-  const teamSpecs = [
-    { name: "Team Hyperion", code: "HYP-01", track: tracks[0], leader: "Aryan Sharma", m1: "Ishan Bose", m2: "Rhea Sen" },
-    { name: "Team CyberValkyrie", code: "CVK-02", track: tracks[1], leader: "Diya Nair", m1: "Kabir Mehta", m2: "Anika Das" },
-    { name: "Team NeuralForge", code: "NRF-03", track: tracks[0], leader: "Aditya Patil", m1: "Tanmay Joshi", m2: "Tara Pillai" },
-    { name: "Team QuantumPulse", code: "QPL-04", track: tracks[2], leader: "Kavya Menon", m1: "Harsh Vardhan", m2: "Simran Kaur" },
-    { name: "Team BioGenesis", code: "BGN-05", track: tracks[2], leader: "Zaid Khan", m1: "Pooja Sundaram", m2: "Chirag Sethi" },
-    { name: "Team SolisCore", code: "SLC-06", track: tracks[3], leader: "Mehul Parekh", m1: "Sneha George", m2: "Aarav Gupta" },
-    { name: "Team TerraSync", code: "TRX-07", track: tracks[3], leader: "Prisha Kapoor", m1: "Dhruv Mittal", m2: "Ananya Roy" },
-    { name: "Team RoboSpectra", code: "RBS-08", track: tracks[4], leader: "Varun Nambiar", m1: "Aditi Bhatia", m2: "Nikhil Chawla" },
-    { name: "Team MechaniQ", code: "MCQ-09", track: tracks[4], leader: "Sanya Bansal", m1: "Gautam Rao", m2: "Kiran Mazumdar" },
-    { name: "Team ChainMatrix", code: "CMX-10", track: tracks[1], leader: "Rishi Agarwal", m1: "Meera Nanda", m2: "Devendra Paul" },
-    { name: "Team CogniFlow", code: "CGF-11", track: tracks[0], leader: "Naveen Tewari", m1: "Shreya Ghoshal", m2: "Samir Kochhar" },
-    { name: "Team ApexAegis", code: "APX-12", track: tracks[1], leader: "Kunal Shah", m1: "Vidya Balan", m2: "Rahul Dravid" },
-    { name: "Team VitaNova", code: "VTN-13", track: tracks[2], leader: "Sunil Chhetri", m1: "Dipika Pallikal", m2: "Abhinav Bindra" },
-    { name: "Team EcoVanguard", code: "ECV-14", track: tracks[3], leader: "PV Sindhu", m1: "Neeraj Chopra", m2: "Saina Nehwal" },
-    { name: "Team AeroKinetic", code: "ARK-15", track: tracks[4], leader: "Mary Kom", m1: "Mirabai Chanu", m2: "Bajrang Punia" },
-    { name: "Team SynthMind", code: "SYM-16", track: tracks[0], leader: "Viswanathan Anand", m1: "Gukesh D", m2: "Praggnanandhaa R" },
-    { name: "Team CryptoSentinels", code: "CSN-17", track: tracks[1], leader: "Rohan Bopanna", m1: "Sania Mirza", m2: "Leander Paes" },
-    { name: "Team OmniHealth", code: "OMH-18", track: tracks[2], leader: "Manika Batra", m1: "Sharath Kamal", m2: "Sathiyan G" },
-    { name: "Team HydroNexus", code: "HDX-19", track: tracks[3], leader: "Aditi Ashok", m1: "Anirban Lahiri", m2: "Jeev Milkha" },
-    { name: "Team AutoBotix", code: "ABX-20", track: tracks[4], leader: "Dipa Karmakar", m1: "Hima Das", m2: "Dutee Chand" },
-  ];
-
-  const createdTeamIds: string[] = [];
-
-  for (let idx = 0; idx < teamSpecs.length; idx++) {
-    const spec = teamSpecs[idx];
-    try {
-      // 4a. Create or find Team
-      let teamId: string | null = null;
-      const { data: existingTeam } = await supabaseAdmin
-        .from("teams")
-        .select("id")
-        .eq("name", spec.name)
-        .maybeSingle();
-
-      if (existingTeam) {
-        teamId = existingTeam.id;
-      } else {
-        const { data: newTeam } = await supabaseAdmin
-          .from("teams")
-          .insert([
-            {
-              name: spec.name,
-              code: spec.code,
-              track: spec.track,
-              leader_name: spec.leader,
-              status: "active",
-            },
-          ])
-          .select("id")
-          .single();
-        if (newTeam) {
-          teamId = newTeam.id;
-          results.teams++;
-        }
-      }
-
-      if (!teamId) continue;
-      createdTeamIds.push(teamId);
-
-      // 4b. Create Team Leader
-      const leadEmail = `lead.team${idx + 1}@ivc.pulse`;
-      let leadUserId: string | null = null;
-      try {
-        const { data: uRes } = await supabaseAdmin.auth.admin.createUser({
-          email: leadEmail,
-          password: DEFAULT_PASSWORD,
-          email_confirm: true,
-          user_metadata: { full_name: spec.leader, role: "leader" },
-        });
-        leadUserId = uRes?.user?.id || null;
-      } catch {
-        const { data: exU } = await supabaseAdmin
-          .from("profiles")
-          .select("id")
-          .eq("email", leadEmail)
-          .maybeSingle();
-        leadUserId = exU?.id || null;
-      }
-
-      if (leadUserId) {
-        await supabaseAdmin.from("profiles").upsert({
-          id: leadUserId,
-          email: leadEmail,
-          full_name: spec.leader,
-          role: "leader",
-        });
-        await supabaseAdmin.from("team_members").upsert(
-          {
-            team_id: teamId,
-            user_id: leadUserId,
-            role: "leader",
-            name: spec.leader,
-            email: leadEmail,
-          },
-          { onConflict: "team_id,user_id" }
-        );
-        results.participants++;
-      }
-
-      // 4c. Create Member 1
-      const m1Email = `member1.team${idx + 1}@ivc.pulse`;
-      let m1UserId: string | null = null;
-      try {
-        const { data: uRes } = await supabaseAdmin.auth.admin.createUser({
-          email: m1Email,
-          password: DEFAULT_PASSWORD,
-          email_confirm: true,
-          user_metadata: { full_name: spec.m1, role: "participant" },
-        });
-        m1UserId = uRes?.user?.id || null;
-      } catch {
-        const { data: exU } = await supabaseAdmin
-          .from("profiles")
-          .select("id")
-          .eq("email", m1Email)
-          .maybeSingle();
-        m1UserId = exU?.id || null;
-      }
-
-      if (m1UserId) {
-        await supabaseAdmin.from("profiles").upsert({
-          id: m1UserId,
-          email: m1Email,
-          full_name: spec.m1,
-          role: "participant",
-        });
-        await supabaseAdmin.from("team_members").upsert(
-          {
-            team_id: teamId,
-            user_id: m1UserId,
-            role: "member",
-            name: spec.m1,
-            email: m1Email,
-          },
-          { onConflict: "team_id,user_id" }
-        );
-        results.participants++;
-      }
-
-      // 4d. Create Member 2
-      const m2Email = `member2.team${idx + 1}@ivc.pulse`;
-      let m2UserId: string | null = null;
-      try {
-        const { data: uRes } = await supabaseAdmin.auth.admin.createUser({
-          email: m2Email,
-          password: DEFAULT_PASSWORD,
-          email_confirm: true,
-          user_metadata: { full_name: spec.m2, role: "participant" },
-        });
-        m2UserId = uRes?.user?.id || null;
-      } catch {
-        const { data: exU } = await supabaseAdmin
-          .from("profiles")
-          .select("id")
-          .eq("email", m2Email)
-          .maybeSingle();
-        m2UserId = exU?.id || null;
-      }
-
-      if (m2UserId) {
-        await supabaseAdmin.from("profiles").upsert({
-          id: m2UserId,
-          email: m2Email,
-          full_name: spec.m2,
-          role: "participant",
-        });
-        await supabaseAdmin.from("team_members").upsert(
-          {
-            team_id: teamId,
-            user_id: m2UserId,
-            role: "member",
-            name: spec.m2,
-            email: m2Email,
-          },
-          { onConflict: "team_id,user_id" }
-        );
-        results.participants++;
-      }
-    } catch (e) {
-      console.warn(`Team ${spec.name} seed note:`, e);
-    }
-  }
-
-  // 5. Automatically Allot Teams evenly across the 5 SPOCs (4 teams per SPOC)
-  if (createdSpocIds.length >= 5 && createdTeamIds.length >= 20) {
-    try {
-      for (let sIdx = 0; sIdx < 5; sIdx++) {
-        const spocId = createdSpocIds[sIdx];
-        const assignedTeams = createdTeamIds.slice(sIdx * 4, sIdx * 4 + 4);
-        for (const tId of assignedTeams) {
-          await supabaseAdmin.from("team_spoc_assignments").upsert(
-            {
-              spoc_id: spocId,
-              team_id: tId,
-              allotted_at: new Date().toISOString(),
-            },
-            { onConflict: "team_id" }
-          );
-        }
-      }
-    } catch (e) {
-      console.warn("SPOC allotment note:", e);
-    }
-  }
-
-  // 6. Automatically Assign Teams evenly across the 5 Judges (4 teams per Judge)
-  if (createdJudgeIds.length >= 5 && createdTeamIds.length >= 20) {
-    try {
-      for (let jIdx = 0; jIdx < 5; jIdx++) {
-        const judgeId = createdJudgeIds[jIdx];
-        const assignedTeams = createdTeamIds.slice(jIdx * 4, jIdx * 4 + 4);
-        for (const tId of assignedTeams) {
-          await supabaseAdmin.from("judge_assignments").upsert(
-            {
-              judge_id: judgeId,
-              team_id: tId,
-              assigned_at: new Date().toISOString(),
-            },
-            { onConflict: "judge_id,team_id" }
-          );
-          results.assignments++;
-        }
-      }
-    } catch (e) {
-      console.warn("Judge assignment note:", e);
-    }
-  }
-
-  revalidatePath("/admin");
-  revalidatePath("/admin/users");
-  revalidatePath("/admin/assignments");
-  revalidatePath("/admin/spoc");
-  revalidatePath("/judge");
-  revalidatePath("/team");
-
-  return { success: true, results };
-}
 
 export interface BulkImportUserRecord {
   full_name: string;
@@ -833,10 +480,24 @@ export interface BulkImportUserRecord {
   team_name?: string;
   team_code?: string;
   track?: string;
+  username?: string;
 }
 
-export async function bulkImportUsers(records: BulkImportUserRecord[]) {
+export async function bulkImportUsers(records: BulkImportUserRecord[], csrfToken?: string) {
   const { user } = await requireAdmin();
+  await validateCsrfToken(csrfToken || null);
+
+  // Rate limiting for bulk operations
+  const rateLimit = checkServerActionRateLimit(
+    user.id,
+    "bulkOperations",
+    SERVER_ACTION_RATE_LIMITS.bulkOperations.maxRequests,
+    SERVER_ACTION_RATE_LIMITS.bulkOperations.windowMs
+  );
+
+  if (!rateLimit.success) {
+    throw new Error(`Too many bulk import attempts. Please try again in ${rateLimit.retryAfter} seconds.`);
+  }
 
   if (!records || records.length === 0) {
     throw new Error("No records provided for import.");
@@ -849,18 +510,45 @@ export async function bulkImportUsers(records: BulkImportUserRecord[]) {
     errors: [] as string[],
   };
 
-  const DEFAULT_PASSWORD = "Password@123";
+  // Generate a strong random password for users without one
+  function generateStrongPassword(): string {
+    const upper = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    const lower = "abcdefghijklmnopqrstuvwxyz";
+    const numbers = "0123456789";
+    const special = "!@#$%^&*()_+-=[]{}|;:,.<>?";
+    const all = upper + lower + numbers + special;
+    
+    let password = "";
+    password += upper[Math.floor(Math.random() * upper.length)];
+    password += lower[Math.floor(Math.random() * lower.length)];
+    password += numbers[Math.floor(Math.random() * numbers.length)];
+    password += special[Math.floor(Math.random() * special.length)];
+    
+    for (let i = 4; i < 16; i++) {
+      password += all[Math.floor(Math.random() * all.length)];
+    }
+    
+    // Shuffle
+    return password.split("").sort(() => Math.random() - 0.5).join("");
+  }
 
   for (const item of records) {
-    const email = item.email?.trim().toLowerCase();
-    const fullName = item.full_name?.trim();
+     const rawEmail = item.email?.trim().toLowerCase();
+     const username = item.username?.trim();
+     const loginEmail = rawEmail
+       ? rawEmail
+       : username
+       ? (username.includes("@") ? username.toLowerCase() : `${username.toLowerCase()}@ivc.pulse`)
+       : null;
+     const email = loginEmail;
+     const fullName = item.full_name?.trim();
     let rawRole = item.role?.toLowerCase();
     // Security fencing: Nobody can be assigned as admin through CSV import
     if (rawRole === "admin") {
       rawRole = "participant";
     }
     const role: AllowedUserRole = (rawRole as AllowedUserRole) || "participant";
-    const password = item.password?.trim() || DEFAULT_PASSWORD;
+    const password = item.password?.trim() || generateStrongPassword();
 
     if (!email || !fullName) {
       results.errors.push(`Row skipped: missing email or full name (${JSON.stringify(item)})`);
@@ -890,7 +578,7 @@ export async function bulkImportUsers(records: BulkImportUserRecord[]) {
         if (userId) {
           try {
             await supabaseAdmin.auth.admin.updateUserById(userId, {
-              user_metadata: { full_name: fullName, role },
+               user_metadata: { full_name: fullName, role, username: item.username },
             });
           } catch {
             // Ignore metadata sync error
@@ -905,7 +593,7 @@ export async function bulkImportUsers(records: BulkImportUserRecord[]) {
             email,
             password,
             email_confirm: true,
-            user_metadata: { full_name: fullName, role },
+             user_metadata: { full_name: fullName, role, username: item.username },
           });
 
           if (createAuthErr) throw createAuthErr;

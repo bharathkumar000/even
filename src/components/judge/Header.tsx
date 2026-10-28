@@ -16,7 +16,7 @@ export default function JudgeHeader() {
             Judges Evaluation Hub
           </h2>
           <p className="font-tech text-[11px] text-accent-secondary m-0 font-bold tracking-[1px] uppercase">
-            Vice Verse 1.0 // Official Scoring Portal
+            Eventra 1.0 // Official Scoring Portal
           </p>
         </div>
       </div>
@@ -28,14 +28,6 @@ export default function JudgeHeader() {
         >
           <ClipboardList size={16} className="text-accent-tertiary" />
           <span>Assigned Teams</span>
-        </Link>
-
-        <Link
-          href="/"
-          className="flex items-center gap-1.5 font-tech text-xs uppercase font-bold text-text-secondary hover:text-text-primary transition-colors pl-4 border-l border-border-color"
-        >
-          <ArrowLeft size={14} />
-          <span>Portal Home</span>
         </Link>
 
         <SignOutButton variant="pill" label="Sign Out" />

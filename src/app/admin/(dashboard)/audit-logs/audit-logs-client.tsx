@@ -80,7 +80,7 @@ export default function AuditLogsClientView({ initialLogs }: { initialLogs: Audi
                   <tr key={log.id} className="hover:bg-surface-color-light/20 transition-colors">
                     <td className="p-3 text-text-secondary whitespace-nowrap flex items-center gap-1.5">
                       <Clock size={13} className="text-accent-secondary" />
-                      {new Date(log.created_at || Date.now()).toLocaleString()}
+                      {log.created_at ? new Date(log.created_at).toLocaleString() : "Unknown time"}
                     </td>
                     <td className="p-3 font-bold text-accent-tertiary">
                       {log.action}

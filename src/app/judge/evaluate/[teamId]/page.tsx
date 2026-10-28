@@ -1,11 +1,6 @@
 import { supabaseAdmin } from "@/lib/supabase/admin";
-import EvaluateClientView, {
-  TeamDetail,
-  SubmissionDetail,
-  ActiveRoundDetail,
-  CriterionDetail,
-  ExistingEvaluationDetail,
-} from "./evaluate-client";
+import { slugify } from "@/lib/utils";
+import EvaluateClientView, { TeamDetail, SubmissionDetail, ActiveRoundDetail, CriterionDetail, ExistingEvaluationDetail } from "./evaluate-client";
 
 export const dynamic = "force-dynamic";
 
@@ -14,7 +9,28 @@ export default async function EvaluateTeamPage({
 }: {
   params: Promise<{ teamId: string }>;
 }) {
-  const { teamId } = await params;
+  const { teamId: slugOrId } = await params;
+
+  // Resolve the actual team ID. If the segment looks like a UUID we use it directly; otherwise we treat it as a slug derived from the team name.
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  let teamId = slugOrId;
+  if (!uuidRegex.test(slugOrId)) {
+    // Assume it's a slug; attempt to find the associated team ID.
+    try {
+      const teamsRes = await supabaseAdmin.from("teams").select("id, name");
+      if (teamsRes.data) {
+        const match = teamsRes.data.find((t: any) => slugify(t.name) === slugOrId);
+        if (match) {
+          teamId = match.id;
+        } else {
+          console.error(`No team found for slug: ${slugOrId}`);
+        }
+      }
+    } catch (e) {
+      console.error("Error resolving team slug to ID:", e);
+    }
+  }
+
 
   let team: TeamDetail | null = null;
   let submission: SubmissionDetail | null = null;

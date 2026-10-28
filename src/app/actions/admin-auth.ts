@@ -3,8 +3,14 @@
 import { cookies } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
+import { validateCsrfToken, CSRF_CONSTANTS } from "@/lib/csrf-server";
+import { checkServerActionRateLimit, SERVER_ACTION_RATE_LIMITS } from "@/lib/rate-limit";
 
-export async function verifyAdminPasscode(passcode: string) {
+export async function verifyAdminPasscode(passcode: string, csrfToken?: string) {
+  if (csrfToken) {
+    await validateCsrfToken(csrfToken);
+  }
+
   // 1. Verify user is authenticated and has admin profile role
   const supabase = await createClient();
   const {
@@ -26,6 +32,18 @@ export async function verifyAdminPasscode(passcode: string) {
     throw new Error("Forbidden: Admin privileges required.");
   }
 
+  // Rate limiting for admin passcode attempts
+  const rateLimit = checkServerActionRateLimit(
+    user.id,
+    "adminPasscode",
+    SERVER_ACTION_RATE_LIMITS.adminPasscode.maxRequests,
+    SERVER_ACTION_RATE_LIMITS.adminPasscode.windowMs
+  );
+
+  if (!rateLimit.success) {
+    throw new Error(`Too many passcode attempts. Please try again in ${rateLimit.retryAfter} seconds.`);
+  }
+
   const cookieStore = await cookies();
   const failedAttemptsCookie = cookieStore.get("admin_failed_attempts")?.value;
   const currentFailedAttempts = failedAttemptsCookie ? parseInt(failedAttemptsCookie, 10) : 0;
@@ -41,18 +59,18 @@ export async function verifyAdminPasscode(passcode: string) {
   }
 
   // 3. Verify passcode against environment secret
-  const expectedSecret = process.env.ADMIN_PORTAL_SECRET || "2026VICEVERSE@IVC";
+  const expectedSecret = process.env.ADMIN_PORTAL_SECRET || "098890";
 
   if (passcode === expectedSecret) {
     // Reset failed attempts counter
     cookieStore.delete("admin_failed_attempts");
 
-    // Set verified session cookie (HttpOnly, SameSite=Lax, 8 hours expiration)
+    // Set verified session cookie (HttpOnly, SameSite=Lax, 10 minutes expiration)
     cookieStore.set("admin_session_verified", "true", {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "lax",
-      maxAge: 8 * 60 * 60, // 8 hours
+      maxAge: 10 * 60, // 10 minutes
       path: "/",
     });
 
@@ -122,11 +140,14 @@ export async function getAdminTrialStatus() {
     };
   }
 
-  // TEMPORARILY BYPASS FOR TESTING: Auto-treat admin as verified
+  // Check if admin passcode has been verified
+  const cookieStore = await cookies();
+  const isPasscodeVerified = cookieStore.get("admin_session_verified")?.value === "true";
+
   return {
     authenticated: true,
     isAdmin: true,
-    verified: true,
+    verified: isPasscodeVerified,
     isLocked: false,
     attemptsRemaining: 3,
   };

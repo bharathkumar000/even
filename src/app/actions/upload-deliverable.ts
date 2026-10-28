@@ -5,8 +5,9 @@ import { supabaseAdmin } from "@/lib/supabase/admin";
 
 const ALLOWED_EXTENSIONS = [".ppt", ".pptx", ".pdf", ".doc", ".docx"];
 const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
+const SIGNED_URL_EXPIRY = 60 * 60 * 24 * 7; // 7 days
 
-export async function uploadPresentationFile(formData: FormData): Promise<{ fileUrl: string; fileName: string }> {
+export async function uploadPresentationFile(formData: FormData): Promise<{ fileUrl: string; fileName: string; signedUrl: string }> {
   const teamId = formData.get("team_id") as string;
   const file = formData.get("file") as File | null;
 
@@ -43,7 +44,7 @@ export async function uploadPresentationFile(formData: FormData): Promise<{ file
   if (bucketError || !bucketData) {
     // Attempt auto-create if not present
     await supabaseAdmin.storage.createBucket(bucketName, {
-      public: true,
+      public: false,
       fileSizeLimit: 52428800,
     });
   }
@@ -63,12 +64,19 @@ export async function uploadPresentationFile(formData: FormData): Promise<{ file
     throw new Error(`Failed to upload file to storage: ${uploadError.message}`);
   }
 
-  const { data: publicUrlData } = supabaseAdmin.storage
+  // Generate signed URL for private bucket access
+  const { data: signedUrlData, error: signedUrlError } = await supabaseAdmin.storage
     .from(bucketName)
-    .getPublicUrl(filePath);
+    .createSignedUrl(filePath, SIGNED_URL_EXPIRY);
+
+  if (signedUrlError || !signedUrlData?.signedUrl) {
+    console.error("Signed URL creation error:", signedUrlError);
+    throw new Error(`Failed to create signed URL: ${signedUrlError?.message}`);
+  }
 
   return {
-    fileUrl: publicUrlData.publicUrl,
+    fileUrl: signedUrlData.signedUrl,
     fileName,
+    signedUrl: signedUrlData.signedUrl,
   };
 }

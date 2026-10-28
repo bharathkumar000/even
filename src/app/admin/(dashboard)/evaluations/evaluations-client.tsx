@@ -191,7 +191,7 @@ export default function EvaluationsClientView({
                   </td>
                   <td className="p-3">{getStatusBadge(ev.status)}</td>
                   <td className="p-3 text-text-secondary">
-                    {new Date(ev.updated_at || ev.created_at || Date.now()).toLocaleTimeString()}
+                    {ev.updated_at ? new Date(ev.updated_at).toLocaleTimeString() : ev.created_at ? new Date(ev.created_at).toLocaleTimeString() : "—"}
                   </td>
                   <td className="p-3 text-right">
                     <button

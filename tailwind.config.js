@@ -1,10 +1,6 @@
 /** @type {import('tailwindcss').Config} */
 module.exports = {
-  content: [
-    './src/pages/**/*.{js,ts,jsx,tsx,mdx}',
-    './src/components/**/*.{js,ts,jsx,tsx,mdx}',
-    './src/app/**/*.{js,ts,jsx,tsx,mdx}',
-  ],
+  content: ['./src/**/*.{js,ts,jsx,tsx,mdx}'],
   theme: {
     extend: {
       colors: {
@@ -21,19 +17,17 @@ module.exports = {
         'status-success': '#10b981',
         'status-warning': '#FBC815',
         'status-error': '#FF007F',
-        border: "hsl(var(--border))",
-        input: "hsl(var(--input))",
-        ring: "hsl(var(--ring))",
-        background: "hsl(var(--background))",
-        foreground: "hsl(var(--foreground))",
+
       },
       fontFamily: {
-        sans: ['Roboto', 'ui-sans-serif', 'system-ui', '-apple-system', 'BlinkMacSystemFont', '"Segoe UI"', 'sans-serif'],
-        body: ['Rajdhani', 'sans-serif'],
-        heading: ['Orbitron', 'sans-serif'],
-        tech: ['Share Tech Mono', 'monospace'],
-        pricedown: ['Pricedown', 'sans-serif'],
-        roboto: ['Roboto', 'sans-serif'],
+        fredoka: ['var(--font-fredoka)', 'Fredoka', 'Fredoka One', 'sans-serif'],
+        sans: ['var(--font-fredoka)', 'Fredoka', 'Fredoka One', 'sans-serif'],
+        body: ['var(--font-fredoka)', 'Fredoka', 'Fredoka One', 'sans-serif'],
+        heading: ['var(--font-fredoka)', 'Fredoka', 'Fredoka One', 'sans-serif'],
+        tech: ['var(--font-fredoka)', 'Fredoka', 'Fredoka One', 'sans-serif'],
+        mono: ['var(--font-fredoka)', 'Fredoka', 'Fredoka One', 'sans-serif'],
+        pricedown: ['var(--font-fredoka)', 'Fredoka', 'Fredoka One', 'sans-serif'],
+        roboto: ['var(--font-fredoka)', 'Fredoka', 'Fredoka One', 'sans-serif'],
       },
     },
   },

@@ -6,10 +6,12 @@ import {
   SubmitEvaluationSchema,
   type SubmitEvaluationInput,
 } from "@/lib/validations/evaluation";
+import { validateCsrfToken, CSRF_CONSTANTS } from "@/lib/csrf-server";
 
-export async function saveOrSubmitEvaluation(data: SubmitEvaluationInput) {
+export async function saveOrSubmitEvaluation(data: SubmitEvaluationInput & { [CSRF_CONSTANTS.HEADER_NAME]?: string }) {
   // 1. Verify judge authentication & team assignment
   const { user } = await requireActiveJudgeForTeam(data.team_id);
+  await validateCsrfToken(data[CSRF_CONSTANTS.HEADER_NAME] || null);
 
   // 2. Validate input schema
   const validated = SubmitEvaluationSchema.parse(data);

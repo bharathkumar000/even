@@ -21,7 +21,7 @@ export default async function ParticipantsPage() {
     .eq("id", user.id)
     .maybeSingle();
 
-  if (!profile || !["admin", "staff", "organizer"].includes(profile.role)) {
+  if (!profile || !["admin", "staff", "organizer", "spoc"].includes(profile.role)) {
     redirect("/login");
   }
 

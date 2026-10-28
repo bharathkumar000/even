@@ -21,7 +21,7 @@ export default function PartnerLogosBar() {
         <div className="relative flex items-center justify-center shrink-0">
           <div className="absolute inset-0 rounded-full bg-accent-secondary/15 blur-sm pointer-events-none" />
           <Image
-            src="/ivc-gear-logo.png"
+            src="/ivc-logo-transparent.png"
             alt="Innovators & Visionaries Club (IVC) Logo"
             width={34}
             height={34}

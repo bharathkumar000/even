@@ -38,7 +38,7 @@ export async function getRoleRedirectUrl(
   if (metadataRole === "judge") {
     return "/judge";
   }
-  if (metadataRole === "staff" || metadataRole === "organizer") {
+  if (metadataRole === "staff" || metadataRole === "organizer" || metadataRole === "spoc") {
     return "/ops/scanner";
   }
 
@@ -72,8 +72,9 @@ export async function getRoleRedirectUrl(
         return "/admin";
       case "judge":
         return "/judge";
-      case "staff":
-      case "organizer":
+        case "staff":
+        case "organizer":
+        case "spoc":
         return "/ops/scanner";
       case "leader":
       case "participant": {
@@ -86,7 +87,7 @@ export async function getRoleRedirectUrl(
     console.warn("Profile role resolution error, utilizing safe fallback:", err);
     if (metadataRole === "admin") return "/admin";
     if (metadataRole === "judge") return "/judge";
-    if (metadataRole === "staff" || metadataRole === "organizer") return "/ops/scanner";
+    if (metadataRole === "staff" || metadataRole === "organizer" || metadataRole === "spoc") return "/ops/scanner";
     return "/team/submission";
   }
 }

@@ -4,11 +4,13 @@ import { requireAdmin } from "@/lib/auth/admin";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { ResultActionSchema } from "@/lib/validations/admin";
 import { z } from "zod";
+import { validateCsrfToken, CSRF_CONSTANTS } from "@/lib/csrf-server";
 
 export type ResultActionInput = z.infer<typeof ResultActionSchema>;
 
-export async function triggerResultsEngine(data: ResultActionInput) {
+export async function triggerResultsEngine(data: ResultActionInput & { [CSRF_CONSTANTS.HEADER_NAME]?: string }) {
   const { user } = await requireAdmin();
+  await validateCsrfToken(data[CSRF_CONSTANTS.HEADER_NAME] || null);
   const validated = ResultActionSchema.parse(data);
 
   if (validated.action === "recalculate") {
@@ -35,25 +37,51 @@ export async function triggerResultsEngine(data: ResultActionInput) {
       throw new Error(`Failed to fetch evaluations for recalculation: ${evalError.message}`);
     }
 
-    // 2. Aggregate total scores grouped by team_id
-    const teamScoreMap = new Map<string, { totalScore: number; count: number }>();
+    // 2. Aggregate scores grouped by team_id
+    const teamScoresMap = new Map<string, number[]>();
 
     for (const ev of evaluations || []) {
       if (!ev.team_id) continue;
-      const current = teamScoreMap.get(ev.team_id) || { totalScore: 0, count: 0 };
-      teamScoreMap.set(ev.team_id, {
-        totalScore: current.totalScore + (Number(ev.total_score) || 0),
-        count: current.count + 1,
-      });
+      const score = Number(ev.total_score) || 0;
+      if (!teamScoresMap.has(ev.team_id)) {
+        teamScoresMap.set(ev.team_id, []);
+      }
+      teamScoresMap.get(ev.team_id)!.push(score);
     }
 
-    // 3. Upsert results per team
-    const updates = Array.from(teamScoreMap.entries()).map(([team_id, stat]) => ({
+    // 3. Compute stats (standard or Olympic scoring)
+    const computedTeams = Array.from(teamScoresMap.entries()).map(([team_id, scoresList]) => {
+      let finalAvg = 0;
+      let finalTotal = scoresList.reduce((a, b) => a + b, 0);
+
+      if (validated.olympic && scoresList.length >= 3) {
+        // Olympic scoring: drop 1 highest and 1 lowest score
+        const sorted = [...scoresList].sort((a, b) => a - b);
+        const trimmed = sorted.slice(1, -1);
+        const trimmedTotal = trimmed.reduce((a, b) => a + b, 0);
+        finalAvg = trimmedTotal / trimmed.length;
+        finalTotal = trimmedTotal;
+      } else {
+        finalAvg = scoresList.length > 0 ? finalTotal / scoresList.length : 0;
+      }
+
+      return {
+        team_id,
+        total_score: finalTotal,
+        average_score: Math.round(finalAvg * 100) / 100,
+        evaluations_count: scoresList.length,
+      };
+    });
+
+    // 4. Assign rank based on average_score descending
+    computedTeams.sort((a, b) => b.average_score - a.average_score);
+    const updates = computedTeams.map((item, idx) => ({
       event_id: validated.event_id,
-      team_id,
-      total_score: stat.totalScore,
-      average_score: stat.count > 0 ? stat.totalScore / stat.count : 0,
-      evaluations_count: stat.count,
+      team_id: item.team_id,
+      total_score: item.total_score,
+      average_score: item.average_score,
+      evaluations_count: item.evaluations_count,
+      rank: idx + 1,
       updated_at: new Date().toISOString(),
     }));
 

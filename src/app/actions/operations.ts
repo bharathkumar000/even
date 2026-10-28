@@ -7,6 +7,7 @@ import {
   type ScanActionInput,
   type ActionType,
 } from "@/lib/validations/operations";
+import { validateCsrfToken, CSRF_CONSTANTS } from "@/lib/csrf-server";
 
 export interface LiveActivityFeedItem {
   id: string;
@@ -38,46 +39,61 @@ export interface EnrichedActivityLog {
  * Record a single scan action (Registration, Goodies, Lunch, Snacks) for a participant.
  * Prevents duplicates, tracks scanner identity, and auto-rotates the team's QR token.
  */
-export async function recordMemberAction(data: ScanActionInput) {
+export async function recordMemberAction(data: ScanActionInput & { [CSRF_CONSTANTS.HEADER_NAME]?: string }) {
   const { user } = await requireOperationsRole();
+  await validateCsrfToken(data[CSRF_CONSTANTS.HEADER_NAME] || null);
   const validated = ScanActionSchema.parse(data);
 
   // 1. Duplicate check in event_activity_logs with scanner attribution
-  const { data: existingRecord, error: checkError } = await supabaseAdmin
+  // Updated to allow up to 3 claims for lunch and snacks per participant.
+  const { data: existingRecords, error: checkError } = await supabaseAdmin
     .from("event_activity_logs")
     .select("id, created_at, scanned_by")
     .eq("participant_id", validated.participant_id)
-    .eq("action_type", validated.action_type)
-    .maybeSingle();
+    .eq("action_type", validated.action_type);
 
   if (checkError) {
     console.warn("Activity check query notice:", checkError.message);
   }
 
-  if (existingRecord) {
-    let prevScannerName = "another club member";
-    if (existingRecord.scanned_by) {
-      const { data: prevScanner } = await supabaseAdmin
-        .from("profiles")
-        .select("full_name, email")
-        .eq("id", existingRecord.scanned_by)
-        .maybeSingle();
-      if (prevScanner?.full_name) {
-        prevScannerName = prevScanner.full_name;
-      }
+  const existingCount = (existingRecords || []).length;
+
+  if (validated.action_type === "lunch" || validated.action_type === "snacks") {
+    // Allow up to three claims per participant for lunch or snacks.
+    if (existingCount >= 3) {
+      throw new Error(
+        `Maximum ${validated.action_type} claims (3) reached for this participant.`
+      );
     }
+  } else {
+    // For other actions (registration, goodies) only one claim is allowed.
+    if (existingCount > 0) {
+      let prevScannerName = "another club member";
+      const existingRecord = existingRecords?.[0];
+      if (existingRecord && existingRecord.scanned_by) {
+        const { data: prevScanner } = await supabaseAdmin
+          .from("profiles")
+          .select("full_name, email")
+          .eq("id", existingRecord.scanned_by)
+          .maybeSingle();
+        if (prevScanner?.full_name) {
+          prevScannerName = prevScanner.full_name;
+        }
+      }
 
-    const timeStr = new Date(existingRecord.created_at).toLocaleTimeString("en-US", {
-      hour: "2-digit",
-      minute: "2-digit",
-      second: "2-digit",
-      hour12: true,
-    });
+      const timeStr = new Date(existingRecord?.created_at).toLocaleTimeString("en-US", {
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+        hour12: true,
+      });
 
-    throw new Error(
-      `FRAUD BLOCKED: "${validated.action_type.toUpperCase()}" already claimed at ${timeStr} from ${prevScannerName}. Duplicate claim strictly prohibited.`
-    );
+      throw new Error(
+        `FRAUD BLOCKED: "${validated.action_type.toUpperCase()}" already claimed at ${timeStr} from ${prevScannerName}. Duplicate claim strictly prohibited.`
+      );
+    }
   }
+
 
   // 2. Fetch current scanner profile
   const { data: currentScanner } = await supabaseAdmin
@@ -138,8 +154,9 @@ export async function recordMemberAction(data: ScanActionInput) {
 /**
  * Record an action for all eligible members of a team in one click (e.g., Team Kit/Goodies distribution)
  */
-export async function recordTeamBulkAction(teamId: string, actionType: ActionType) {
+export async function recordTeamBulkAction(teamId: string, actionType: ActionType, csrfToken?: string) {
   const { user } = await requireOperationsRole();
+  await validateCsrfToken(csrfToken || null);
 
   if (!teamId) {
     throw new Error("A valid Team ID is required for bulk claim");

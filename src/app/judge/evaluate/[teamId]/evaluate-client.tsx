@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   FileText,
   Github,
@@ -11,10 +11,23 @@ import {
   Save,
   Send,
   ArrowLeft,
+  RotateCcw,
+  Sparkles,
+  Clock,
+  Megaphone,
+  Wifi,
+  WifiOff,
 } from "lucide-react";
 import Link from "next/link";
 import { saveOrSubmitEvaluation } from "@/app/actions/judge-evaluation";
 import ScoringSlider from "@/components/judge/ScoringSlider";
+import PitchTimer from "@/components/judge/PitchTimer";
+import { createClient } from "@/lib/supabase/client";
+import {
+  saveOfflineDraft,
+  getOfflineDraft,
+  deleteOfflineDraft,
+} from "@/lib/offline-storage";
 
 export interface TeamDetail {
   id: string;
@@ -93,8 +106,111 @@ export default function EvaluateClientView({
   const [loading, setLoading] = useState(false);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [draftRestoredMsg, setDraftRestoredMsg] = useState<string | null>(null);
+  const [showTimer, setShowTimer] = useState(false);
+  const [isOnline, setIsOnline] = useState(true);
+  const [pitchCalling, setPitchCalling] = useState(false);
+  const [pitchCallSent, setPitchCallSent] = useState(false);
 
   const isLocked = existingEvaluation?.status === "locked";
+  const draftKey = `ivc_draft_${activeRound?.id || "noround"}_${teamId}`;
+
+  // Check localStorage for timer toggle preference on mount
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const savedTimerPref = localStorage.getItem("ivc_judge_show_timer");
+      if (savedTimerPref === "true") {
+        setShowTimer(true);
+      }
+    } catch {}
+  }, []);
+
+  // Network status detection & offline sync listener
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    setIsOnline(navigator.onLine);
+
+    const handleOnline = () => {
+      setIsOnline(true);
+      // Auto-sync draft to cloud if we have active round and scores
+      if (activeRound?.id) {
+        getOfflineDraft(draftKey).then((saved) => {
+          if (saved?.data?.scores && Object.keys(saved.data.scores).length > 0) {
+            setDraftRestoredMsg("Back online: Ready to sync scores to cloud.");
+          }
+        });
+      }
+    };
+    const handleOffline = () => setIsOnline(false);
+
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
+    return () => {
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
+    };
+  }, [activeRound?.id, draftKey]);
+
+  // Check IndexedDB + localStorage for unsaved drafts on mount if not already submitted
+  useEffect(() => {
+    if (typeof window === "undefined" || isLocked || existingEvaluation?.status === "submitted") return;
+    getOfflineDraft(draftKey).then((saved) => {
+      if (saved && saved.data) {
+        const draftContent = saved.data;
+        if (draftContent.scores && Object.keys(draftContent.scores).length > 0) {
+          setScores(draftContent.scores);
+          if (draftContent.feedback) setFeedback(draftContent.feedback);
+          const timeAgo = Math.round((Date.now() - (saved.savedAt || Date.now())) / 60000);
+          setDraftRestoredMsg(`Recovered offline draft from IndexedDB (${timeAgo < 1 ? "just now" : `${timeAgo}m ago`})`);
+        }
+      }
+    });
+  }, [draftKey, isLocked, existingEvaluation?.status]);
+
+  // Auto-save in-progress draft to IndexedDB and localStorage
+  useEffect(() => {
+    if (typeof window === "undefined" || isLocked || existingEvaluation?.status === "submitted") return;
+    const hasScores = Object.values(scores).some((val) => val > 0);
+    if (hasScores || feedback.trim().length > 0) {
+      saveOfflineDraft(draftKey, {
+        scores,
+        feedback,
+      });
+    }
+  }, [scores, feedback, draftKey, isLocked, existingEvaluation?.status]);
+
+  const clearLocalDraft = async () => {
+    await deleteOfflineDraft(draftKey);
+    setScores(initialScores);
+    setFeedback(existingEvaluation?.feedback || "");
+    setDraftRestoredMsg(null);
+  };
+
+  const callTeamToPitch = async () => {
+    try {
+      setPitchCalling(true);
+      const supabase = createClient();
+      const channel = supabase.channel("team-pitch-alerts");
+      await channel.send({
+        type: "broadcast",
+        event: "pitch_call",
+        payload: {
+          team_id: teamId,
+          team_name: team?.name || `Team ${teamId.slice(0, 8)}`,
+          round_title: activeRound?.title || "Active Round",
+          track: team?.track || "Innovation Track",
+          timestamp: Date.now(),
+        },
+      });
+      setPitchCallSent(true);
+      setTimeout(() => setPitchCallSent(false), 5000);
+    } catch (err) {
+      console.warn("Pitch call broadcast notice:", err);
+    } finally {
+      setPitchCalling(false);
+    }
+  };
 
   const totalScore = criteria.reduce((sum, c) => sum + (scores[c.id] || 0), 0);
   const maxPossibleScore = criteria.reduce((sum, c) => sum + (c.max_marks || 0), 0);
@@ -131,9 +247,14 @@ export default function EvaluateClientView({
         is_draft: isDraft,
       });
 
+      if (!isDraft) {
+        await deleteOfflineDraft(draftKey);
+        setDraftRestoredMsg(null);
+      }
+
       setSuccessMsg(
         isDraft
-          ? "Draft saved successfully."
+          ? "Draft saved successfully to cloud."
           : "Evaluation officially submitted and recorded!"
       );
     } catch (err: unknown) {
@@ -181,6 +302,22 @@ export default function EvaluateClientView({
       </div>
 
       {/* Notifications */}
+      {draftRestoredMsg && (
+        <div className="p-3 bg-accent-secondary/15 border border-accent-secondary text-accent-secondary font-tech text-xs flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <Sparkles size={16} />
+            <span>{draftRestoredMsg}</span>
+          </div>
+          <button
+            onClick={clearLocalDraft}
+            className="flex items-center gap-1 text-[11px] uppercase underline hover:text-text-primary transition-colors"
+          >
+            <RotateCcw size={12} />
+            <span>Discard Draft</span>
+          </button>
+        </div>
+      )}
+
       {successMsg && (
         <div className="p-4 bg-status-success/15 border border-status-success text-status-success font-tech text-xs flex items-center gap-2">
           <CheckCircle2 size={18} />
@@ -193,6 +330,71 @@ export default function EvaluateClientView({
           <span>{errorMsg}</span>
         </div>
       )}
+
+      {/* Pitch Timekeeper & Operations Control Bar */}
+      <div className="flex flex-wrap items-center justify-between gap-3 p-3.5 glass-panel border border-border-color bg-surface-color/60 rounded">
+        <div className="flex flex-wrap items-center gap-2.5">
+          <Clock size={16} className={showTimer ? "text-accent-secondary" : "text-text-secondary"} />
+          <span className="font-tech text-xs uppercase tracking-wider text-text-primary font-bold">
+            Live Presentation & Q&A Pitch Timekeeper
+          </span>
+          <span className={`text-[10px] font-tech uppercase px-1.5 py-0.5 rounded border font-bold ${
+            showTimer ? "border-accent-secondary/50 text-accent-secondary bg-accent-secondary/10" : "border-border-color text-text-secondary"
+          }`}>
+            {showTimer ? "Active" : "Hidden"}
+          </span>
+
+          {/* Network State Chip */}
+          <div className={`flex items-center gap-1.5 px-2 py-0.5 rounded text-[10px] font-tech uppercase font-bold border ${
+            isOnline ? "border-status-success/40 text-status-success bg-status-success/10" : "border-status-warning/40 text-status-warning bg-status-warning/10"
+          }`}>
+            {isOnline ? <Wifi size={11} /> : <WifiOff size={11} />}
+            <span>{isOnline ? "Online (Auto-Sync)" : "Offline (IndexedDB Active)"}</span>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2">
+          {/* Pitch Call Alert Button */}
+          <button
+            type="button"
+            onClick={callTeamToPitch}
+            disabled={pitchCalling || pitchCallSent}
+            className={`flex items-center gap-1.5 px-3 py-1 font-tech text-xs uppercase font-bold tracking-wider rounded border transition-colors ${
+              pitchCallSent
+                ? "border-status-success bg-status-success/20 text-status-success"
+                : "border-accent-primary bg-accent-primary/20 text-accent-primary hover:bg-accent-primary/30"
+            }`}
+          >
+            <Megaphone size={13} />
+            <span>{pitchCallSent ? "Team Notified!" : pitchCalling ? "Calling..." : "Call Team to Pitch"}</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              const next = !showTimer;
+              setShowTimer(next);
+              try {
+                localStorage.setItem("ivc_judge_show_timer", String(next));
+              } catch {}
+            }}
+            className={`px-3 py-1 font-tech text-xs uppercase font-bold tracking-wider rounded border transition-colors ${
+              showTimer
+                ? "border-border-color bg-surface-color-light text-text-secondary hover:text-text-primary"
+                : "border-accent-secondary bg-accent-secondary/20 text-accent-secondary hover:bg-accent-secondary/30"
+            }`}
+          >
+            {showTimer ? "Hide Pitch Timer" : "Launch Pitch Timer"}
+          </button>
+        </div>
+      </div>
+
+      {showTimer && (
+        <div className="space-y-3">
+          <PitchTimer initialSeconds={300} />
+        </div>
+      )}
+
 
       {/* Submission Assets Panel */}
       <div className="glass-panel p-6 border border-border-color space-y-6">

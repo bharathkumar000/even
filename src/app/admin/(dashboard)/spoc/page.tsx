@@ -24,7 +24,9 @@ export default async function AdminSpocPage() {
             SPOC Management & Team Allotment
           </h1>
           <p className="font-tech text-text-secondary text-sm mt-2 max-w-2xl m-0">
-            Create, manage, and allot Single Points of Contact (SPOCs) to registered teams. Each team can be allotted to a dedicated coordinator for mentoring and operational assistance.
+            Every Staff / Club Member is automatically available as a Single Point
+            of Contact (SPOC). Allot registered teams to staff members for
+            mentoring and operational assistance.
           </p>
         </div>
       </div>

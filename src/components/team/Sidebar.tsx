@@ -14,6 +14,9 @@ import {
   ArrowLeft,
   Shield,
   Layers,
+  Home,
+  Gavel,
+  ScrollText,
 } from "lucide-react";
 import SignOutButton from "@/components/SignOutButton";
 
@@ -53,6 +56,11 @@ export default function TeamSidebar({
       badge: "Check-in",
     },
     {
+      href: "/team/problem-statements",
+      icon: ScrollText,
+      label: "Problem Statements",
+    },
+      {
       href: "/team/results",
       icon: Trophy,
       label: "Results & Standings",
@@ -68,7 +76,7 @@ export default function TeamSidebar({
           {/* Top Center Logo */}
           <div className="mb-3.5 relative flex items-center justify-center">
             <Image
-              src="/ivc-gear-logo.png"
+              src="/ivc-logo-transparent.png"
               alt="Innovators & Visionaries Club Logo"
               width={72}
               height={72}
@@ -119,74 +127,57 @@ export default function TeamSidebar({
               <Link
                 key={item.href}
                 href={item.href}
-                className={`group flex items-center justify-between py-2.5 px-3.5 font-tech font-semibold text-xs uppercase tracking-[1px] transition-all duration-200 border-l-[3px] rounded-r ${
+                className={`group relative flex items-center justify-between py-3 px-4 rounded-2xl transition-all duration-300 ease-out active:scale-[0.98] ${
                   isActive
-                    ? "bg-gradient-to-r from-accent-secondary/20 to-transparent text-text-primary border-accent-secondary"
-                    : "text-text-secondary border-transparent hover:bg-surface-color-light/40 hover:text-text-primary hover:border-border-color"
+                    ? "bg-[linear-gradient(90deg,#E0026E_0%,#B8005A_26%,#5B0832_60%,#240A1B_85%,#140E17_100%)] text-white shadow-[0_4px_22px_rgba(224,2,110,0.38),inset_0_1px_1px_rgba(255,255,255,0.22)] border border-pink-500/25 animate-active-pill"
+                    : "text-[#94A3B8] border border-transparent hover:text-white hover:bg-white/[0.04] hover:translate-x-1"
                 }`}
               >
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-3.5">
                   <item.icon
-                    size={17}
-                    className={isActive ? "text-accent-secondary" : "group-hover:text-text-primary"}
+                    size={18}
+                    className={`transition-colors duration-200 shrink-0 ${
+                      isActive ? "text-white" : "text-[#94A3B8] group-hover:text-white"
+                    }`}
                   />
                   <span
-                    style={{
-                      textShadow: isActive
-                        ? "0 0 10px #FF007F, 0 0 20px rgba(255,0,127,0.5)"
-                        : "none",
-                    }}
+                    className={`text-[13px] font-medium tracking-normal transition-colors duration-200 ${
+                      isActive ? "text-white font-semibold" : "text-[#94A3B8] group-hover:text-white"
+                    }`}
                   >
                     {item.label}
                   </span>
                 </div>
-                {item.badge && (
-                  <span
-                    className={`text-[9px] px-1.5 py-0.5 uppercase font-mono font-bold tracking-wider ${
-                      isActive
-                        ? "bg-accent-secondary/20 text-accent-secondary border border-accent-secondary/50"
-                        : "bg-surface-color text-text-secondary border border-border-color/60"
-                    }`}
-                  >
-                    {item.badge}
-                  </span>
-                )}
-              </Link>
+                </Link>
             );
           })}
         </div>
       </div>
 
-      {/* Footer Team Context & Sign Out */}
-      <div className="px-4 py-4 border-t border-border-color mt-auto space-y-3 shrink-0">
-        <div className="p-3 bg-surface-color/50 border border-border-color rounded">
-          <p className="text-[10px] uppercase text-text-secondary tracking-wider font-bold mb-0.5">
-            Active Team
-          </p>
-          <p className="font-heading text-xs text-text-primary uppercase truncate m-0">
-            {teamName}
-          </p>
-          <div className="flex items-center justify-between text-[10px] text-text-secondary mt-1 font-mono">
-            <span>Track: {track}</span>
-            <span className="text-accent-tertiary">{isLeader ? "LEADER" : "MEMBER"}</span>
+        {/* Footer Team Context & Sign Out */}
+        <div className="px-4 py-4 border-t border-border-color mt-auto space-y-3 shrink-0">
+          <div className="p-3 bg-surface-color/50 border border-border-color rounded">
+            <p className="text-[10px] uppercase text-text-secondary tracking-wider font-bold mb-0.5">
+              Active Team
+            </p>
+            <p className="font-heading text-xs text-text-primary uppercase truncate m-0">
+              {teamName}
+            </p>
+            <div className="flex items-center justify-between text-[10px] text-text-secondary mt-1 font-mono">
+              <span>Track: {track}</span>
+              <span className="text-accent-tertiary">{isLeader ? "LEADER" : "MEMBER"}</span>
+            </div>
+          </div>
+
+          <SignOutButton variant="menu-item" label="Sign Out" />
+
+          <div className="pt-2 text-[10px] text-text-secondary/70 font-mono tracking-wider flex items-center justify-between">
+            <span>BUILD: ViceVerse v2.0</span>
+            <span>IVC 2026</span>
           </div>
         </div>
-
-        <Link
-          href="/"
-          className="flex items-center gap-2 py-2 px-3 text-xs font-tech font-bold uppercase tracking-[1px] text-text-secondary hover:text-accent-tertiary transition-colors border border-border-color hover:border-accent-tertiary/40 rounded bg-surface-color-light/50"
-        >
-          <ArrowLeft size={14} />
-          <span>Exit to Home</span>
-        </Link>
-
-        <SignOutButton variant="menu-item" label="Sign Out" />
-
-        <div className="pt-2 text-[10px] text-text-secondary/70 font-mono tracking-wider flex items-center justify-between">
-          <span>BUILD: ViceVerse v2.0</span>
-          <span>IVC 2026</span>
-        </div>
-      </div>
     </aside>
   );
 }
+export { TeamSidebar };
+

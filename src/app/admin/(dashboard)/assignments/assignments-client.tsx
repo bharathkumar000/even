@@ -17,6 +17,8 @@ import {
   JudgeOption,
   TeamOption,
   updateJudgeTeams,
+  autoBalanceJudgeAssignments,
+  getJudgeAssignmentsData,
 } from "@/app/actions/admin-assignments";
 
 interface AssignmentsClientProps {
@@ -40,6 +42,7 @@ export default function AssignmentsClientView({
   const [judgeSearch, setJudgeSearch] = useState("");
   const [teamSearch, setTeamSearch] = useState("");
   const [trackFilter, setTrackFilter] = useState("all");
+  const [judgesPerTeam, setJudgesPerTeam] = useState<number>(2);
 
   const [isPending, startTransition] = useTransition();
   const [notification, setNotification] = useState<{
@@ -54,16 +57,30 @@ export default function AssignmentsClientView({
   );
 
   // Pending stage state: map of judgeId -> string[] of selected team IDs
-  const [pendingAssignedMap, setPendingAssignedMap] = useState<Record<string, string[]>>({});
-
-  // Initialize pending map when judges load or change
-  useEffect(() => {
+  const [pendingAssignedMapState, setPendingAssignedMap] = useState<Record<string, string[]>>(() => {
     const initialMap: Record<string, string[]> = {};
     judges.forEach((j) => {
       initialMap[j.id] = [...j.assigned_team_ids];
     });
-    setPendingAssignedMap(initialMap);
+    return initialMap;
+  });
+
+  // Derive pending map directly from judges using useMemo - no useEffect needed
+  const pendingAssignedMapFromJudges = useMemo(() => {
+    const initialMap: Record<string, string[]> = {};
+    judges.forEach((j) => {
+      initialMap[j.id] = [...j.assigned_team_ids];
+    });
+    return initialMap;
   }, [judges]);
+
+  // Sync state with judges when they change
+  useEffect(() => {
+    setPendingAssignedMap(pendingAssignedMapFromJudges);
+  }, [pendingAssignedMapFromJudges]);
+
+  // Use the state for both reading and staging
+  const pendingAssignedMap = pendingAssignedMapState;
 
   // Current staged team IDs for active judge
   const stagedTeamIds = useMemo(() => {
@@ -235,6 +252,35 @@ export default function AssignmentsClientView({
     });
   };
 
+  const handleAutoBalance = (countToAssign: number = judgesPerTeam) => {
+    if (judges.length === 0) {
+      setNotification({ type: "error", message: "Please create judges before auto-balancing." });
+      return;
+    }
+
+    if (!confirm(`Auto-balance teams evenly across all judges (${countToAssign} judge${countToAssign > 1 ? "s" : ""} per team)?`)) {
+      return;
+    }
+
+    startTransition(async () => {
+      try {
+        const res = await autoBalanceJudgeAssignments({ judgesPerTeam: countToAssign });
+        const fresh = await getJudgeAssignmentsData();
+        setJudges(fresh.judges);
+        setTeams(fresh.teams);
+        setNotification({
+          type: "success",
+          message: `Auto-balance complete! Generated ${res.totalAssignments} judge-team evaluation pairs (${countToAssign} per team) across ${res.judgesCount} judges.`,
+        });
+      } catch (err: unknown) {
+        setNotification({
+          type: "error",
+          message: err instanceof Error ? err.message : "Failed to auto-balance judge assignments.",
+        });
+      }
+    });
+  };
+
   return (
     <div className="space-y-6 animate-fade-in font-tech">
       {/* Notifications */}
@@ -273,6 +319,31 @@ export default function AssignmentsClientView({
               <h2 className="font-heading text-lg text-text-primary uppercase m-0">
                 Judges ({judges.length})
               </h2>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <div
+                className="flex items-center border border-border-color rounded bg-surface-color px-1.5 py-0.5"
+                title="Number of judges to assign per team (Configurable by admin)"
+              >
+                <span className="text-[10px] text-text-secondary font-tech mr-1 uppercase">Per Team:</span>
+                <input
+                  type="number"
+                  min={1}
+                  max={Math.max(1, judges.length)}
+                  value={judgesPerTeam}
+                  onChange={(e) => setJudgesPerTeam(Math.max(1, parseInt(e.target.value) || 1))}
+                  className="w-8 bg-transparent text-center font-bold font-mono text-xs text-accent-secondary outline-none"
+                />
+              </div>
+              <button
+                onClick={() => handleAutoBalance(judgesPerTeam)}
+                disabled={isPending}
+                title={`Automatically distribute teams across judges (${judgesPerTeam} judges per team)`}
+                className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-surface-color-light border border-accent-secondary/50 hover:border-accent-secondary text-accent-secondary font-tech font-bold uppercase tracking-wider text-[11px] rounded transition-all hover:bg-accent-secondary/10 cursor-pointer disabled:opacity-50"
+              >
+                <Sparkles size={12} />
+                <span>Auto-Balance</span>
+              </button>
             </div>
           </div>
 

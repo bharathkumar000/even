@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   Gift,
   UserCheck,
@@ -32,6 +32,8 @@ export default function LiveActivityStream({
 }: LiveActivityStreamProps) {
   const [filterAction, setFilterAction] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState("");
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => { setMounted(true); }, []);
 
   const getActionBadge = (action: ActionType) => {
     switch (action) {
@@ -69,6 +71,7 @@ export default function LiveActivityStream({
   };
 
   const formatTimestamp = (iso: string) => {
+    if (!mounted) return { timeStr: "", dateStr: "", relativeStr: "" };
     try {
       const date = new Date(iso);
       const timeStr = date.toLocaleTimeString("en-US", {
@@ -82,16 +85,9 @@ export default function LiveActivityStream({
         day: "numeric",
       });
 
-      // Relative calculation
-      const diffSecs = Math.max(0, Math.floor((Date.now() - date.getTime()) / 1000));
-      let relativeStr = "just now";
-      if (diffSecs >= 60 && diffSecs < 3600) {
-        relativeStr = `${Math.floor(diffSecs / 60)}m ago`;
-      } else if (diffSecs >= 3600) {
-        relativeStr = `${Math.floor(diffSecs / 3600)}h ago`;
-      } else if (diffSecs >= 5) {
-        relativeStr = `${diffSecs}s ago`;
-      }
+       // No relative time calculation to avoid hydration mismatch; leave empty
+       const relativeStr = "";
+
 
       return { timeStr, dateStr, relativeStr };
     } catch {
@@ -140,10 +136,10 @@ export default function LiveActivityStream({
         </div>
 
         <div className="flex items-center gap-2">
-          {lastSyncTime && (
+          {mounted && lastSyncTime && (
             <span className="text-[10px] text-text-secondary flex items-center gap-1 font-mono">
               <Clock size={12} />
-              Sync: {lastSyncTime.toLocaleTimeString()}
+               Sync: {lastSyncTime.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false })}
             </span>
           )}
           <button
@@ -255,10 +251,10 @@ export default function LiveActivityStream({
                         <Clock size={12} className="text-accent-tertiary" />
                         <span>{timeStr}</span>
                       </div>
-                      <div className="text-[10px] text-text-secondary mt-0.5 flex items-center gap-1 font-mono">
-                        <span>{dateStr}</span>
-                        <span className="text-accent-tertiary font-bold">({relativeStr})</span>
-                      </div>
+          <div className="text-[10px] text-text-secondary mt-0.5 flex items-center gap-1 font-mono">
+            <span>{dateStr}</span>
+            {relativeStr && <span className="text-accent-tertiary font-bold">({relativeStr})</span>}
+          </div>
                     </td>
 
                     {/* Club Member / Scanner */}
