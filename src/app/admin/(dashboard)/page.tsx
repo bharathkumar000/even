@@ -13,7 +13,7 @@ import {
 import Link from "next/link";
 import StatCard from "@/components/admin/StatCard";
 import AdminAnnouncementModal from "@/components/admin/AdminAnnouncementModal";
-import AnnouncementBanner from "@/components/AnnouncementBanner";
+
 import { getActiveAnnouncements } from "@/app/actions/announcements";
 
 export const dynamic = "force-dynamic";
@@ -30,7 +30,6 @@ export default async function AdminDashboardPage() {
   let activeRounds = 0;
   let pendingEvaluations = 0;
   let isResultsPublished = false;
-  let announcements: any[] = [];
 
   try {
     const [
@@ -40,7 +39,7 @@ export default async function AdminDashboardPage() {
       roundsRes,
       evalsRes,
       resultsRes,
-      annRes,
+
     ] = await Promise.allSettled([
       supabaseAdmin.from("profiles").select("role"),
       supabaseAdmin.from("team_members").select("id", { count: "exact", head: true }).eq("role", "leader"),
@@ -78,9 +77,7 @@ export default async function AdminDashboardPage() {
     ) {
       isResultsPublished = true;
     }
-    if (annRes.status === "fulfilled" && Array.isArray(annRes.value)) {
-      announcements = annRes.value;
-    }
+
   } catch (err) {
     console.error("Failed to load live admin metrics:", err);
   }
@@ -123,7 +120,7 @@ export default async function AdminDashboardPage() {
   return (
     <div className="space-y-12 animate-fade-in font-tech max-w-7xl mx-auto pb-12">
       {/* Live Announcement Banner (Only shows when an actual announcement exists) */}
-      <AnnouncementBanner announcements={announcements} portalName="Global Broadcast" />
+
 
       {/* Header Banner: Actions at the top row */}
       <div className="space-y-4 border-b border-border-color pb-8">
@@ -266,92 +263,7 @@ export default async function AdminDashboardPage() {
         </div>
       </section>
 
-      {/* SECTION 3: Quick Navigation */}
-      <section className="space-y-6">
-        <div className="border-b border-border-color/40 pb-3">
-          <h2 className="font-heading text-xl text-text-primary uppercase tracking-wider m-0 flex items-center gap-2.5">
-            <ShieldCheck className="text-accent-tertiary" size={20} />
-            <span>Mission Control Modules</span>
-          </h2>
-          <p className="font-tech text-xs text-text-secondary m-0 mt-1">
-            Direct shortcuts to system management tooling and audit registries.
-          </p>
-        </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
-          <Link
-            href="/admin/users"
-            className="group glass-panel p-5 border border-border-color hover:border-accent-secondary transition-all flex flex-col justify-between"
-          >
-            <div>
-              <div className="flex items-center justify-between mb-3">
-                <Users size={20} className="text-accent-secondary" />
-                <ArrowRight size={14} className="text-text-secondary group-hover:text-accent-secondary group-hover:translate-x-1 transition-all" />
-              </div>
-              <h3 className="font-heading text-sm text-text-primary mb-1 uppercase group-hover:text-accent-secondary transition-colors">
-                User Management
-              </h3>
-              <p className="font-tech text-xs text-text-secondary m-0 line-clamp-2">
-                Role promotion, user provisioning, and attendee roster directory.
-              </p>
-            </div>
-          </Link>
-
-          <Link
-            href="/admin/rounds"
-            className="group glass-panel p-5 border border-border-color hover:border-accent-primary transition-all flex flex-col justify-between"
-          >
-            <div>
-              <div className="flex items-center justify-between mb-3">
-                <Layers size={20} className="text-accent-primary" />
-                <ArrowRight size={14} className="text-text-secondary group-hover:text-accent-primary group-hover:translate-x-1 transition-all" />
-              </div>
-              <h3 className="font-heading text-sm text-text-primary mb-1 uppercase group-hover:text-accent-primary transition-colors">
-                Rounds & Criteria
-              </h3>
-              <p className="font-tech text-xs text-text-secondary m-0 line-clamp-2">
-                Configure evaluation rubrics, sequence ordering, and round locks.
-              </p>
-            </div>
-          </Link>
-
-          <Link
-            href="/admin/evaluations"
-            className="group glass-panel p-5 border border-border-color hover:border-accent-tertiary transition-all flex flex-col justify-between"
-          >
-            <div>
-              <div className="flex items-center justify-between mb-3">
-                <Clock size={20} className="text-accent-tertiary" />
-                <ArrowRight size={14} className="text-text-secondary group-hover:text-accent-tertiary group-hover:translate-x-1 transition-all" />
-              </div>
-              <h3 className="font-heading text-sm text-text-primary mb-1 uppercase group-hover:text-accent-tertiary transition-colors">
-                Evaluation Overrides
-              </h3>
-              <p className="font-tech text-xs text-text-secondary m-0 line-clamp-2">
-                Inspect judge scorecards, reopen submissions, and audit overrides.
-              </p>
-            </div>
-          </Link>
-
-          <Link
-            href="/admin/results"
-            className="group glass-panel p-5 border border-border-color hover:border-status-success transition-all flex flex-col justify-between"
-          >
-            <div>
-              <div className="flex items-center justify-between mb-3">
-                <ShieldCheck size={20} className="text-status-success" />
-                <ArrowRight size={14} className="text-text-secondary group-hover:text-status-success group-hover:translate-x-1 transition-all" />
-              </div>
-              <h3 className="font-heading text-sm text-text-primary mb-1 uppercase group-hover:text-status-success transition-colors">
-                Results Engine
-              </h3>
-              <p className="font-tech text-xs text-text-secondary m-0 line-clamp-2">
-                Recalculate leaderboard scores, freeze standing tables, and publish finals.
-              </p>
-            </div>
-          </Link>
-        </div>
-      </section>
     </div>
   );
 }
