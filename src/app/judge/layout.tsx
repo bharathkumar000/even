@@ -1,12 +1,13 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { supabaseAdmin } from "@/lib/supabase/admin";
 import JudgeSidebar from "@/components/judge/Sidebar";
+import { getActiveAnnouncements } from "@/app/actions/announcements";
+import AnnouncementBanner from "@/components/AnnouncementBanner";
 import SessionSync from "@/components/auth/SessionSync";
-import { getAuthorizedPortalUrl } from "@/lib/auth/portal-route";
+import { supabaseAdmin } from "@/lib/supabase/admin";
 
-export const dynamic = "force-dynamic";
+import { getAuthorizedPortalUrl } from "@/lib/auth/portal-route";
 
 export const metadata: Metadata = {
   robots: {
@@ -46,6 +47,7 @@ export default async function JudgeLayout({
 
   const isAuthorized = role === "judge" || role === "admin";
 
+  const announcements = await getActiveAnnouncements("judges");
   if (!isAuthorized) {
     const authorizedUrl = getAuthorizedPortalUrl(role);
     redirect(`${authorizedUrl}?access_denied=1&portal=judge`);
@@ -62,7 +64,8 @@ export default async function JudgeLayout({
         }}
       >
         <div className="max-w-7xl mx-auto w-full">
-          {children}
+                    <AnnouncementBanner announcements={announcements} portalName="Judge Portal" />
+        {children}
         <SessionSync />
         </div>
       </main>

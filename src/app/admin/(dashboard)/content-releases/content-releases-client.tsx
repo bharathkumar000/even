@@ -80,6 +80,9 @@ interface ItemFormState {
   // Allocation controls
   enableSelection: boolean;
   manualLock: boolean;
+  // Selection window fields (optional)
+  selectionOpening: string;
+  selectionClosing: string;
 }
 
 const ACTIVITY_LABELS: Record<ActivityType, string> = {
@@ -121,6 +124,8 @@ const EMPTY_FORM: ItemFormState = {
   teamLimit: "",
   enableSelection: true,
   manualLock: false,
+  selectionOpening: "",
+  selectionClosing: "",
 };
 
 function formatDate(value: string | null): string {
@@ -648,6 +653,9 @@ export default function ContentHubClientView({
       teamLimit: item.team_limit != null ? String(item.team_limit) : "",
       enableSelection: item.enable_selection !== false,
       manualLock: item.manual_lock === true,
+      // New fields for selection window
+      selectionOpening: item.selection_opening ? new Date(item.selection_opening).toISOString().slice(0,16) : "",
+      selectionClosing: item.selection_closing ? new Date(item.selection_closing).toISOString().slice(0,16) : "",
     });
     setEditorOpen(true);
   };
@@ -675,22 +683,30 @@ export default function ContentHubClientView({
         (itemForm.enableSelection !== (editingItem?.enable_selection ?? true) ||
           itemForm.manualLock !== (editingItem?.manual_lock ?? false));
 
-      const payload = {
-        activityId: selectedActivity.id,
-        title: itemForm.title,
-        referenceNumber: itemForm.referenceNumber,
-        summary: itemForm.summary,
-        body: itemForm.body,
-        domain: itemForm.domain,
-        metadata: metadataFor(selectedActivity.type, itemForm),
-        ...(teamLimit !== undefined ? { teamLimit } : {}),
-        ...(allocationChanged
-          ? {
-              enableSelection: itemForm.enableSelection,
-              manualLock: itemForm.manualLock,
-            }
-          : {}),
-      };
+        const payload = {
+          activityId: selectedActivity.id,
+          title: itemForm.title,
+          referenceNumber: itemForm.referenceNumber,
+          summary: itemForm.summary,
+          body: itemForm.body,
+          domain: itemForm.domain,
+          metadata: metadataFor(selectedActivity.type, itemForm),
+          ...(teamLimit !== undefined ? { teamLimit } : {}),
+          ...(allocationChanged
+            ? {
+                enableSelection: itemForm.enableSelection,
+                manualLock: itemForm.manualLock,
+              }
+            : {}),
+          // Include selection window dates if provided (only for problem statements)
+          ...(selectedActivity.type === "problem_statements" && itemForm.selectionOpening
+            ? { selectionOpening: new Date(itemForm.selectionOpening).toISOString() }
+            : {}),
+          ...(selectedActivity.type === "problem_statements" && itemForm.selectionClosing
+            ? { selectionClosing: new Date(itemForm.selectionClosing).toISOString() }
+            : {}),
+        };
+
 
       let saved: ContentItem;
       if (editingItem) {
@@ -1912,6 +1928,7 @@ export default function ContentHubClientView({
                       placeholder="Leave empty for unlimited"
                       className="w-full px-3 py-2.5 bg-surface-color-light border border-border-color rounded text-xs text-text-primary focus:border-accent-secondary outline-none"
                     />
+                    {/* Enable selection and manual lock checkboxes */}
                     <label className="inline-flex items-center mt-2">
                       <input
                         type="checkbox"
@@ -1934,6 +1951,35 @@ export default function ContentHubClientView({
                       />
                       Manual Lock
                     </label>
+                    {/* Selection window controls */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
+                      <div>
+                        <label className="block text-[10px] uppercase tracking-wider text-text-secondary mb-1.5">
+                          Selection Opening (optional)
+                        </label>
+                        <input
+                          type="datetime-local"
+                          value={itemForm.selectionOpening}
+                          onChange={(e) =>
+                            setItemForm({ ...itemForm, selectionOpening: e.target.value })
+                          }
+                          className="w-full px-3 py-2.5 bg-surface-color-light border border-border-color rounded text-xs text-text-primary focus:border-accent-secondary outline-none"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] uppercase tracking-wider text-text-secondary mb-1.5">
+                          Selection Closing (optional)
+                        </label>
+                        <input
+                          type="datetime-local"
+                          value={itemForm.selectionClosing}
+                          onChange={(e) =>
+                            setItemForm({ ...itemForm, selectionClosing: e.target.value })
+                          }
+                          className="w-full px-3 py-2.5 bg-surface-color-light border border-border-color rounded text-xs text-text-primary focus:border-accent-secondary outline-none"
+                        />
+                      </div>
+                    </div>
                   </div>
                 )}
 

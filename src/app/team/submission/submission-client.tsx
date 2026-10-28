@@ -7,7 +7,7 @@ import {
   AlertCircle,
 } from "lucide-react";
 import { upsertTeamSubmission } from "@/app/actions/team-submission";
-import { uploadPresentationFile } from "@/app/actions/upload-deliverable";
+
 import SubmissionForm from "@/components/team/SubmissionForm";
 
 export interface ActiveRoundInfo {
@@ -51,8 +51,8 @@ export default function TeamSubmissionClientView({
   const [proposedSolution, setProposedSolution] = useState(currentSubmission?.proposed_solution || "");
   const [solutionDescription, setSolutionDescription] = useState(currentSubmission?.solution_description || "");
   const [pptUrl, setPptUrl] = useState(currentSubmission?.ppt_url || "");
-  const [pptFileName, setPptFileName] = useState("");
-  const [fileUploading, setFileUploading] = useState(false);
+
+
   const [githubUrl, setGithubUrl] = useState(currentSubmission?.github_url || "");
   const [pitchDeckUrl, setPitchDeckUrl] = useState(currentSubmission?.pitch_deck_url || "");
   const [prototypeUrl, setPrototypeUrl] = useState(currentSubmission?.prototype_url || "");
@@ -62,26 +62,7 @@ export default function TeamSubmissionClientView({
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  const handleFileUpload = async (file: File) => {
-    setErrorMsg(null);
-    setSuccessMsg(null);
-    setFileUploading(true);
 
-    try {
-      const formData = new FormData();
-      formData.append("team_id", teamId);
-      formData.append("file", file);
-
-      const res = await uploadPresentationFile(formData);
-      setPptUrl(res.fileUrl);
-      setPptFileName(res.fileName);
-      setSuccessMsg(`File "${res.fileName}" uploaded successfully! Complete any remaining fields and click "Submit Deliverables" below.`);
-    } catch (err: unknown) {
-      setErrorMsg(err instanceof Error ? err.message : "File upload failed");
-    } finally {
-      setFileUploading(false);
-    }
-  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -111,7 +92,7 @@ export default function TeamSubmissionClientView({
     }
 
     if (!pptUrl) {
-      setErrorMsg("Please upload your presentation file (.ppt, .pptx, .pdf, or .docx) before submitting.");
+      setErrorMsg("Please provide a Canva PPT link before submitting.");
       return;
     }
 
@@ -207,9 +188,6 @@ export default function TeamSubmissionClientView({
         onProposedSolutionChange={setProposedSolution}
         onSolutionDescriptionChange={setSolutionDescription}
         pptUrl={pptUrl}
-        pptFileName={pptFileName}
-        fileUploading={fileUploading}
-        onFileSelect={handleFileUpload}
         githubUrl={githubUrl}
         pitchDeckUrl={pitchDeckUrl}
         prototypeUrl={prototypeUrl}

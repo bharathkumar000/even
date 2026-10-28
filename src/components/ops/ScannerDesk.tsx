@@ -11,6 +11,7 @@ interface ScannerDeskProps {
   onStopScanner: () => void;
   onManualIdChange: (v: string) => void;
   onLookup: (id: string) => void;
+  recentScans?: string[];
 }
 
 export default function ScannerDesk({
@@ -21,9 +22,10 @@ export default function ScannerDesk({
   onStopScanner,
   onManualIdChange,
   onLookup,
+  recentScans,
 }: ScannerDeskProps) {
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-[65%_35%] gap-6">
+    <div className="grid grid-cols-1 gap-6">
       {/* Camera Box */}
       <div className="glass-panel p-4 sm:p-6 border border-border-color space-y-4 min-w-0">
         <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
@@ -45,10 +47,7 @@ export default function ScannerDesk({
 
         <div className="relative w-full min-h-[420px] lg:min-h-[500px] lg:max-h-[650px] bg-surface-color border border-dashed border-border-color overflow-hidden rounded flex items-center justify-center">
           {/* html5-qrcode attaches and mutates DOM directly in this dedicated div. React must NOT have children here */}
-          <div
-            id="qr-reader-container"
-            className="w-full h-full"
-          />
+          <div id="qr-reader-container" className="w-full h-full" />
 
           {!scanning && (
             <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none text-center text-text-secondary font-tech p-4 bg-surface-color/90">
@@ -69,13 +68,12 @@ export default function ScannerDesk({
           <p className="font-tech text-xs text-text-secondary mt-1">
             If camera scanning is unavailable, enter the Team UUID directly.
           </p>
-
           <div className="pt-4 space-y-3 font-tech">
             <input
               type="text"
               placeholder="Paste Team ID UUID (e.g. 00000000-0000-...)"
               value={manualId}
-              onChange={(e) => onManualIdChange(e.target.value)}
+              onChange={e => onManualIdChange(e.target.value)}
               className="w-full bg-surface-color border border-border-color p-3 text-text-primary text-xs focus:border-accent-secondary outline-none font-sans tracking-normal"
             />
             <button
@@ -89,11 +87,31 @@ export default function ScannerDesk({
             </button>
           </div>
         </div>
-
         <div className="p-3 bg-surface-color-light/30 border border-border-color text-text-secondary font-tech text-[11px]">
           Action Desks: Registration, Kit/Goodies, Lunch Token, Snacks Token.
         </div>
       </div>
+
+      {/* Recent Scans */}
+      {recentScans && recentScans.length > 0 && (
+        <div className="glass-panel p-4 border border-border-color">
+          <h3 className="font-tech text-sm font-bold uppercase mb-2">Recent Teams</h3>
+          <ul className="flex flex-col gap-1">
+            {recentScans.map((id, idx) => (
+              <li key={id} className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => onLookup(id)}
+                  className="text-accent-primary underline"
+                >
+                  {id}
+                </button>
+                {idx === 0 && <span className="text-xs text-status-success">(Current)</span>}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
     </div>
   );
 }

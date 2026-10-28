@@ -134,7 +134,7 @@ export default function AuthPage({ isSignUp = false }: { isSignUp?: boolean }) {
 
     try {
       if (isSignUp) {
-        const normalizedEmail = email.includes("@") ? email.trim() : `${email.trim()}@ivc.pulse`;
+const normalizedEmail = email.trim();
         if (role !== "participant" && accessCode !== "0987") {
           setErrorMsg("Invalid access code for selected role.");
           setLoading(false);
@@ -170,9 +170,7 @@ export default function AuthPage({ isSignUp = false }: { isSignUp?: boolean }) {
         let targetEmail = email.trim();
         const targetPass = password.trim();
 
-        if (!targetEmail.includes("@")) {
-          targetEmail = `${targetEmail}@ivc.pulse`;
-        }
+        // No domain auto-append needed
 
         if (!targetPass) {
           setErrorMsg("Password is required");
@@ -201,7 +199,7 @@ export default function AuthPage({ isSignUp = false }: { isSignUp?: boolean }) {
     setErrorMsg(null);
 
     const supabase = createClient();
-    const normalizedEmail = email.includes("@") ? email : `${email}@ivc.pulse`;
+    const normalizedEmail = email.trim();
 
     try {
       const { data, error } = await supabase.auth.verifyOtp({
@@ -256,7 +254,7 @@ const handleDemoClick = async (demoEmail: string, roleName: string, targetPath: 
       return;
     }
     const supabase = createClient();
-    const normalizedEmail = email.includes("@") ? email.trim() : `${email.trim()}@ivc.pulse`;
+    const normalizedEmail = email.trim();
     try {
       const { error } = await supabase.auth.resetPasswordForEmail(normalizedEmail, {
         redirectTo: `${typeof window !== "undefined" ? window.location.origin : ""}/login`,
@@ -275,7 +273,7 @@ const handleDemoClick = async (demoEmail: string, roleName: string, targetPath: 
     setErrorMsg(null);
 
     const supabase = createClient();
-    const normalizedEmail = email.includes("@") ? email : `${email}@ivc.pulse`;
+    const normalizedEmail = email.trim();
 
     try {
       const { error } = await supabase.auth.resend({

@@ -22,7 +22,7 @@ import {
 } from "@/app/actions/operations";
 import type { ActionType } from "@/lib/validations/operations";
 import ScannerDesk from "@/components/ops/ScannerDesk";
-import LiveActivityStream from "@/components/ops/LiveActivityStream";
+
 import { CSRF_CONSTANTS } from "@/lib/csrf-constants";
 import { createClient } from "@/lib/supabase/client";
 import { playScanSuccess, playScanError } from "@/lib/feedback-sound";
@@ -59,10 +59,11 @@ export default function ScannerClientView() {
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [liveStreamLogs, setLiveStreamLogs] = useState<LiveActivityFeedItem[]>([]);
-  const [streamLoading, setStreamLoading] = useState(false);
-  const [lastSyncTime, setLastSyncTime] = useState<Date | null>(null);
-const [csrfToken, setCsrfToken] = useState<string | undefined>(undefined);
-// Initialize last sync timestamp and fetch CSRF token on client mount
+   const [streamLoading, setStreamLoading] = useState(false);
+   const [recentScans, setRecentScans] = useState<string[]>([]);
+
+   const [lastSyncTime, setLastSyncTime] = useState<Date | null>(null);
+   const [csrfToken, setCsrfToken] = useState<string | undefined>(undefined);
 useEffect(() => {
   setLastSyncTime(new Date());
   // Fetch CSRF token from server
@@ -281,8 +282,14 @@ useEffect(() => {
     try {
       const res = await fetchTeamMembersForScan(teamId);
       playScanSuccess();
-      setTeamData(res);
-      setSuccessMsg(`Loaded roster for team "${res.team.name}"`);
+        setTeamData(res);
+        setSuccessMsg(`Loaded roster for team "${res.team.name}"`);
+        // Update recent scans (keep up to 3 items: current + two previous)
+        setRecentScans(prev => {
+          const filtered = prev.filter(id => id !== res.team.id);
+          const newList = [res.team.id, ...filtered];
+          return newList.slice(0, 3);
+        });
     } catch (err: unknown) {
       playScanError();
       setErrorMsg(err instanceof Error ? err.message : "Failed to fetch team details");
@@ -457,7 +464,8 @@ useEffect(() => {
         </div>
       )}
 
-      {/* Operation Selector */}
+      {/* Link to Live Activity Feed */}
+      <a href="/ops/scanner/live-activity" className="text-accent-primary hover:underline text-sm font-bold" target="_self">Live Activity Feed</a>
       <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 mb-4 bg-surface-color/60 border border-border-color p-3 rounded">
         <label htmlFor="operation-select" className="font-bold uppercase text-xs text-text-secondary shrink-0">Select Active Desk / Operation</label>
         <select
@@ -476,15 +484,16 @@ useEffect(() => {
       
        {/* Scanner & Manual Lookup Controls */}
         <div>
-         <ScannerDesk
-           scanning={scanning}
-           manualId={manualId}
-           loading={loading}
-           onStartScanner={startScanner}
-           onStopScanner={stopScanner}
-           onManualIdChange={setManualId}
-           onLookup={(id) => handleDetectedCode(id)}
-         />
+          <ScannerDesk
+            scanning={scanning}
+            manualId={manualId}
+            loading={loading}
+            onStartScanner={startScanner}
+            onStopScanner={stopScanner}
+            onManualIdChange={setManualId}
+            onLookup={(id) => handleDetectedCode(id)}
+            recentScans={recentScans}
+          />
        </div>
 
       {/* Scanned Team Roster Panel */}
@@ -721,13 +730,7 @@ useEffect(() => {
         </div>
       )}
 
-      {/* Live Realtime Audit & Activity Feed */}
-      <LiveActivityStream
-        logs={liveStreamLogs}
-        loading={streamLoading}
-        onRefresh={fetchLiveStream}
-        lastSyncTime={lastSyncTime ?? undefined}
-      />
+
     </div>
   );
 }

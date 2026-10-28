@@ -1,7 +1,8 @@
 import { requireAuthenticatedTeamUser } from "@/lib/auth/team";
 import { getPublishedProblemStatements } from "@/app/actions/admin-problem-statements";
 import { supabaseAdmin } from "@/lib/supabase/admin";
-import SelectStatementButton from "./select-statement-button";
+import StatementCard from "./StatementCard";
+
 
 export const dynamic = "force-dynamic";
 
@@ -40,28 +41,7 @@ export default async function TeamProblemStatementsPage() {
       ) : (
         <div className="grid gap-4">
           {statements.map((stmt) => (
-            <div key={stmt.id} className="p-4 bg-surface-color/30 border border-border-color rounded">
-              <h2 className="font-heading text-xl text-text-primary">{stmt.title}</h2>
-              <p className="text-sm text-text-secondary">
-                {stmt.summary ?? stmt.description?.slice(0, 200) + "..."}
-              </p>
-              {/* Show team limit and current allocation */}
-              {stmt.team_limit != null && (
-                <p className="text-xs text-text-secondary mt-1">
-                  Limit: {stmt.team_limit} team{stmt.team_limit === 1 ? "" : "s"} – currently assigned: {counts[stmt.id] ?? 0}
-                </p>
-              )}
-              <SelectStatementButton
-                statementId={stmt.id}
-                statementTitle={stmt.title}
-                disabled={
-                  (stmt.team_limit != null &&
-                    (counts[stmt.id] ?? 0) >= stmt.team_limit) ||
-                  stmt.enable_selection === false ||
-                  stmt.manual_lock === true
-                }
-              />
-            </div>
+            <StatementCard key={stmt.id} stmt={stmt} assignedCount={counts[stmt.id] ?? 0} />
           ))}
         </div>
       )}
