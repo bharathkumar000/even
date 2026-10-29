@@ -26,13 +26,17 @@ export async function getCsrfToken(): Promise<string> {
 
   if (!token) {
     token = generateToken();
-    cookieStore.set(CSRF_COOKIE_NAME, token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      maxAge: 60 * 60 * 24, // 24 hours
-      path: "/",
-    });
+    try {
+      cookieStore.set(CSRF_COOKIE_NAME, token, {
+        httpOnly: false, // Allow client-side JavaScript to read the token for double-submit pattern
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "lax",
+        maxAge: 60 * 60 * 24, // 24 hours
+        path: "/",
+      });
+    } catch {
+      // In Server Components rendering (layouts/pages), Next.js forbids modifying cookies.
+    }
   }
 
   return token;

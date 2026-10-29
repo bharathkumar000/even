@@ -11,10 +11,8 @@ import {
   Clock,
   AlertCircle,
 } from "lucide-react";
-import { slugify } from "@/lib/utils";
-
+import { getActiveAnnouncements } from "@/app/actions/announcements";
 import JudgeDashboardClient from "./JudgeDashboardClient";
-
 
 export const dynamic = "force-dynamic";
 
@@ -52,7 +50,7 @@ export default async function JudgeDashboardPage() {
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
 
-    const [teamsRes, roundsRes, evalsRes, assignRes] = await Promise.all([
+    const [teamsRes, roundsRes, evalsRes, assignRes, announcementsData] = await Promise.all([
       supabaseAdmin.from("teams").select("id, name, leader_name, track, status"),
       supabaseAdmin
         .from("evaluation_rounds")
@@ -65,12 +63,13 @@ export default async function JudgeDashboardPage() {
             .select("team_id")
             .eq("judge_id", user.id)
         : Promise.resolve({ data: [] }),
+      getActiveAnnouncements("judges").catch(() => []),
     ]);
 
     if (teamsRes.data) allTeams = teamsRes.data;
     if (roundsRes.data) rounds = roundsRes.data;
     if (evalsRes.data) evaluations = evalsRes.data;
-    // announcements no longer fetched
+    if (announcementsData) announcements = announcementsData;
 
     if (assignRes && assignRes.data && assignRes.data.length > 0) {
       judgeAssignedTeamIds = assignRes.data.map((a: any) => a.team_id);

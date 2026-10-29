@@ -2,12 +2,12 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import JudgeSidebar from "@/components/judge/Sidebar";
-import { getActiveAnnouncements } from "@/app/actions/announcements";
-import AnnouncementBanner from "@/components/AnnouncementBanner";
 import SessionSync from "@/components/auth/SessionSync";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 
 import { getAuthorizedPortalUrl } from "@/lib/auth/portal-route";
+
+export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
   robots: {
@@ -25,20 +25,33 @@ export default async function JudgeLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  let supabase;
+  let user;
+  try {
+    supabase = await createClient();
+    const auth = await supabase.auth.getUser();
+    user = auth.data?.user;
+  } catch (err) {
+    console.error("Failed to initialize Supabase client:", err);
+    redirect("/login");
+  }
 
   if (!user) {
     redirect("/login");
   }
 
-  const { data: profile } = await supabaseAdmin
-    .from("profiles")
-    .select("role, full_name")
-    .eq("id", user.id)
-    .maybeSingle();
+  let profile;
+  try {
+    const result = await supabaseAdmin
+      .from("profiles")
+      .select("role, full_name")
+      .eq("id", user.id)
+      .maybeSingle();
+    profile = result.data;
+  } catch (err) {
+    console.error("Failed to fetch profile:", err);
+    profile = null;
+  }
 
   const role =
     profile?.role ||
@@ -47,7 +60,6 @@ export default async function JudgeLayout({
 
   const isAuthorized = role === "judge" || role === "admin";
 
-  const announcements = await getActiveAnnouncements("judges");
   if (!isAuthorized) {
     const authorizedUrl = getAuthorizedPortalUrl(role);
     redirect(`${authorizedUrl}?access_denied=1&portal=judge`);
@@ -64,9 +76,8 @@ export default async function JudgeLayout({
         }}
       >
         <div className="max-w-7xl mx-auto w-full">
-                    <AnnouncementBanner announcements={announcements} portalName="Judge Portal" />
-        {children}
-        <SessionSync />
+          {children}
+          <SessionSync />
         </div>
       </main>
     </div>

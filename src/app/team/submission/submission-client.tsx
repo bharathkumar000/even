@@ -7,6 +7,7 @@ import {
   AlertCircle,
 } from "lucide-react";
 import { upsertTeamSubmission } from "@/app/actions/team-submission";
+import { withCsrfToken } from "@/lib/csrf-client";
 
 import SubmissionForm from "@/components/team/SubmissionForm";
 
@@ -113,6 +114,7 @@ export default function TeamSubmissionClientView({
         pitch_deck_url: pitchDeckUrl,
         prototype_url: prototypeUrl,
         additional_material_url: additionalUrl,
+        ...withCsrfToken(),
       });
 
       setSuccessMsg("Team deliverables successfully updated and submitted for evaluation!");

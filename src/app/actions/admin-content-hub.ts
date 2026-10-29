@@ -1567,7 +1567,8 @@ export async function scheduleContentItem(
 export async function scheduleContentActivity(
   activityId: string,
   scheduledAt: string,
-  timezone = "UTC"
+  timezone = "UTC",
+  enableSelection?: boolean
 ) {
   const { user } = await requireAdmin();
   const scheduledDate = new Date(scheduledAt);
@@ -1601,6 +1602,13 @@ export async function scheduleContentActivity(
       .eq("item_id", item.id)
       .eq("status", "pending");
 
+    // Apply enable_selection flag if provided (reading disables, selection enables)
+    if (typeof enableSelection !== "undefined") {
+      await supabaseAdmin
+        .from("problem_statements")
+        .update({ enable_selection: enableSelection })
+        .eq("id", item.id);
+    }
     const { error: insErr } = await supabaseAdmin
       .from("content_scheduled_publications")
       .insert({
