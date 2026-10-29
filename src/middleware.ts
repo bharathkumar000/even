@@ -151,6 +151,20 @@ export async function middleware(request: NextRequest) {
     response.headers.set("X-Robots-Tag", "noindex, nofollow, noarchive");
   }
 
+  // Ensure CSRF token cookie is present
+  if (!request.cookies.has("csrf_token")) {
+    const array = new Uint8Array(32);
+    crypto.getRandomValues(array);
+    const csrfToken = Array.from(array, (byte) => byte.toString(16).padStart(2, "0")).join("");
+    response.cookies.set("csrf_token", csrfToken, {
+      httpOnly: false,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      maxAge: 60 * 60 * 24,
+      path: "/",
+    });
+  }
+
   return response;
 }
 
