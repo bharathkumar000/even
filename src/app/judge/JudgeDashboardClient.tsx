@@ -12,6 +12,7 @@ import {
   AlertCircle,
 } from "lucide-react";
 import { slugify } from "@/lib/utils";
+import AnnouncementBanner from "@/components/AnnouncementBanner";
 
 interface AssignedTeam {
   id: string;
@@ -96,6 +97,13 @@ export default function JudgeDashboardClient({
 
   return (
     <div className="space-y-6 animate-fade-in font-tech">
+      {/* Broadcast Announcements */}
+      <AnnouncementBanner
+        announcements={announcements}
+        portalName="Judge Portal"
+        audience="judges"
+      />
+
       {/* Round selector */}
       <div className="flex items-center gap-2 mb-4">
         <label className="font-tech text-xs uppercase text-text-secondary">Round:</label>

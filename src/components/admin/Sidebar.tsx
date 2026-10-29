@@ -18,6 +18,7 @@ import {
   Home,
   ScanLine,
   Gavel,
+  Megaphone,
 } from "lucide-react";
 import SignOutButton from "@/components/SignOutButton";
 
@@ -27,6 +28,7 @@ export default function AdminSidebar() {
   const navItems = [
     { href: "/admin", icon: Users, label: "Overview" },
     { href: "/admin/users", icon: Users, label: "User Management" },
+    { href: "/admin/announcements", icon: Megaphone, label: "Announcements" },
     { href: "/admin/assignments", icon: UserCheck, label: "Judge Assignments" },
     { href: "/admin/spoc", icon: Contact2, label: "SPOC Management" },
     { href: "/admin/rounds", icon: Layers, label: "Rounds & Criteria" },

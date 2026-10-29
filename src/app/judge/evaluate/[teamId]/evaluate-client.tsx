@@ -28,6 +28,7 @@ import {
   getOfflineDraft,
   deleteOfflineDraft,
 } from "@/lib/offline-storage";
+import { withCsrfToken } from "@/lib/csrf-client";
 
 export interface TeamDetail {
   id: string;
@@ -245,6 +246,7 @@ export default function EvaluateClientView({
         scores: scoreItems,
         feedback,
         is_draft: isDraft,
+        ...withCsrfToken(),
       });
 
       if (!isDraft) {

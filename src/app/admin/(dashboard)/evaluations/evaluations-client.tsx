@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Filter, AlertTriangle, ShieldCheck, CheckCircle2 } from "lucide-react";
 import { overrideEvaluationStatus } from "@/app/actions/admin-evaluations";
+import { withCsrfToken } from "@/lib/csrf-client";
 
 export interface EvaluationItem {
   id: string;
@@ -72,6 +73,7 @@ export default function EvaluationsClientView({
         evaluation_id: selectedEval.id,
         status: targetStatus,
         reason: overrideReason,
+        ...withCsrfToken(),
       });
 
       setEvaluations((prev) =>

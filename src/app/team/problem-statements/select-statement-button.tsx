@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Check, Loader2 } from "lucide-react";
 import { selectProblemStatement } from "@/app/actions/team-problem-statement-selection";
+import { withCsrfToken, CSRF_HEADER_NAME } from "@/lib/csrf-client";
 
 interface SelectStatementButtonProps {
   statementId: string;
@@ -26,7 +27,7 @@ export default function SelectStatementButton({
     setSuccess(false);
     startTransition(async () => {
       try {
-        await selectProblemStatement(statementId);
+        await selectProblemStatement(statementId, withCsrfToken()[CSRF_HEADER_NAME] || undefined);
         setSuccess(true);
         router.refresh();
       } catch (err: unknown) {

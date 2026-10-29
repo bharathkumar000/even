@@ -134,7 +134,7 @@ export default function AuthPage({ isSignUp = false }: { isSignUp?: boolean }) {
 
     try {
       if (isSignUp) {
-const normalizedEmail = email.trim();
+const normalizedEmail = email.includes("@") ? email.trim() : `${email.trim()}@ivc.pulse`;
         if (role !== "participant" && accessCode !== "0987") {
           setErrorMsg("Invalid access code for selected role.");
           setLoading(false);
@@ -170,7 +170,9 @@ const normalizedEmail = email.trim();
         let targetEmail = email.trim();
         const targetPass = password.trim();
 
-        // No domain auto-append needed
+        if (!targetEmail.includes("@")) {
+          targetEmail = `${targetEmail}@ivc.pulse`;
+        }
 
         if (!targetPass) {
           setErrorMsg("Password is required");
@@ -199,7 +201,7 @@ const normalizedEmail = email.trim();
     setErrorMsg(null);
 
     const supabase = createClient();
-    const normalizedEmail = email.trim();
+    const normalizedEmail = email.includes("@") ? email.trim() : `${email.trim()}@ivc.pulse`;
 
     try {
       const { data, error } = await supabase.auth.verifyOtp({
@@ -254,7 +256,7 @@ const handleDemoClick = async (demoEmail: string, roleName: string, targetPath: 
       return;
     }
     const supabase = createClient();
-    const normalizedEmail = email.trim();
+    const normalizedEmail = email.includes("@") ? email.trim() : `${email.trim()}@ivc.pulse`;
     try {
       const { error } = await supabase.auth.resetPasswordForEmail(normalizedEmail, {
         redirectTo: `${typeof window !== "undefined" ? window.location.origin : ""}/login`,
@@ -273,7 +275,7 @@ const handleDemoClick = async (demoEmail: string, roleName: string, targetPath: 
     setErrorMsg(null);
 
     const supabase = createClient();
-    const normalizedEmail = email.trim();
+    const normalizedEmail = email.includes("@") ? email.trim() : `${email.trim()}@ivc.pulse`;
 
     try {
       const { error } = await supabase.auth.resend({

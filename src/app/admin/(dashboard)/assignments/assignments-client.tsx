@@ -20,6 +20,7 @@ import {
   autoBalanceJudgeAssignments,
   getJudgeAssignmentsData,
 } from "@/app/actions/admin-assignments";
+import { withCsrfToken } from "@/lib/csrf-client";
 
 interface AssignmentsClientProps {
   initialJudges: JudgeOption[];
@@ -238,6 +239,7 @@ export default function AssignmentsClientView({
         await updateJudgeTeams({
           judgeId: activeJudge.id,
           teamIds: nextArray,
+          ...withCsrfToken(),
         });
         setNotification({
           type: "success",
@@ -264,7 +266,7 @@ export default function AssignmentsClientView({
 
     startTransition(async () => {
       try {
-        const res = await autoBalanceJudgeAssignments({ judgesPerTeam: countToAssign });
+        const res = await autoBalanceJudgeAssignments({ judgesPerTeam: countToAssign, ...withCsrfToken() });
         const fresh = await getJudgeAssignmentsData();
         setJudges(fresh.judges);
         setTeams(fresh.teams);

@@ -7,6 +7,7 @@ import { supabaseAdmin } from "@/lib/supabase/admin";
 import AdminSidebar from "@/components/admin/Sidebar";
 import SessionSync from "@/components/auth/SessionSync";
 import { getAuthorizedPortalUrl } from "@/lib/auth/portal-route";
+import { getCsrfToken } from "@/lib/csrf-server";
 
 export const dynamic = "force-dynamic";
 
@@ -67,12 +68,8 @@ export default async function AdminLayout({
     redirect(`${authorizedUrl}?access_denied=1&portal=admin`);
   }
 
-  // 2. Checkpoint Verification: Admin passcode verification required
-  // const cookieStore = await cookies();
-  // const isVerified = cookieStore.get("admin_session_verified")?.value === "true";
-  // if (!isVerified) {
-  //   redirect("/admin/login");
-  // }
+  // Generate CSRF token for client-side use
+  const csrfToken = await getCsrfToken();
 
   return (
     <div className="flex flex-col md:flex-row min-h-screen md:h-screen md:overflow-hidden bg-[#050508]">
@@ -84,6 +81,7 @@ export default async function AdminLayout({
             "radial-gradient(circle at top right, rgba(255, 0, 127, 0.08), transparent 500px), radial-gradient(circle at bottom left, rgba(0, 240, 255, 0.05), transparent 500px)",
         }}
       >
+        <meta name="csrf-token" content={csrfToken} />
         {children}
         <SessionSync />
       </main>

@@ -152,7 +152,7 @@ export default async function TeamDashboardPage() {
       <PitchAlertListener teamId={effectiveTeamId} teamName={teamInfo?.name} />
 
       {/* Live Announcement Banner */}
-      <AnnouncementBanner announcements={announcements} portalName="Team Portal" />
+
 
       {/* Top Header */}
       <div className="border-b border-border-color pb-6">
@@ -180,6 +180,13 @@ export default async function TeamDashboardPage() {
           </div>
         </div>
       </div>
+
+      {/* Broadcast Announcements */}
+      <AnnouncementBanner
+        announcements={announcements}
+        portalName="Team Portal"
+        audience="teams"
+      />
 
       {/* Primary KPI Row: Team Status & Submission State */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
@@ -454,112 +461,7 @@ export default async function TeamDashboardPage() {
         </div>
       </div>
 
-      {/* Quick Actions (Matching Operations Action Cards) */}
-      <div className="space-y-3">
-        <p className="text-xs uppercase tracking-[2px] text-text-secondary font-bold m-0">
-          Quick Actions
-        </p>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {/* Action 1: Upload Deliverables */}
-          <Link
-            href="/team/submission"
-            className="group glass-panel p-3.5 sm:p-4 border border-border-color hover:border-accent-secondary transition-all flex items-center justify-between gap-3"
-          >
-            <div className="flex items-center gap-3 min-w-0">
-              <div className="p-2.5 sm:p-3 bg-accent-secondary/10 border border-accent-secondary/40 text-accent-secondary rounded group-hover:scale-105 transition-transform shrink-0">
-                <FileUp size={20} className="sm:w-[22px] sm:h-[22px]" />
-              </div>
-              <div className="min-w-0">
-                <p className="font-heading text-sm sm:text-base text-text-primary uppercase m-0 group-hover:text-accent-secondary transition-colors truncate">
-                  Submit Deliverables
-                </p>
-                <p className="text-[11px] sm:text-xs text-text-secondary m-0 mt-0.5 truncate">
-                  Upload Problem/Solution Statement & Presentation File
-                </p>
-              </div>
-            </div>
-            <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
-              <span className="text-[9px] sm:text-[10px] px-2 py-0.5 bg-accent-secondary/15 border border-accent-secondary/40 text-accent-secondary font-bold uppercase">
-                {hasSubmitted ? "Updated" : "Primary"}
-              </span>
-              <ArrowRight size={15} className="text-text-secondary group-hover:text-accent-secondary group-hover:translate-x-1 transition-all" />
-            </div>
-          </Link>
-
-          {/* Action 2: Show QR Code */}
-          <Link
-            href="/team/qr"
-            className="group glass-panel p-3.5 sm:p-4 border border-border-color hover:border-accent-tertiary transition-all flex items-center justify-between gap-3"
-          >
-            <div className="flex items-center gap-3 min-w-0">
-              <div className="p-2.5 sm:p-3 bg-accent-tertiary/10 border border-accent-tertiary/40 text-accent-tertiary rounded group-hover:scale-105 transition-transform shrink-0">
-                <QrCode size={20} className="sm:w-[22px] sm:h-[22px]" />
-              </div>
-              <div className="min-w-0">
-                <p className="font-heading text-sm sm:text-base text-text-primary uppercase m-0 group-hover:text-accent-tertiary transition-colors truncate">
-                  Show Team QR Pass
-                </p>
-                <p className="text-[11px] sm:text-xs text-text-secondary m-0 mt-0.5 truncate">
-                  Present QR badge to Operations Desk for check-in & tokens
-                </p>
-              </div>
-            </div>
-            <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
-              <span className="text-[9px] sm:text-[10px] px-2 py-0.5 bg-surface-color border border-border-color text-text-secondary font-bold uppercase">
-                Pass
-              </span>
-              <ArrowRight size={15} className="text-text-secondary group-hover:text-accent-tertiary group-hover:translate-x-1 transition-all" />
-            </div>
-          </Link>
-
-          {/* Action 3: Team Standings */}
-          <Link
-            href="/team/results"
-            className="group glass-panel p-3.5 sm:p-4 border border-border-color hover:border-accent-primary transition-all flex items-center justify-between gap-3"
-          >
-            <div className="flex items-center gap-3 min-w-0">
-              <div className="p-2.5 sm:p-3 bg-accent-primary/10 border border-accent-primary/40 text-accent-primary rounded group-hover:scale-105 transition-transform shrink-0">
-                <Trophy size={20} className="sm:w-[22px] sm:h-[22px]" />
-              </div>
-              <div className="min-w-0">
-                <p className="font-heading text-sm sm:text-base text-text-primary uppercase m-0 group-hover:text-accent-primary transition-colors truncate">
-                  Scorecard & Results
-                </p>
-                <p className="text-[11px] sm:text-xs text-text-secondary m-0 mt-0.5 truncate">
-                  Check certified judging scores and event standings
-                </p>
-              </div>
-            </div>
-            <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
-              <span className="text-[9px] sm:text-[10px] px-2 py-0.5 bg-surface-color border border-border-color text-text-secondary font-bold uppercase">
-                Certified
-              </span>
-              <ArrowRight size={15} className="text-text-secondary group-hover:text-accent-primary group-hover:translate-x-1 transition-all" />
-            </div>
-          </Link>
-
-          {/* Action 4: Round Details */}
-          <div className="glass-panel p-4 border border-border-color flex items-center justify-between opacity-80">
-            <div className="flex items-center gap-3.5">
-              <div className="p-3 bg-surface-color-light border border-border-color text-text-secondary rounded">
-                <Clock size={22} />
-              </div>
-              <div>
-                <p className="font-heading text-base text-text-primary uppercase m-0">
-                  Current Stage: {activeRound?.title || "Innovation & Pitch"}
-                </p>
-                <p className="text-xs text-text-secondary m-0 mt-0.5 font-mono">
-                  Status: {activeRound?.status?.toUpperCase() || "ACTIVE"}
-                </p>
-              </div>
-            </div>
-            <span className="text-[10px] px-2 py-0.5 bg-status-success/15 border border-status-success text-status-success font-bold uppercase">
-              Live
-            </span>
-          </div>
-        </div>
-      </div>
     </div>
   );
 }
