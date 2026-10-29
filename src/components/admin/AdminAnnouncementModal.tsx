@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { Radio, Send, X } from "lucide-react";
 import { createAnnouncement } from "@/app/actions/announcements";
+import { withCsrfToken } from "@/lib/csrf-client";
 
 export default function AdminAnnouncementModal() {
   const [mounted, setMounted] = useState(false);
@@ -39,6 +40,7 @@ export default function AdminAnnouncementModal() {
         message,
         priority,
         target_audience: targetAudience,
+        ...withCsrfToken(),
       });
       setStatusMsg("Announcement broadcasted live to all portals!");
       setTitle("");

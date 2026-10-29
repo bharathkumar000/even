@@ -28,6 +28,7 @@ import {
   deleteCriterion,
   type RoundStatus,
 } from "@/app/actions/admin-rounds";
+import { withCsrfToken, CSRF_HEADER_NAME } from "@/lib/csrf-client";
 
 export interface AdminRoundItem {
   id: string;
@@ -198,6 +199,7 @@ export default function RoundsClientView({
           title: titleToSave,
           sequence_order: orderToSave,
           status: statusToSave,
+          ...withCsrfToken(),
         });
       } catch (err: unknown) {
         setNotification({
@@ -229,6 +231,7 @@ export default function RoundsClientView({
           title: titleToSave,
           sequence_order: orderToSave,
           status: statusToSave,
+          ...withCsrfToken(),
         });
         if (created?.id) {
           setRounds((prev) =>
@@ -265,7 +268,7 @@ export default function RoundsClientView({
     });
 
     try {
-      await deleteRound(target.id);
+      await deleteRound(target.id, withCsrfToken()[CSRF_HEADER_NAME] || undefined);
     } catch (err: unknown) {
       setNotification({
         type: "error",
@@ -280,7 +283,7 @@ export default function RoundsClientView({
     );
 
     try {
-      await updateRoundStatus(roundId, nextStatus);
+      await updateRoundStatus(roundId, nextStatus, withCsrfToken()[CSRF_HEADER_NAME] || undefined);
       setNotification({
         type: "success",
         message: `Status updated to ${nextStatus.toUpperCase()}.`,
@@ -352,6 +355,7 @@ export default function RoundsClientView({
           description: descToSave,
           max_marks: maxMarksToSave,
           is_required: requiredToSave,
+          ...withCsrfToken(),
         });
       } catch (err: unknown) {
         setNotification({
@@ -384,6 +388,7 @@ export default function RoundsClientView({
           description: descToSave,
           max_marks: maxMarksToSave,
           is_required: requiredToSave,
+          ...withCsrfToken(),
         });
         if (created?.id) {
           setCriteria((prev) =>
@@ -412,7 +417,7 @@ export default function RoundsClientView({
     });
 
     try {
-      await deleteCriterion(target.id);
+      await deleteCriterion(target.id, withCsrfToken()[CSRF_HEADER_NAME] || undefined);
     } catch (err: unknown) {
       setNotification({
         type: "error",

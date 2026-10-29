@@ -41,6 +41,7 @@ import {
   bulkImportUsers,
   BulkImportUserRecord,
 } from "@/app/actions/admin-users";
+import { withCsrfToken, CSRF_HEADER_NAME } from "@/lib/csrf-client";
 
 interface UsersClientProps {
   initialUsers: UserProfileItem[];
@@ -417,7 +418,7 @@ export default function UsersClientView({
     setImportError(null);
 
     try {
-      const res = await bulkImportUsers(recordsToImport);
+      const res = await bulkImportUsers(recordsToImport, withCsrfToken()[CSRF_HEADER_NAME] || undefined);
       setNotification({
         type: "success",
         message: `Verified Import Completed! Processed ${res.total} users (${res.created} created, ${res.updated} updated, ${res.errors.length} skipped).`,
@@ -506,7 +507,7 @@ export default function UsersClientView({
     setNotification(null);
     startTransition(async () => {
       try {
-        const res = await updateUserRole({ userId, newRole });
+        const res = await updateUserRole({ userId, newRole, ...withCsrfToken() });
         setUsersList((prev) =>
           prev.map((u) => (u.id === userId ? { ...u, role: newRole } : u))
         );
@@ -537,13 +538,14 @@ export default function UsersClientView({
                ? trimmedUsername
                : `${trimmedUsername}@ivc.pulse`;
            })();
-       await createUser({
-         email: loginEmail,
-         password: newUserData.password,
-         fullName: newUserData.fullName,
-         role: newUserData.role,
-         username: newUserData.username.trim(),
-       });
+await createUser({
+          email: loginEmail,
+          password: newUserData.password,
+          fullName: newUserData.fullName,
+          role: newUserData.role,
+          username: newUserData.username.trim(),
+          ...withCsrfToken(),
+        });
        setNotification({
          type: "success",
          message: `Account created for ${loginEmail} with role ${newUserData.role}`,
@@ -576,7 +578,7 @@ export default function UsersClientView({
 
     startTransition(async () => {
       try {
-        await deleteUser(target.id);
+        await deleteUser(target.id, withCsrfToken()[CSRF_HEADER_NAME] || undefined);
         setUsersList((prev) => prev.filter((u) => u.id !== target.id));
         setNotification({
           type: "success",
