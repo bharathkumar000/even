@@ -6,18 +6,12 @@ import { supabaseAdmin } from "@/lib/supabase/admin";
 export async function requireAdmin() {
   const supabase = await createClient();
 
-  // Fast-path: Check local decrypted session JWT without remote network trip
-  const { data: sessionData } = await supabase.auth.getSession();
-  let user = sessionData?.session?.user;
-
-  // Fallback to getUser() only if session is missing
-  if (!user) {
-    const { data: userData, error: authError } = await supabase.auth.getUser();
-    if (authError || !userData?.user) {
-      throw new Error("Unauthorized: Authentication required");
-    }
-    user = userData.user;
+  // Use getUser() instead of getSession() for secure server-side auth verification
+  const { data: userData, error: authError } = await supabase.auth.getUser();
+  if (authError || !userData?.user) {
+    throw new Error("Unauthorized: Authentication required");
   }
+  const user = userData.user;
 
   // Fast-path: Check user metadata first to avoid blocking DB query
   const metaRole =

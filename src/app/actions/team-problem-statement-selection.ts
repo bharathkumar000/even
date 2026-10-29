@@ -4,8 +4,13 @@ import { revalidatePath } from "next/cache";
 import { requireAuthenticatedTeamUser } from "@/lib/auth/team";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { checkServerActionRateLimit, SERVER_ACTION_RATE_LIMITS } from "@/lib/rate-limit";
+import { validateCsrfToken, CSRF_CONSTANTS } from "@/lib/csrf-server";
 
-export async function selectProblemStatement(statementId: string) {
+export async function selectProblemStatement(
+  statementId: string,
+  csrfToken?: string
+) {
+  await validateCsrfToken(csrfToken || null);
   const { user, teamId, role } = await requireAuthenticatedTeamUser();
 
   if (!teamId) {

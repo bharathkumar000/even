@@ -21,6 +21,7 @@ import {
   autoBalanceSpocAssignments,
   getSpocPortalData,
 } from "@/app/actions/admin-spoc";
+import { withCsrfToken } from "@/lib/csrf-client";
 
 interface SpocClientProps {
   initialSpocs: SpocItem[];
@@ -292,6 +293,7 @@ export default function SpocClientView({
         await updateSpocTeams({
           spocId: activeSpoc.id,
           teamIds: nextArray,
+          ...withCsrfToken(),
         });
         setNotification({
           type: "success",
@@ -326,7 +328,7 @@ export default function SpocClientView({
 
     startTransition(async () => {
       try {
-        const res = await autoBalanceSpocAssignments();
+        const res = await autoBalanceSpocAssignments({ ...withCsrfToken() });
         const fresh = await getSpocPortalData();
         setSpocs(fresh.spocs);
         setTeams(fresh.teams);

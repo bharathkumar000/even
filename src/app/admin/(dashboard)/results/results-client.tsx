@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { RefreshCw, Globe, Lock, ShieldCheck, CheckCircle2 } from "lucide-react";
 import { triggerResultsEngine } from "@/app/actions/admin-results";
+import { withCsrfToken } from "@/lib/csrf-client";
 
 export interface ResultItem {
   id: string;
@@ -118,6 +119,7 @@ export default function ResultsClientView({
         event_id: eventId,
         action,
         olympic: action === "recalculate" ? olympicMode : undefined,
+        ...withCsrfToken(),
       });
 
       if (action === "publish") {

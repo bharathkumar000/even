@@ -243,6 +243,7 @@ function formatCountdown(totalSeconds: number): string {
 }
 
 function renderBody(body: string) {
+  if (typeof body !== "string") return <p className="text-sm text-text-secondary">Invalid content format.</p>;
   const lines = body.split(/\r?\n/);
   return lines.map((line, index) => {
     const trimmed = line.trim();
@@ -1517,7 +1518,7 @@ export default function ContentHubClientView({
             ) : (
               <AlertCircle size={18} />
             )}
-            <span className="font-bold tracking-wide">{notification.message}</span>
+            <span className="font-bold tracking-wide">{typeof notification.message === "string" ? notification.message : String(notification.message)}</span>
           </div>
           <button
             onClick={() => setNotification(null)}
@@ -1704,9 +1705,7 @@ export default function ContentHubClientView({
                 >
                   Cancel Active Timer
                 </button>
-              ) : (
-                <div />
-              )}
+              ) : null}
 
               <div className="flex items-center gap-2">
                 <button

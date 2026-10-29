@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition, useEffect } from "react";
+import React, { useState, useTransition, useEffect, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useForm } from "react-hook-form";
@@ -46,6 +46,7 @@ import {
   getAnnouncementCounts,
 } from "@/app/actions/announcements";
 import { format } from "date-fns";
+import { withCsrfToken, CSRF_HEADER_NAME } from "@/lib/csrf-client";
 
 export type AnnouncementStatus = "draft" | "scheduled" | "published" | "unpublished" | "archived";
 export type AnnouncementCategory = "general" | "important" | "deadline" | "schedule" | "emergency";
@@ -227,23 +228,23 @@ export default function AnnouncementsClient({
     fetchData();
   }, [page, statusFilter, audienceFilter, search]);
 
-  const handleSearch = (e: React.FormEvent) => {
+  const handleSearch = useCallback((e: React.FormEvent) => {
     e.preventDefault();
     setPage(1);
     setSearch((e.target as HTMLFormElement).search.value);
-  };
+  }, []);
 
-  const handleStatusFilterChange = (value: string) => {
+  const handleStatusFilterChange = useCallback((value: string) => {
     setPage(1);
     setStatusFilter(value);
-  };
+  }, []);
 
-  const handleAudienceFilterChange = (value: string) => {
+  const handleAudienceFilterChange = useCallback((value: string) => {
     setPage(1);
     setAudienceFilter(value);
-  };
+  }, []);
 
-  const openCreateModal = () => {
+  const openCreateModal = useCallback(() => {
     setEditingAnnouncement(null);
     setFormData({
       title: "",
@@ -260,9 +261,9 @@ export default function AnnouncementsClient({
       resource_links: [{ label: "", url: "" }],
     });
     setModalOpen(true);
-  };
+  }, []);
 
-  const openEditModal = (announcement: Announcement) => {
+  const openEditModal = useCallback((announcement: Announcement) => {
     setEditingAnnouncement(announcement);
     setFormData({
       title: announcement.title,
@@ -281,13 +282,13 @@ export default function AnnouncementsClient({
         : [{ label: "", url: "" }],
     });
     setModalOpen(true);
-  };
+  }, []);
 
-  const openPreview = (announcement: Announcement) => {
+  const openPreview = useCallback((announcement: Announcement) => {
     setPreviewAnnouncement(announcement);
-  };
+  }, []);
 
-  const closeModal = () => {
+  const closeModal = useCallback(() => {
     setModalOpen(false);
     setEditingAnnouncement(null);
     setFormData({
@@ -304,17 +305,17 @@ export default function AnnouncementsClient({
       attachment_name: "",
       resource_links: [{ label: "", url: "" }],
     });
-  };
+  }, []);
 
-  const cleanErrorMsg = (err: any, fallback: string) => {
+  const cleanErrorMsg = useCallback((err: any, fallback: string) => {
     const msg = err?.message || "";
     if (!msg || msg.includes("Minified React error #441") || msg.includes("Server Components render")) {
       return `${fallback}: Database or authorization error. Please refresh and check your permissions.`;
     }
     return msg;
-  };
+  }, []);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
 
     const payload = {
@@ -326,10 +327,10 @@ export default function AnnouncementsClient({
 
     try {
       if (editingAnnouncement) {
-        await updateAnnouncement(editingAnnouncement.id, payload);
+        await updateAnnouncement(editingAnnouncement.id, { ...payload, ...withCsrfToken() });
         setNotification({ type: "success", message: "Announcement updated successfully" });
       } else {
-        await createAnnouncement(payload);
+        await createAnnouncement({ ...payload, ...withCsrfToken() });
         setNotification({ type: "success", message: "Announcement created successfully" });
       }
       closeModal();
@@ -337,19 +338,19 @@ export default function AnnouncementsClient({
     } catch (err: any) {
       setNotification({ type: "error", message: cleanErrorMsg(err, "Failed to save announcement") });
     }
-  };
+  }, [formData, editingAnnouncement, closeModal, fetchData, cleanErrorMsg]);
 
-  const handlePublish = async (id: string) => {
+  const handlePublish = useCallback(async (id: string) => {
     try {
-      await publishAnnouncement(id);
+      await publishAnnouncement(id, withCsrfToken()[CSRF_HEADER_NAME] || undefined);
       setNotification({ type: "success", message: "Announcement published" });
       fetchData();
     } catch (err: any) {
       setNotification({ type: "error", message: cleanErrorMsg(err, "Failed to publish") });
     }
-  };
+  }, [fetchData, cleanErrorMsg]);
 
-  const handleUnpublish = async (id: string) => {
+  const handleUnpublish = useCallback(async (id: string) => {
     try {
       await unpublishAnnouncement(id);
       setNotification({ type: "success", message: "Announcement unpublished" });
@@ -357,27 +358,27 @@ export default function AnnouncementsClient({
     } catch (err: any) {
       setNotification({ type: "error", message: cleanErrorMsg(err, "Failed to unpublish") });
     }
-  };
+  }, [fetchData, cleanErrorMsg]);
 
-  const handleArchive = async (id: string) => {
+  const handleArchive = useCallback(async (id: string) => {
     try {
-      await archiveAnnouncement(id);
+      await archiveAnnouncement(id, withCsrfToken()[CSRF_HEADER_NAME] || undefined);
       setNotification({ type: "success", message: "Announcement archived" });
       fetchData();
     } catch (err: any) {
       setNotification({ type: "error", message: cleanErrorMsg(err, "Failed to archive") });
     }
-  };
+  }, [fetchData, cleanErrorMsg]);
 
-  const confirmDelete = (announcement: Announcement) => {
+  const confirmDelete = useCallback((announcement: Announcement) => {
     setDeleteTarget(announcement);
     setConfirmAction({ type: "delete", announcement });
-  };
+  }, []);
 
-  const executeDelete = async () => {
+  const executeDelete = useCallback(async () => {
     if (!deleteTarget) return;
     try {
-      await deleteAnnouncement(deleteTarget.id);
+      await deleteAnnouncement(deleteTarget.id, withCsrfToken()[CSRF_HEADER_NAME] || undefined);
       setNotification({ type: "success", message: "Announcement deleted" });
       setDeleteTarget(null);
       setConfirmAction(null);
@@ -385,51 +386,51 @@ export default function AnnouncementsClient({
     } catch (err: any) {
       setNotification({ type: "error", message: cleanErrorMsg(err, "Failed to delete") });
     }
-  };
+  }, [deleteTarget, fetchData, cleanErrorMsg]);
 
-  const handleDuplicate = async (id: string) => {
+  const handleDuplicate = useCallback(async (id: string) => {
     try {
-      await duplicateAnnouncement(id);
+      await duplicateAnnouncement(id, withCsrfToken()[CSRF_HEADER_NAME] || undefined);
       setNotification({ type: "success", message: "Announcement duplicated" });
       fetchData();
     } catch (err: any) {
       setNotification({ type: "error", message: err.message || "Failed to duplicate" });
     }
-  };
+  }, [fetchData]);
 
-  const addResourceLink = () => {
+  const addResourceLink = useCallback(() => {
     setFormData((prev: any) => ({
       ...prev,
       resource_links: [...prev.resource_links, { label: "", url: "" }],
     }));
-  };
+  }, []);
 
-  const removeResourceLink = (index: number) => {
+  const removeResourceLink = useCallback((index: number) => {
     setFormData((prev: any) => ({
       ...prev,
       resource_links: prev.resource_links.filter((_: any, i: number) => i !== index),
     }));
-  };
+  }, []);
 
-  const formatDate = (dateStr: string | null) => {
+  const formatDate = useCallback((dateStr: string | null) => {
     if (!dateStr) return "—";
     try {
       return format(new Date(dateStr), "MMM d, yyyy h:mm a");
     } catch {
       return "—";
     }
-  };
+  }, []);
 
-  const formatDateTimeLocal = (dateStr: string | null) => {
+  const formatDateTimeLocal = useCallback((dateStr: string | null) => {
     if (!dateStr) return "";
     try {
       return new Date(dateStr).toISOString().slice(0, 16);
     } catch {
       return "";
     }
-  };
+  }, []);
 
-  const getStatusIcon = (status: string) => {
+  const getStatusIcon = useCallback((status: string) => {
     switch (status) {
       case "published": return <CheckCircle2 className="w-3 h-3" />;
       case "scheduled": return <Clock className="w-3 h-3" />;
@@ -437,7 +438,82 @@ export default function AnnouncementsClient({
       case "archived": return <Archive className="w-3 h-3" />;
       default: return <AlertCircle className="w-3 h-3" />;
     }
-  };
+  }, []);
+
+  const AnnouncementRow = React.memo(({ 
+    announcement, 
+    onPreview, 
+    onEdit, 
+    onPublish, 
+    onUnpublish, 
+    onArchive, 
+    onDuplicate, 
+    onDelete,
+    formatDate,
+    getStatusIcon
+  }: {
+    announcement: Announcement;
+    onPreview: (a: Announcement) => void;
+    onEdit: (a: Announcement) => void;
+    onPublish: (id: string) => void;
+    onUnpublish: (id: string) => void;
+    onArchive: (id: string) => void;
+    onDuplicate: (id: string) => void;
+    onDelete: (a: Announcement) => void;
+    formatDate: (dateStr: string | null) => string;
+    getStatusIcon: (status: string) => React.ReactNode;
+  }) => (
+    <tr key={announcement.id} className="hover:bg-gray-800/50 transition-colors">
+      <td className="px-4 py-3">
+        <div className="flex items-center gap-3">
+          {announcement.pin_to_top && <Star className="w-4 h-4 text-yellow-400" />}
+          <div>
+            <p className="font-medium text-white truncate max-w-xs md:max-w-md">{announcement.title}</p>
+            <p className="text-xs text-gray-400 truncate max-w-xs md:max-w-md line-clamp-1">{announcement.message}</p>
+          </div>
+        </div>
+      </td>
+      <td className="px-4 py-3 hidden md:table-cell">
+        <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-full bg-gray-800 border border-gray-700">
+          {(CATEGORY_ICONS[announcement.category] 
+            ? (() => { const Icon = CATEGORY_ICONS[announcement.category]; return <Icon className="w-3 h-3 text-gray-400" />; })() 
+            : <FileText className="w-3 h-3 text-gray-400" />)}
+          <span className="capitalize text-gray-300">{announcement.category}</span>
+        </span>
+      </td>
+      <td className="px-4 py-3 hidden lg:table-cell">
+        <span className="inline-flex items-center px-2 py-0.5 text-xs rounded-full bg-gray-800 border border-gray-700 text-gray-300">
+          {AUDIENCE_LABELS[announcement.target_audience] || announcement.target_audience}
+        </span>
+      </td>
+      <td className="px-4 py-3">
+        <span className={`inline-flex items-center gap-1 px-2 py-1 text-xs rounded-full ${STATUS_COLORS[announcement.status] || STATUS_COLORS.draft}`}>
+          {getStatusIcon(announcement.status)}
+          <span className="capitalize">{STATUS_LABELS[announcement.status] || announcement.status}</span>
+        </span>
+        {announcement.pin_to_top && (
+          <span className="ml-2 px-1.5 py-0.5 text-[10px] font-mono bg-yellow-500/20 text-yellow-400 border border-yellow-500/30 rounded">PINNED</span>
+        )}
+      </td>
+      <td className="px-4 py-3 hidden md:table-cell text-gray-400 text-sm">
+        {announcement.published_at ? formatDate(announcement.published_at) : "—"}
+      </td>
+      <td className="px-4 py-3 hidden lg:table-cell text-gray-400 text-sm">
+        {announcement.expires_at ? formatDate(announcement.expires_at) : "—"}
+      </td>
+      <td className="px-4 py-3 text-right">
+        <div className="flex items-center justify-end gap-1">
+          <button onClick={() => onPreview(announcement)} className="p-2 text-gray-400 hover:text-white hover:bg-gray-800 rounded-lg transition-colors" title="Preview"><Eye className="w-4 h-4" /></button>
+          <button onClick={() => onEdit(announcement)} className="p-2 text-gray-400 hover:text-white hover:bg-gray-800 rounded-lg transition-colors" title="Edit"><Edit className="w-4 h-4" /></button>
+          {announcement.status === "draft" && <button onClick={() => onPublish(announcement.id)} className="p-2 text-gray-400 hover:text-green-400 hover:bg-green-500/10 rounded-lg transition-colors" title="Publish Now"><Send className="w-4 h-4" /></button>}
+          {announcement.status === "published" && <button onClick={() => onUnpublish(announcement.id)} className="p-2 text-gray-400 hover:text-orange-400 hover:bg-orange-500/10 rounded-lg transition-colors" title="Unpublish"><RotateCcw className="w-4 h-4" /></button>}
+          {announcement.status !== "archived" && <button onClick={() => onArchive(announcement.id)} className="p-2 text-gray-400 hover:text-purple-400 hover:bg-purple-500/10 rounded-lg transition-colors" title="Archive"><Archive className="w-4 h-4" /></button>}
+          <button onClick={() => onDuplicate(announcement.id)} className="p-2 text-gray-400 hover:text-blue-400 hover:bg-blue-500/10 rounded-lg transition-colors" title="Duplicate"><Copy className="w-4 h-4" /></button>
+          <button onClick={() => onDelete(announcement)} className="p-2 text-gray-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors" title="Delete"><Trash2 className="w-4 h-4" /></button>
+        </div>
+      </td>
+    </tr>
+  ));
 
   return (
     <div className="space-y-6">
@@ -589,107 +665,21 @@ export default function AnnouncementsClient({
                 </thead>
                 <tbody className="divide-y divide-gray-800">
                   {announcements.map((announcement: Announcement) => (
-                    <tr key={announcement.id} className="hover:bg-gray-800/50 transition-colors">
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-3">
-                          {announcement.pin_to_top && <Star className="w-4 h-4 text-yellow-400" />}
-                          <div>
-                            <p className="font-medium text-white truncate max-w-xs md:max-w-md">{announcement.title}</p>
-                            <p className="text-xs text-gray-400 truncate max-w-xs md:max-w-md line-clamp-1">{announcement.message}</p>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-4 py-3 hidden md:table-cell">
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-full bg-gray-800 border border-gray-700">
-                          {(() => {
-                            const IconComponent = CATEGORY_ICONS[announcement.category] || FileText;
-                            return <IconComponent className="w-3 h-3 text-gray-400" />;
-                          })()}
-                          <span className="capitalize text-gray-300">{announcement.category}</span>
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 hidden lg:table-cell">
-                        <span className="inline-flex items-center px-2 py-0.5 text-xs rounded-full bg-gray-800 border border-gray-700 text-gray-300">
-                          {AUDIENCE_LABELS[announcement.target_audience] || announcement.target_audience}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3">
-                        <span className={`inline-flex items-center gap-1 px-2 py-1 text-xs rounded-full ${STATUS_COLORS[announcement.status] || STATUS_COLORS.draft}`}>
-                          {getStatusIcon(announcement.status)}
-                          <span className="capitalize">{STATUS_LABELS[announcement.status] || announcement.status}</span>
-                        </span>
-                        {announcement.pin_to_top && (
-                          <span className="ml-2 px-1.5 py-0.5 text-[10px] font-mono bg-yellow-500/20 text-yellow-400 border border-yellow-500/30 rounded">PINNED</span>
-                        )}
-                      </td>
-                      <td className="px-4 py-3 hidden md:table-cell text-gray-400 text-sm">
-                        {announcement.published_at ? formatDate(announcement.published_at) : "—"}
-                      </td>
-                      <td className="px-4 py-3 hidden lg:table-cell text-gray-400 text-sm">
-                        {announcement.expires_at ? formatDate(announcement.expires_at) : "—"}
-                      </td>
-                      <td className="px-4 py-3 text-right">
-                        <div className="flex items-center justify-end gap-1">
-                          <button
-                            onClick={() => openPreview(announcement)}
-                            className="p-2 text-gray-400 hover:text-white hover:bg-gray-800 rounded-lg transition-colors"
-                            title="Preview"
-                          >
-                            <Eye className="w-4 h-4" />
-                          </button>
-                          <button
-                            onClick={() => openEditModal(announcement)}
-                            className="p-2 text-gray-400 hover:text-white hover:bg-gray-800 rounded-lg transition-colors"
-                            title="Edit"
-                          >
-                            <Edit className="w-4 h-4" />
-                          </button>
-                          {announcement.status === "draft" && (
-                            <button
-                              onClick={() => handlePublish(announcement.id)}
-                              className="p-2 text-gray-400 hover:text-green-400 hover:bg-green-500/10 rounded-lg transition-colors"
-                              title="Publish Now"
-                            >
-                              <Send className="w-4 h-4" />
-                            </button>
-                          )}
-                          {announcement.status === "published" && (
-                            <button
-                              onClick={() => handleUnpublish(announcement.id)}
-                              className="p-2 text-gray-400 hover:text-orange-400 hover:bg-orange-500/10 rounded-lg transition-colors"
-                              title="Unpublish"
-                            >
-                              <RotateCcw className="w-4 h-4" />
-                            </button>
-                          )}
-                          {announcement.status !== "archived" && (
-                            <button
-                              onClick={() => handleArchive(announcement.id)}
-                              className="p-2 text-gray-400 hover:text-purple-400 hover:bg-purple-500/10 rounded-lg transition-colors"
-                              title="Archive"
-                            >
-                              <Archive className="w-4 h-4" />
-                            </button>
-                          )}
-                          <button
-                            onClick={() => handleDuplicate(announcement.id)}
-                            className="p-2 text-gray-400 hover:text-blue-400 hover:bg-blue-500/10 rounded-lg transition-colors"
-                            title="Duplicate"
-                          >
-                            <Copy className="w-4 h-4" />
-                          </button>
-                          <button
-                            onClick={() => confirmDelete(announcement)}
-                            className="p-2 text-gray-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"
-                            title="Delete"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
+                    <AnnouncementRow
+                      key={announcement.id}
+                      announcement={announcement}
+                      onPreview={openPreview}
+                      onEdit={openEditModal}
+                      onPublish={handlePublish}
+                      onUnpublish={handleUnpublish}
+                      onArchive={handleArchive}
+                      onDuplicate={handleDuplicate}
+                      onDelete={confirmDelete}
+                      formatDate={formatDate}
+                      getStatusIcon={getStatusIcon}
+                    />
                   ))}
-                </tbody>
+</tbody>
               </table>
             </div>
 
