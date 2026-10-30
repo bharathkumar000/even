@@ -41,6 +41,7 @@ export async function createRound(data: RoundInput & { [CSRF_CONSTANTS.HEADER_NA
         title: round.title,
         sequence_order: round.sequence_order,
         status: round.status,
+        event_id: round.event_id,
       },
       created_at: new Date().toISOString(),
     },
@@ -271,4 +272,20 @@ export async function getRoundsData() {
   );
 
   return Promise.race([fetchRounds(), timeoutPromise]);
+}
+
+export async function getEventsForDropdown() {
+  const { data, error } = await supabaseAdmin
+    .from("events")
+    .select("id, title")
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    throw new Error(`Failed to load events: ${error.message}`);
+  }
+
+  return (data || []).map((event) => ({
+    id: event.id,
+    title: event.title,
+  }));
 }

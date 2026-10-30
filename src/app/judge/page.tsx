@@ -10,9 +10,13 @@ import {
   CheckCircle2,
   Clock,
   AlertCircle,
+  Layers as LayersIcon,
+  Sparkles,
 } from "lucide-react";
 import { getActiveAnnouncements } from "@/app/actions/announcements";
+import { getContentForPortal } from "@/app/actions/content-hub";
 import JudgeDashboardClient from "./JudgeDashboardClient";
+import { ContentActivityHub } from "@/components/content-hub";
 
 export const dynamic = "force-dynamic";
 
@@ -45,6 +49,15 @@ export default async function JudgeDashboardPage() {
   let announcements: any[] = [];
   let judgeAssignedTeamIds: string[] = [];
   let isJudgeSpecific = false;
+
+  // Fetch content for judge portal
+  let contentItems: any[] = [];
+  try {
+    const contentData = await getContentForPortal("judge", undefined, undefined, "published", 20);
+    contentItems = contentData.items || [];
+  } catch (err) {
+    console.error("Failed to load content for judge portal:", err);
+  }
 
   try {
     const supabase = await createClient();
@@ -118,15 +131,28 @@ export default async function JudgeDashboardPage() {
     }
   });
 
-  return (
-    <JudgeDashboardClient
-      allTeams={allTeams}
-      rounds={rounds}
-      evaluations={evaluations}
-      announcements={announcements}
-      judgeAssignedTeamIds={judgeAssignedTeamIds}
-      isJudgeSpecific={isJudgeSpecific}
-    />
-  );
+return (
+    <>
+      <JudgeDashboardClient
+        allTeams={allTeams}
+        rounds={rounds}
+        evaluations={evaluations}
+        announcements={announcements}
+        judgeAssignedTeamIds={judgeAssignedTeamIds}
+        isJudgeSpecific={isJudgeSpecific}
+      />
 
+      {/* Content & Activity Hub for Judges */}
+      <ContentActivityHub
+        portalAudience="judge"
+        showFilters={true}
+        showSearch={true}
+        showCreateButton={false}
+        initialItems={[]}
+        emptyMessage="No judge-specific content published yet."
+        loadingMessage="Loading judge content..."
+        errorMessage="Failed to load judge content."
+      />
+    </>
+  );
 }

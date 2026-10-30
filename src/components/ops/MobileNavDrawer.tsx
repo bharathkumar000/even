@@ -11,11 +11,11 @@ export default function OpsMobileNav() {
   const [open, setOpen] = useState(false);
   const pathname = usePathname();
 
-  const navItems = [
+  const navItems: { href: string; icon: any; label: string; newTab?: boolean }[] = [
     { href: "/ops/scanner", icon: QrCode, label: "QR Scanner Desk" },
     { href: "/ops/judges-roster", icon: Gavel, label: "Judges Roster" },
     { href: "/ops/scanner#manual-lookup", icon: Search, label: "Team Lookup" },
-    { href: "/ops/scanner#live-activity", icon: Activity, label: "Live Activity" },
+    { href: "/ops/scanner/live-activity", icon: Activity, label: "Live Activity", newTab: true },
   ];
 
   const titleMap: Record<string, string> = {
@@ -97,6 +97,8 @@ export default function OpsMobileNav() {
                   <Link
                     key={item.href}
                     href={item.href}
+                    target={item.newTab ? "_blank" : undefined}
+                    rel={item.newTab ? "noopener noreferrer" : undefined}
                     onClick={() => setOpen(false)}
                     className={`flex items-center gap-3.5 py-3 px-4 rounded-2xl text-[13px] font-medium transition-all duration-300 ease-out active:scale-[0.98] ${
                       isActive

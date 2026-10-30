@@ -8,6 +8,10 @@ import {
   type ActionType,
 } from "@/lib/validations/operations";
 import { validateCsrfToken, CSRF_CONSTANTS } from "@/lib/csrf-server";
+import {
+  recordScannerActivity,
+  type AuditMethod,
+} from "@/lib/audit";
 
 export interface LiveActivityFeedItem {
   id: string;
@@ -35,77 +39,263 @@ export interface EnrichedActivityLog {
   scanner_email?: string;
 }
 
+export interface TeamScanData {
+  team: {
+    id: string;
+    name: string;
+    track?: string | null;
+    leader_name?: string | null;
+    code?: string | null;
+    qr_token?: string | null;
+    last_scanned_at?: string | null;
+  };
+  members: {
+    id: string;
+    user_id: string;
+    role?: string | null;
+    name?: string | null;
+    email?: string | null;
+  }[];
+  activityLogs: EnrichedActivityLog[];
+}
+
 /**
- * Record a single scan action (Registration, Goodies, Lunch, Snacks) for a participant.
- * Prevents duplicates, tracks scanner identity, and auto-rotates the team's QR token.
+ * Manual team lookup for ops scanner (read-only, no CSRF required).
+ * Used by ops scanner manual lookup fallback when QR scanning fails.
+ *
+ * Records a manual verification audit event (scan_attempt). A read-only lookup
+ * is NOT logged as a check-in; it only records that the team was searched manually.
  */
-export async function recordMemberAction(data: ScanActionInput & { [CSRF_CONSTANTS.HEADER_NAME]?: string }) {
-  const { user } = await requireOperationsRole();
+export async function manualTeamLookup(teamId: string): Promise<TeamScanData> {
+  await requireOperationsRole();
+
+  if (!teamId) {
+    throw new Error("A valid team identifier is required");
+  }
+
+  const correlationId = crypto.randomUUID();
+
+  // 1. Fetch team details
+  const { data: team, error: teamError } = await supabaseAdmin
+    .from("teams")
+    .select("id, name, track, leader_name, code, qr_token, last_scanned_at")
+    .eq("id", teamId)
+    .maybeSingle();
+
+  if (teamError || !team) {
+    // Record the failed manual lookup safely (no state change).
+    try {
+      await recordScannerActivity({
+        teamId,
+        action: "verification_failed",
+        method: "manual",
+        result: "failure",
+        reason: `Team not found: ${teamError?.message || "Invalid team ID"}`,
+        correlationId,
+      });
+    } catch {
+      // Never let an audit failure mask the real lookup error.
+    }
+    throw new Error(`Team not found: ${teamError?.message || "Invalid team ID"}`);
+  }
+
+  // Record the successful manual team verification (read-only, not a check-in).
+  try {
+    await recordScannerActivity({
+      teamId,
+      participantId: null,
+      action: "verification_success",
+      method: "manual",
+      result: "success",
+      itemName: team.name || null,
+      correlationId,
+    });
+  } catch {
+    // Never let an audit failure change the outcome of a successful lookup.
+  }
+
+  // 2. Fetch team participants/members with profiles join
+  const { data: rawMembers, error: membersError } = await supabaseAdmin
+    .from("team_members")
+    .select(`
+      id,
+      user_id,
+      role,
+      profiles (
+        id,
+        full_name,
+        email
+      )
+    `)
+    .eq("team_id", teamId);
+
+  if (membersError) {
+    console.warn("Notice: Falling back to direct team_members query:", membersError.message);
+  }
+
+  interface RawMember {
+    id: string;
+    user_id: string;
+    role?: string | null;
+    name?: string | null;
+    email?: string | null;
+    profiles?: { full_name?: string | null; email?: string | null } | null;
+  }
+
+  const members = ((rawMembers as unknown as RawMember[]) || []).map((m) => ({
+    id: m.id,
+    user_id: m.user_id,
+    role: m.role || "member",
+    name: m.profiles?.full_name || m.name || "Member",
+    email: m.profiles?.email || m.email || "",
+  }));
+
+  // 3. Fetch activity logs for this team with scanner identity
+  const { data: rawLogs, error: logsError } = await supabaseAdmin
+    .from("event_activity_logs")
+    .select("id, participant_id, action_type, created_at, scanned_by")
+    .eq("team_id", teamId);
+
+  if (logsError) {
+    console.warn("Activity logs query notice:", logsError.message);
+  }
+
+  // Fetch scanner profiles to attach club member names & emails
+  const scannerIds = Array.from(new Set((rawLogs || []).map((l) => l.scanned_by).filter(Boolean)));
+  let scannerMap: Record<string, { full_name: string; email: string }> = {};
+
+  if (scannerIds.length > 0) {
+    const { data: scanners } = await supabaseAdmin
+      .from("profiles")
+      .select("id, full_name, email")
+      .in("id", scannerIds);
+
+    if (scanners) {
+      scannerMap = Object.fromEntries(
+        scanners.map((s) => [
+          s.id,
+          {
+            full_name: s.full_name || "Club Member",
+            email: s.email || "",
+          },
+        ])
+      );
+    }
+  }
+
+  const enrichedLogs: EnrichedActivityLog[] = (rawLogs || []).map((l) => ({
+    id: l.id,
+    participant_id: l.participant_id,
+    action_type: l.action_type,
+    created_at: l.created_at,
+    scanned_by: l.scanned_by,
+    scanner_name: l.scanned_by ? scannerMap[l.scanned_by]?.full_name || "Club Member" : "System",
+    scanner_email: l.scanned_by ? scannerMap[l.scanned_by]?.email || "" : "",
+  }));
+
+  return {
+    team,
+    members: members || [],
+    activityLogs: enrichedLogs,
+  };
+}
+
+/**
+ * Record a single scan action (Registration, Goodies, Lunch, Snacks, Certificates)
+ * for a participant. Prevents duplicates, tracks scanner identity, auto-rotates the
+ * team's QR token, and writes a server-side audit record after the outcome is known.
+ *
+ * Distinguishes a successful verification/claim from a duplicate or rejected attempt.
+ * A duplicate attempt is recorded as result='already_completed' and does NOT change state.
+ */
+export async function recordMemberAction(data: ScanActionInput & {
+  [CSRF_CONSTANTS.HEADER_NAME]?: string;
+  correlationId?: string;
+  method?: AuditMethod;
+}) {
+  const { user, profile } = await requireOperationsRole();
   await validateCsrfToken(data[CSRF_CONSTANTS.HEADER_NAME] || null);
   const validated = ScanActionSchema.parse(data);
 
-  // 1. Duplicate check in event_activity_logs with scanner attribution
-  // Updated to allow up to 3 claims for lunch and snacks per participant.
+  const method: AuditMethod = data.method || "qr";
+  const correlationId = data.correlationId || crypto.randomUUID();
+
+  const operatorId = user.id;
+  const operatorRole = (profile?.role as string) || "staff";
+  const operatorName =
+    typeof profile === "object" && profile !== null && "full_name" in profile
+      ? (profile as { full_name?: string | null }).full_name ?? user.email ?? "Operations"
+      : user.email ?? "Operations";
+
+  // 1. Duplicate check in event_activity_logs with scanner attribution.
+  //    Existing behaviour preserved: lunch/snacks allow up to 3 claims;
+     // registration/goodies/certificates allow one claim.
   const { data: existingRecords, error: checkError } = await supabaseAdmin
     .from("event_activity_logs")
-    .select("id, created_at, scanned_by")
+    .select("id, created_at, scanned_by, result")
     .eq("participant_id", validated.participant_id)
-    .eq("action_type", validated.action_type);
+    .eq("action_type", validated.action_type)
+    .eq("result", "success");
 
   if (checkError) {
     console.warn("Activity check query notice:", checkError.message);
   }
 
-  const existingCount = (existingRecords || []).length;
+  const existingSuccessCount = (existingRecords || []).length;
 
-  if (validated.action_type === "lunch" || validated.action_type === "snacks") {
-    // Allow up to three claims per participant for lunch or snacks.
-    if (existingCount >= 3) {
-      throw new Error(
-        `Maximum ${validated.action_type} claims (3) reached for this participant.`
-      );
+  // registration/goodies/certificates allow one successful claim;
+  // lunch/snacks allow up to three.
+  const alreadyCompleted = async () => {
+    const prev = existingRecords?.[0];
+    let prevScannerName = "another club member";
+    if (prev?.scanned_by) {
+      const { data: prevScanner } = await supabaseAdmin
+        .from("profiles")
+        .select("full_name")
+        .eq("id", prev.scanned_by)
+        .maybeSingle();
+      if (prevScanner?.full_name) prevScannerName = prevScanner.full_name;
     }
-  } else {
-    // For other actions (registration, goodies) only one claim is allowed.
-    if (existingCount > 0) {
-      let prevScannerName = "another club member";
-      const existingRecord = existingRecords?.[0];
-      if (existingRecord && existingRecord.scanned_by) {
-        const { data: prevScanner } = await supabaseAdmin
-          .from("profiles")
-          .select("full_name, email")
-          .eq("id", existingRecord.scanned_by)
-          .maybeSingle();
-        if (prevScanner?.full_name) {
-          prevScannerName = prevScanner.full_name;
-        }
-      }
+    const timeStr = prev?.created_at
+      ? new Date(prev.created_at).toLocaleTimeString("en-US", {
+          hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: true,
+        })
+      : "";
+    return {
+      message: `FRAUD BLOCKED: "${validated.action_type.toUpperCase()}"${
+        timeStr ? ` already claimed at ${timeStr} from ${prevScannerName}` : ""
+      }. Duplicate claim strictly prohibited.`,
+      prevScannerName,
+      timeStr,
+    };
+  };
 
-      const timeStr = new Date(existingRecord?.created_at).toLocaleTimeString("en-US", {
-        hour: "2-digit",
-        minute: "2-digit",
-        second: "2-digit",
-        hour12: true,
+  const maxReached =
+    (validated.action_type === "lunch" || validated.action_type === "snacks")
+      ? existingSuccessCount >= 3
+      : existingSuccessCount > 0;
+
+  if (maxReached) {
+    const { message } = await alreadyCompleted();
+    // Record the rejected/duplicate attempt as audit history without changing state.
+    try {
+      await recordScannerActivity({
+        teamId: validated.team_id,
+        participantId: validated.participant_id,
+        action: validated.action_type,
+        method,
+        result: "already_completed",
+        reason: "Duplicate claim already recorded for this participant and action.",
+        correlationId: `${correlationId}-duplicate`,
       });
-
-      throw new Error(
-        `FRAUD BLOCKED: "${validated.action_type.toUpperCase()}" already claimed at ${timeStr} from ${prevScannerName}. Duplicate claim strictly prohibited.`
-      );
+    } catch {
+      // Never let an audit failure mask a real business rejection.
     }
+    throw new Error(message);
   }
 
-
-  // 2. Fetch current scanner profile
-  const { data: currentScanner } = await supabaseAdmin
-    .from("profiles")
-    .select("full_name, email")
-    .eq("id", user.id)
-    .maybeSingle();
-
-  const scannerName = currentScanner?.full_name || user.email || "Club Member";
-  const scannerEmail = currentScanner?.email || user.email || "";
-
-  // 3. Insert activity log
+  // 2. Insert activity log as the authoritative success record + audit entry
+  //    (transactionally consistent: state change and success audit row together).
   const nowIso = new Date().toISOString();
   const { data: record, error: insertError } = await supabaseAdmin
     .from("event_activity_logs")
@@ -114,7 +304,14 @@ export async function recordMemberAction(data: ScanActionInput & { [CSRF_CONSTAN
         team_id: validated.team_id,
         participant_id: validated.participant_id,
         action_type: validated.action_type,
+        method,
+        result: "success",
+        new_status: "claimed",
         scanned_by: user.id,
+        operator_id: operatorId,
+        operator_name: operatorName,
+        operator_role: operatorRole,
+        correlation_id: correlationId,
         created_at: nowIso,
       },
     ])
@@ -125,7 +322,7 @@ export async function recordMemberAction(data: ScanActionInput & { [CSRF_CONSTAN
     throw new Error(`Failed to record scan action: ${insertError.message}`);
   }
 
-  // 4. Auto-update team QR token & timestamp to prevent fraud
+  // 3. Auto-update team QR token & timestamp to prevent fraud
   const nextToken = `SEC-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
   try {
     await supabaseAdmin
@@ -140,6 +337,9 @@ export async function recordMemberAction(data: ScanActionInput & { [CSRF_CONSTAN
     console.warn("Notice: Team QR telemetry update skipped (schema compatible):", updateErr);
   }
 
+  const scannerName = operatorName;
+  const scannerEmail = user.email || "";
+
   return {
     success: true,
     record: {
@@ -148,19 +348,34 @@ export async function recordMemberAction(data: ScanActionInput & { [CSRF_CONSTAN
       scanner_email: scannerEmail,
     },
     qr_token: nextToken,
+    correlationId,
   };
 }
 
 /**
- * Record an action for all eligible members of a team in one click (e.g., Team Kit/Goodies distribution)
+ * Record an action for all eligible members of a team in one click (e.g., Team Kit/Goodies distribution).
+ * Writes one server-side audit record per member after the outcome is known.
  */
-export async function recordTeamBulkAction(teamId: string, actionType: ActionType, csrfToken?: string) {
-  const { user } = await requireOperationsRole();
+export async function recordTeamBulkAction(teamId: string, actionType: ActionType, csrfToken?: string, opts?: {
+  correlationId?: string;
+  method?: AuditMethod;
+}) {
+  const { user, profile } = await requireOperationsRole();
   await validateCsrfToken(csrfToken || null);
 
   if (!teamId) {
     throw new Error("A valid Team ID is required for bulk claim");
   }
+
+  const method: AuditMethod = opts?.method || "qr";
+  const baseCorrelationId = opts?.correlationId || crypto.randomUUID();
+
+  const operatorId = user.id;
+  const operatorRole = (profile?.role as string) || "staff";
+  const operatorName =
+    typeof profile === "object" && profile !== null && "full_name" in profile
+      ? (profile as { full_name?: string | null }).full_name ?? user.email ?? "Operations"
+      : user.email ?? "Operations";
 
   // Fetch team members
   const { data: members, error: membersError } = await supabaseAdmin
@@ -172,12 +387,13 @@ export async function recordTeamBulkAction(teamId: string, actionType: ActionTyp
     throw new Error("No team members found for bulk distribution");
   }
 
-  // Fetch existing logs for this action
+  // Fetch existing successful logs for this action (duplicate prevention)
   const { data: existingLogs } = await supabaseAdmin
     .from("event_activity_logs")
-    .select("participant_id")
+    .select("participant_id, result")
     .eq("team_id", teamId)
-    .eq("action_type", actionType);
+    .eq("action_type", actionType)
+    .eq("result", "success");
 
   const claimedParticipantIds = new Set(existingLogs?.map((l) => l.participant_id) || []);
   const unclaimedMembers = members.filter((m) => !claimedParticipantIds.has(m.user_id));
@@ -187,11 +403,18 @@ export async function recordTeamBulkAction(teamId: string, actionType: ActionTyp
   }
 
   const nowIso = new Date().toISOString();
-  const insertPayloads = unclaimedMembers.map((m) => ({
+  const insertPayloads = unclaimedMembers.map((m, index) => ({
     team_id: teamId,
     participant_id: m.user_id,
     action_type: actionType,
+    method,
+    result: "success",
+    new_status: "claimed",
     scanned_by: user.id,
+    operator_id: operatorId,
+    operator_name: operatorName,
+    operator_role: operatorRole,
+    correlation_id: `${baseCorrelationId}-${index}`,
     created_at: nowIso,
   }));
 
@@ -221,6 +444,7 @@ export async function recordTeamBulkAction(teamId: string, actionType: ActionTyp
     claimedCount: unclaimedMembers.length,
     alreadyClaimedCount: claimedParticipantIds.size,
     qr_token: nextToken,
+    correlationId: baseCorrelationId,
   };
 }
 

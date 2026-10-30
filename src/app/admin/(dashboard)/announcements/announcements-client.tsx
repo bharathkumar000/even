@@ -47,6 +47,8 @@ import {
 } from "@/app/actions/announcements";
 import { format } from "date-fns";
 import { withCsrfToken, CSRF_HEADER_NAME } from "@/lib/csrf-client";
+import MultiAudienceSelector from "@/components/announcements/MultiAudienceSelector";
+import { useRealtimeSync } from "@/lib/realtime/use-realtime-sync";
 
 export type AnnouncementStatus = "draft" | "scheduled" | "published" | "unpublished" | "archived";
 export type AnnouncementCategory = "general" | "important" | "deadline" | "schedule" | "emergency";
@@ -59,7 +61,8 @@ export interface Announcement {
   message: string;
   category: string;
   priority_level: string;
-  target_audience: string;
+  target_audience: string | string[];
+  target_audiences?: string[];
   status: string;
   is_active: boolean;
   pin_to_top: boolean;
@@ -179,7 +182,7 @@ export default function AnnouncementsClient({
     message: "",
     category: "general" as any,
     priority_level: "normal" as any,
-    target_audience: "all" as any,
+    target_audience: ["all"] as AnnouncementAudience[],
     status: "draft" as any,
     scheduled_at: "",
     expires_at: "",
@@ -251,7 +254,7 @@ export default function AnnouncementsClient({
       message: "",
       category: "general",
       priority_level: "normal",
-      target_audience: "all",
+      target_audience: ["all"] as AnnouncementAudience[],
       status: "draft",
       scheduled_at: "",
       expires_at: "",
@@ -270,7 +273,11 @@ export default function AnnouncementsClient({
       message: announcement.message,
       category: announcement.category,
       priority_level: announcement.priority_level,
-      target_audience: announcement.target_audience,
+      target_audience: (() => {
+        const ta = announcement.target_audiences || announcement.target_audience;
+        const arr = Array.isArray(ta) ? ta : [ta];
+        return arr as AnnouncementAudience[];
+      })(),
       status: announcement.status,
       scheduled_at: announcement.scheduled_at ? new Date(announcement.scheduled_at).toISOString().slice(0, 16) : "",
       expires_at: announcement.expires_at ? new Date(announcement.expires_at).toISOString().slice(0, 16) : "",
@@ -296,7 +303,7 @@ export default function AnnouncementsClient({
       message: "",
       category: "general",
       priority_level: "normal",
-      target_audience: "all",
+      target_audience: ["all"] as AnnouncementAudience[],
       status: "draft",
       scheduled_at: "",
       expires_at: "",
@@ -483,7 +490,7 @@ export default function AnnouncementsClient({
       </td>
       <td className="px-4 py-3 hidden lg:table-cell">
         <span className="inline-flex items-center px-2 py-0.5 text-xs rounded-full bg-gray-800 border border-gray-700 text-gray-300">
-          {AUDIENCE_LABELS[announcement.target_audience] || announcement.target_audience}
+          {(Array.isArray(announcement.target_audience) ? announcement.target_audience : [announcement.target_audience || "all"]).map((a) => AUDIENCE_LABELS[a] || a).join(", ")}
         </span>
       </td>
       <td className="px-4 py-3">
@@ -794,20 +801,11 @@ export default function AnnouncementsClient({
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-gray-400 mb-1">Audience *</label>
-                  <select
+                  <MultiAudienceSelector
                     value={formData.target_audience}
-                    onChange={(e) => setFormData({ ...formData, target_audience: e.target.value as any })}
-                    className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:border-pink-500 focus:ring-1 focus:ring-pink-500 outline-none"
-                  >
-                    <option value="all">All Portals</option>
-                    <option value="teams">Team Leaders</option>
-                    <option value="judges">Judges</option>
-                    <option value="ops">Operations</option>
-                    <option value="admin">Admin Portal</option>
-                    <option value="participants">Participants</option>
-                    <option value="staff">Staff</option>
-                    <option value="organizers">Organizers</option>
-                  </select>
+                    onChange={(vals) => setFormData({ ...formData, target_audience: vals })}
+                    required
+                  />
                 </div>
               </div>
 
@@ -952,7 +950,7 @@ export default function AnnouncementsClient({
                   <span className="capitalize">{STATUS_LABELS[previewAnnouncement.status] || previewAnnouncement.status}</span>
                 </span>
                 <span className="inline-flex items-center px-2 py-1 text-xs rounded-full bg-gray-800 border border-gray-700 text-gray-300">
-                  {AUDIENCE_LABELS[previewAnnouncement.target_audience] || previewAnnouncement.target_audience}
+                  {(Array.isArray(previewAnnouncement.target_audience) ? previewAnnouncement.target_audience : [previewAnnouncement.target_audience || "all"]).map((a) => AUDIENCE_LABELS[a] || a).join(", ")}
                 </span>
                 {previewAnnouncement.pin_to_top && (
                   <span className="px-1.5 py-0.5 text-[10px] font-mono bg-yellow-500/20 text-yellow-400 border border-yellow-500/30 rounded">PINNED</span>
