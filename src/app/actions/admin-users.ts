@@ -17,6 +17,7 @@ export interface UserProfileItem {
   team_name?: string | null;
   team_role?: string | null;
   username?: string | null;
+  phone: string | null;
 }
 
 export interface MemberHierarchyItem {
@@ -26,6 +27,7 @@ export interface MemberHierarchyItem {
   name: string | null;
   full_name?: string | null;
   email: string | null;
+  phone: string | null;
   created_at?: string;
 }
 
@@ -74,7 +76,8 @@ export async function getTeamsHierarchyData(): Promise<TeamHierarchyItem[]> {
         profiles (
           id,
           full_name,
-          email
+          email,
+          phone
         )
       `);
 
@@ -95,6 +98,7 @@ export async function getTeamsHierarchyData(): Promise<TeamHierarchyItem[]> {
         name: nameVal,
         full_name: nameVal,
         email: profile?.email || rm.email || null,
+        phone: profile?.phone || null,
         created_at: rm.joined_at,
       };
 
@@ -116,6 +120,7 @@ export async function getTeamsHierarchyData(): Promise<TeamHierarchyItem[]> {
               name: team.leader_name,
               full_name: team.leader_name,
               email: null,
+              phone: null,
             }
           : null);
 
@@ -160,6 +165,7 @@ export async function getUsersList(params?: {
         email,
         full_name,
         role,
+        phone,
         created_at
       `)
       .order("created_at", { ascending: false })
@@ -245,6 +251,7 @@ export async function getUsersList(params?: {
         team_name: tm?.team_name || null,
         team_role: tm?.team_role || null,
         username: explicitUsername || fallbackUsername,
+        phone: p.phone || null,
       };
     });
   };
@@ -337,6 +344,100 @@ export async function updateUserRole(data: {
   revalidatePath("/admin/users");
 
   return { success: true, message: `Role updated to ${data.newRole}` };
+}
+
+/**
+ * Update a user's phone number. Admin-only; validated server-side.
+ * Normalizes Indian mobile numbers: accepts +91XXXXXXXXXX, 91XXXXXXXXXX,
+ * XXXXXXXXXXXX, +91-XXXXXXXXXX and stores in E.164-like canonical form.
+ */
+export async function updateUserPhone(data: {
+  userId: string;
+  phone: string | null;
+  [CSRF_CONSTANTS.HEADER_NAME]?: string;
+}) {
+  const { user } = await requireAdmin();
+  await validateCsrfToken(data[CSRF_CONSTANTS.HEADER_NAME] || null);
+
+  // Rate limiting for phone changes
+  const rateLimit = checkServerActionRateLimit(
+    user.id,
+    "userPhoneChange",
+    SERVER_ACTION_RATE_LIMITS.userRoleChange.maxRequests,
+    SERVER_ACTION_RATE_LIMITS.userRoleChange.windowMs
+  );
+
+  if (!rateLimit.success) {
+    throw new Error(`Too many phone change attempts. Please try again in ${rateLimit.retryAfter} seconds.`);
+  }
+
+  // Validate phone format if provided
+  let normalizedPhone: string | null = null;
+  if (data.phone && data.phone.trim() !== "") {
+    const raw = data.phone.trim();
+    // Strip +91, 91, spaces, dashes
+    const digitsOnly = raw.replace(/^(\+?91|91)?[-]?/, "").replace(/\s/g, "");
+    // Must be exactly 10 digits starting with 6-9
+    if (!/^[6-9]\d{9}$/.test(digitsOnly)) {
+      throw new Error("Invalid phone number. Provide a valid 10-digit Indian mobile number (optional +91 prefix).");
+    }
+    normalizedPhone = `+91${digitsOnly}`;
+  }
+
+  // Fetch current profile for audit
+  const { data: currentProfile, error: fetchErr } = await supabaseAdmin
+    .from("profiles")
+    .select("phone, email, full_name, role")
+    .eq("id", data.userId)
+    .single();
+
+  if (fetchErr || !currentProfile) {
+    throw new Error("User profile not found.");
+  }
+
+  const previousPhone = currentProfile.phone;
+
+  // No-op if unchanged
+  if (previousPhone === normalizedPhone) {
+    return { success: true, message: "Phone number unchanged." };
+  }
+
+  // Update phone in profiles
+  const { error: updateErr } = await supabaseAdmin
+    .from("profiles")
+    .update({ phone: normalizedPhone })
+    .eq("id", data.userId);
+
+  if (updateErr) {
+    throw new Error(`Failed to update phone number: ${updateErr.message}`);
+  }
+
+  // Audit log
+  void supabaseAdmin.from("audit_logs").insert([
+    {
+      action: "UPDATE_USER_PHONE",
+      entity_type: "profile",
+      entity_id: data.userId,
+      admin_id: user.id,
+      details: {
+        target_email: currentProfile.email,
+        target_name: currentProfile.full_name,
+        previous_phone: previousPhone || null,
+        new_phone: normalizedPhone || null,
+      },
+    },
+  ]);
+
+  revalidatePath("/admin");
+  revalidatePath("/admin/users");
+  revalidatePath("/team");
+
+  return {
+    success: true,
+    message: normalizedPhone
+      ? `Phone number updated to ${normalizedPhone}`
+      : "Phone number removed.",
+  };
 }
 
 export async function createUser(data: {

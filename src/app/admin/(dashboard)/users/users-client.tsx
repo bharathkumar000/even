@@ -18,6 +18,7 @@ import {
   Lock,
   Mail,
   User,
+  Phone,
   ShieldCheck,
   LucideIcon,
   ChevronDown,
@@ -40,6 +41,7 @@ import {
   // seedMockDataServerAction,
   bulkImportUsers,
   BulkImportUserRecord,
+  updateUserPhone,
 } from "@/app/actions/admin-users";
 import { withCsrfToken, CSRF_HEADER_NAME } from "@/lib/csrf-client";
 
@@ -159,12 +161,13 @@ export default function UsersClientView({
 
   // New User Form State
    const [newUserData, setNewUserData] = useState({
-     fullName: "",
-     username: "",
-     email: "",
-     password: "",
-     role: "participant" as AllowedUserRole,
-   });
+      fullName: "",
+      username: "",
+      email: "",
+      phone: "",
+      password: "",
+      role: "participant" as AllowedUserRole,
+    });
   const [formLoading, setFormLoading] = useState(false);
 
   // Import / Export State
@@ -552,12 +555,13 @@ await createUser({
        });
        setIsAddModalOpen(false);
        setNewUserData({
-         fullName: "",
-         username: "",
-         email: "",
-         password: "",
-         role: "participant",
-       });
+          fullName: "",
+          username: "",
+          email: "",
+          phone: "",
+          password: "",
+          role: "participant",
+        });
        router.refresh();
     } catch (err: unknown) {
       setNotification({
@@ -881,6 +885,7 @@ await createUser({
             <thead>
               <tr className="border-b border-border-color bg-surface-color-light/50 text-[11px] text-accent-primary uppercase tracking-wider font-bold">
                 <th className="p-4">User</th>
+                <th className="p-4">Phone</th>
                 <th className="p-4">Assigned Role</th>
                 <th className="p-4">Team Association</th>
                 <th className="p-4">Enrolled At</th>
@@ -932,6 +937,17 @@ await createUser({
                         </div>
                       </td>
 
+                      {/* Phone Number */}
+                      <td className="p-4">
+                        {user.phone ? (
+                          <div className="text-text-primary text-[11px] font-mono truncate max-w-[200px]">
+                            {user.phone}
+                          </div>
+                        ) : (
+                          <span className="opacity-50 italic text-[11px]">Not added</span>
+                        )}
+                      </td>
+
                       {/* Current Role Badge */}
                       <td className="p-4">
                         <span
@@ -969,9 +985,46 @@ await createUser({
                         })}
                       </td>
 
-                      {/* Actions: Role Selector Dropdown & Delete Button */}
+                      {/* Actions: Phone Edit, Role Selector Dropdown & Delete Button */}
                       <td className="p-4 text-right">
                         <div className="inline-flex items-center gap-2">
+                          {/* Edit Phone Button */}
+                          <button
+                            disabled={isPending || isSelf}
+                            onClick={() => {
+                              const current = user.phone || "";
+                              const next = window.prompt("Enter phone number (e.g. 9876543210 or +919876543210):", current);
+                              if (next !== null) {
+                                startTransition(async () => {
+                                  try {
+                                    await updateUserPhone({
+                                      userId: user.id,
+                                      phone: next.trim() === "" ? null : next.trim(),
+                                      ...withCsrfToken(),
+                                    });
+                                    setUsersList((prev) =>
+                                      prev.map((u) => (u.id === user.id ? { ...u, phone: next.trim() || null } : u))
+                                    );
+                                    setNotification({
+                                      type: "success",
+                                      message: `Phone updated for ${user.full_name || user.email}`,
+                                    });
+                                    router.refresh();
+                                  } catch (err: unknown) {
+                                    setNotification({
+                                      type: "error",
+                                      message: err instanceof Error ? err.message : "Failed to update phone number.",
+                                    });
+                                  }
+                                });
+                              }
+                            }}
+                            className="p-1.5 bg-surface-color border border-border-color hover:border-accent-tertiary text-accent-tertiary hover:bg-accent-tertiary/10 transition-colors disabled:opacity-30 cursor-pointer"
+                            title={isSelf ? "Cannot edit your own phone" : "Edit phone number"}
+                          >
+                            <Phone size={13} />
+                          </button>
+
                           {/* Role Select Dropdown */}
                           <select
                             disabled={isPending || isSelf}
@@ -1052,13 +1105,49 @@ await createUser({
                     }
                     className="w-full bg-surface-color border border-border-color py-2 pl-9 pr-3 text-xs text-text-primary focus:border-accent-secondary outline-none font-sans tracking-normal"
                   />
+                  </div>
                 </div>
-              </div>
 
                <div className="space-y-1">
                  <label className="block text-xs uppercase text-text-secondary font-bold">
-                   Username
+                   Phone Number (Optional)
                  </label>
+                 <div className="relative">
+                   <Phone size={15} className="absolute left-3 top-2.5 text-text-secondary" />
+                   <input
+                     type="tel"
+                     placeholder="e.g. 9876543210 or +919876543210"
+                     value={newUserData.phone}
+                     onChange={(e) =>
+                       setNewUserData((p) => ({ ...p, phone: e.target.value }))
+                     }
+                     className="w-full bg-surface-color border border-border-color py-2 pl-9 pr-3 text-xs text-text-primary focus:border-accent-secondary outline-none font-sans tracking-normal"
+                   />
+                 </div>
+               </div>
+
+              <div className="space-y-1">
+                <label className="block text-xs uppercase text-text-secondary font-bold">
+                  Temporary Password
+                </label>
+                 <div className="relative">
+                   <Phone size={15} className="absolute left-3 top-2.5 text-text-secondary" />
+                   <input
+                     type="tel"
+                     placeholder="e.g. 9876543210 or +919876543210"
+                     value={newUserData.phone}
+                     onChange={(e) =>
+                       setNewUserData((p) => ({ ...p, phone: e.target.value }))
+                     }
+                     className="w-full bg-surface-color border border-border-color py-2 pl-9 pr-3 text-xs text-text-primary focus:border-accent-secondary outline-none font-sans tracking-normal"
+                   />
+                 </div>
+               </div>
+
+              <div className="space-y-1">
+                <label className="block text-xs uppercase text-text-secondary font-bold">
+                  Temporary Password
+                </label>
                  <div className="relative">
                    <User size={15} className="absolute left-3 top-2.5 text-text-secondary" />
                    <input

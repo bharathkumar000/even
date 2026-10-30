@@ -236,36 +236,29 @@ const normalizedEmail = email.includes("@") ? email.trim() : `${email.trim()}@iv
     }
   };
 
-const handleDemoClick = async (demoEmail: string, roleName: string, targetPath: string) => {
+const DEMO_PASSWORD = "Password@123";
+
+  const handleDemoClick = async (demoEmail: string, roleName: string, targetPath: string) => {
     // Only allow demo credentials in development environment
     if (process.env.NODE_ENV === "production") {
       setErrorMsg("Demo credentials are not available in production.");
       return;
     }
-    // Demo accounts should have proper credentials set up in the auth system
-    // This is a placeholder - actual demo credentials should be configured in Supabase
+
     setEmail(demoEmail);
-    setPassword(""); // User must enter the actual demo password
+    setPassword(DEMO_PASSWORD);
     setErrorMsg(null);
-    setSuccessMsg(`Demo account ${roleName} selected. Please enter the demo password.`);
-  };
+    setSuccessMsg(`Logging in as ${roleName}...`);
 
-  const handleForgotPassword = async () => {
-    if (!email.trim()) {
-      setErrorMsg("Enter your username or email above first to receive reset instructions.");
-      return;
-    }
-    const supabase = createClient();
-    const normalizedEmail = email.includes("@") ? email.trim() : `${email.trim()}@ivc.pulse`;
     try {
-      const { error } = await supabase.auth.resetPasswordForEmail(normalizedEmail, {
-        redirectTo: `${typeof window !== "undefined" ? window.location.origin : ""}/login`,
-      });
-
-      if (error) throw error;
-      setSuccessMsg(`Password reset instructions sent to ${normalizedEmail}`);
+      await executeSignIn(demoEmail, DEMO_PASSWORD, targetPath);
     } catch (err: unknown) {
-      setErrorMsg(err instanceof Error ? err.message : "Failed to send reset instructions.");
+      setErrorMsg(
+        err instanceof Error
+          ? `Demo login failed: ${err.message}`
+          : `Demo login failed for ${roleName}. Please check credentials.`
+      );
+      setLoading(false);
     }
   };
 
@@ -611,7 +604,7 @@ const handleDemoClick = async (demoEmail: string, roleName: string, targetPath: 
                       </div>
                     </div>
 
-                    {/* Remember Me & Forgot Password Row */}
+                    {/* Remember Me Row */}
                     {!isSignUp && (
                       <div className="flex items-center justify-between text-[10px] pt-0.5">
                         <label className="flex items-center gap-1.5 cursor-pointer select-none text-[#94a3b8] hover:text-white transition-colors">
@@ -623,13 +616,6 @@ const handleDemoClick = async (demoEmail: string, roleName: string, targetPath: 
                           />
                           <span className="text-[10px]">Remember me</span>
                         </label>
-                        <button
-                          type="button"
-                          onClick={handleForgotPassword}
-                          className="text-[#ff007f] hover:text-[#ff3399] font-medium transition-colors text-[10px]"
-                        >
-                          Forgot password?
-                        </button>
                       </div>
                     )}
 
