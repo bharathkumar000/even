@@ -16,7 +16,7 @@ export default function AdminAnnouncementModal() {
   const [targetAudience, setTargetAudience] = useState<"all" | "teams" | "judges" | "ops">("all");
   const [loading, setLoading] = useState(false);
   const [clearing, setClearing] = useState(false);
-  const [statusMsg, setStatusMsg] = useState<string | null>(null);
+  const [statusMsg, setStatusMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
   useEffect(() => {
     setMounted(true);
@@ -37,14 +37,18 @@ export default function AdminAnnouncementModal() {
     setLoading(true);
     setStatusMsg(null);
     try {
-      await createAnnouncement({
+      const res = await createAnnouncement({
         title,
         message,
         priority,
         target_audience: targetAudience,
         ...withCsrfToken(),
       });
-      setStatusMsg("Announcement broadcasted live to all portals!");
+      if (res && !res.success) {
+        setStatusMsg({ type: "error", text: res.error || "Broadcast failed" });
+        return;
+      }
+      setStatusMsg({ type: "success", text: "Announcement broadcasted live to all portals!" });
       setTitle("");
       setMessage("");
       setTimeout(() => {
@@ -52,7 +56,7 @@ export default function AdminAnnouncementModal() {
         setStatusMsg(null);
       }, 1500);
     } catch (err: unknown) {
-      setStatusMsg(err instanceof Error ? err.message : "Broadcast failed");
+      setStatusMsg({ type: "error", text: err instanceof Error ? err.message : "Broadcast failed" });
     } finally {
       setLoading(false);
     }
@@ -74,13 +78,13 @@ export default function AdminAnnouncementModal() {
           event: "clear_all_broadcasts",
         });
       } catch {}
-      setStatusMsg(`Successfully cleared ${res.count} broadcast alert(s) from all portals!`);
+      setStatusMsg({ type: "success", text: `Successfully cleared ${res.count} broadcast alert(s) from all portals!` });
       setTimeout(() => {
         setIsOpen(false);
         setStatusMsg(null);
       }, 1500);
     } catch (err: unknown) {
-      setStatusMsg(err instanceof Error ? err.message : "Failed to clear alerts");
+      setStatusMsg({ type: "error", text: err instanceof Error ? err.message : "Failed to clear alerts" });
     } finally {
       setClearing(false);
     }
@@ -131,8 +135,15 @@ export default function AdminAnnouncementModal() {
             </div>
 
             {statusMsg && (
-              <div id="admin-announcement-desc" className="p-3 bg-status-success/15 border border-status-success text-status-success text-xs font-mono">
-                {statusMsg}
+              <div
+                id="admin-announcement-desc"
+                className={`p-3 text-xs font-mono border ${
+                  statusMsg.type === "success"
+                    ? "bg-status-success/15 border-status-success text-status-success"
+                    : "bg-status-error/15 border-status-error text-status-error"
+                }`}
+              >
+                {statusMsg.text}
               </div>
             )}
 

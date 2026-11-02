@@ -147,12 +147,15 @@ function mapAnnouncementToDb(data: Partial<any>): Record<string, any> {
   if (data.is_pinned !== undefined || data.pin_to_top !== undefined) {
     const pinVal = Boolean(data.is_pinned ?? data.pin_to_top);
     row.is_pinned = pinVal;
-    row.pin_to_top = pinVal;
   }
 
   if (data.scheduled_at !== undefined) row.scheduled_at = data.scheduled_at || null;
   if (data.published_at !== undefined) row.published_at = data.published_at || null;
   if (data.expires_at !== undefined) row.expires_at = data.expires_at || null;
+
+  if (data.created_by !== undefined) {
+    row.created_by = data.created_by;
+  }
 
   // Store attachments/links in actual 'attachments' JSON column
   if (data.attachments !== undefined) {
@@ -398,73 +401,94 @@ export async function createAnnouncement({
   attachment_name?: string | null;
   resource_links?: Record<string, string>[];
   [CSRF_CONSTANTS.HEADER_NAME]?: string;
-}) {
-  const { user } = await requireOperationsRole();
-  if (csrfToken) {
-    try {
-      await validateCsrfToken(csrfToken);
-    } catch {
-      // Allow authenticated operations session
+}): Promise<{ success: boolean; announcement?: Announcement; error?: string }> {
+  try {
+    const { user } = await requireOperationsRole();
+    if (csrfToken) {
+      try {
+        await validateCsrfToken(csrfToken);
+      } catch {
+        // Allow authenticated operations session
+      }
     }
+
+    // Validate and normalize target_audience
+    const audiences = Array.isArray(target_audience) ? target_audience : [target_audience];
+    const validAudiences: AnnouncementAudience[] = [
+      "all", "teams", "judges", "ops", "admin", "participants", "staff", "organizers",
+    ];
+    const filteredAudiences = audiences.filter((a) => validAudiences.includes(a));
+    const normalizedAudience = filteredAudiences.length > 0 ? filteredAudiences : ["all"];
+    // If 'all' is selected with others, normalize to just ['all']
+    const finalAudience = normalizedAudience.includes("all") && normalizedAudience.length > 1
+      ? ["all"]
+      : normalizedAudience;
+
+    const effectivePriority = priority_level || priority || "normal";
+    const effectivePinned = Boolean(is_pinned ?? pin_to_top ?? false);
+    const now = new Date().toISOString();
+    const effectiveStatus = status || "published";
+    const effectivePublishedAt =
+      effectiveStatus === "published"
+        ? (published_at || now)
+        : (published_at || null);
+
+    // Verify creator id exists in profiles table before setting created_by to satisfy foreign key constraint
+    let validCreatorId: string | null = null;
+    if (user?.id) {
+      try {
+        const { data: prof } = await supabaseAdmin
+          .from("profiles")
+          .select("id")
+          .eq("id", user.id)
+          .maybeSingle();
+        if (prof?.id) {
+          validCreatorId = prof.id;
+        }
+      } catch {}
+    }
+
+    const dbRow = mapAnnouncementToDb({
+      title: title.trim(),
+      message: message.trim(),
+      priority: effectivePriority,
+      target_audience: finalAudience,
+      category,
+      status: effectiveStatus,
+      is_active: effectiveStatus === "published",
+      is_pinned: effectivePinned,
+      scheduled_at: scheduled_at || null,
+      published_at: effectivePublishedAt,
+      expires_at: expires_at || null,
+      attachment_url: attachment_url || null,
+      attachment_name: attachment_name || null,
+      resource_links: resource_links || [],
+      created_by: validCreatorId,
+    });
+
+    const { data, error } = await supabaseAdmin
+      .from("announcements")
+      .insert(dbRow)
+      .select()
+      .single();
+
+    if (error) {
+      console.error("Failed to insert announcement:", error.message);
+      throw new Error(`Failed to create announcement: ${error.message}`);
+    }
+
+    revalidatePath("/admin");
+    revalidatePath("/admin/announcements");
+    revalidatePath("/team");
+    revalidatePath("/judge");
+    revalidatePath("/ops");
+    revalidatePath("/ops/scanner");
+
+    return { success: true, announcement: mapDbToAnnouncement(data) };
+  } catch (err: unknown) {
+    console.error("createAnnouncement error:", err);
+    throw err;
   }
-
-  // Validate and normalize target_audience
-  const audiences = Array.isArray(target_audience) ? target_audience : [target_audience];
-  const validAudiences: AnnouncementAudience[] = [
-    "all", "teams", "judges", "ops", "admin", "participants", "staff", "organizers",
-  ];
-  const filteredAudiences = audiences.filter((a) => validAudiences.includes(a));
-  const normalizedAudience = filteredAudiences.length > 0 ? filteredAudiences : ["all"];
-  // If 'all' is selected with others, normalize to just ['all']
-  const finalAudience = normalizedAudience.includes("all") && normalizedAudience.length > 1
-    ? ["all"]
-    : normalizedAudience;
-
-  const effectivePriority = priority_level || priority || "normal";
-  const effectivePinned = Boolean(is_pinned ?? pin_to_top ?? false);
-  const now = new Date().toISOString();
-  const effectiveStatus = status || "published";
-  const effectivePublishedAt =
-    effectiveStatus === "published"
-      ? (published_at || now)
-      : (published_at || null);
-
-  const dbRow = mapAnnouncementToDb({
-    title: title.trim(),
-    message: message.trim(),
-    priority: effectivePriority,
-    target_audience: finalAudience,
-    category,
-    status: effectiveStatus,
-    is_active: effectiveStatus === "published",
-    is_pinned: effectivePinned,
-    scheduled_at: scheduled_at || null,
-    published_at: effectivePublishedAt,
-    expires_at: expires_at || null,
-    attachment_url: attachment_url || null,
-    attachment_name: attachment_name || null,
-    resource_links: resource_links || [],
-    created_by: user.id,
-  });
-
-  const { data, error } = await supabaseAdmin
-    .from("announcements")
-    .insert(dbRow)
-    .select()
-    .single();
-
-  if (error) {
-    throw new Error(`Failed to create announcement: ${error.message}`);
-  }
-
-  revalidatePath("/admin");
-  revalidatePath("/admin/announcements");
-  revalidatePath("/team");
-  revalidatePath("/judge");
-  revalidatePath("/ops");
-  revalidatePath("/ops/scanner");
-
-  return { success: true, announcement: mapDbToAnnouncement(data) };
 }
 
 /**
