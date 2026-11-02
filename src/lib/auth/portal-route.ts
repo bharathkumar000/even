@@ -5,6 +5,7 @@
 const LEGACY_ROLE_ALIASES: Record<string, string> = {
   ops: "staff",
   team: "leader",
+  spoc: "staff",
 };
 
 /**
@@ -28,6 +29,7 @@ export function getAuthorizedPortalUrl(role: string | null | undefined): string 
     case "judge":
       return "/judge";
     case "staff":
+    case "spoc":
       return "/ops/scanner";
     case "organizer":
       return "/ops/scanner";
@@ -47,7 +49,7 @@ export function isAuthorizedForPortal(portalPath: string, role: string | null | 
   const r = normalizeRole(role);
   if (portalPath.startsWith("/admin")) return r === "admin";
   if (portalPath.startsWith("/judge")) return r === "judge" || r === "admin";
-  if (portalPath.startsWith("/ops")) return r === "staff" || r === "organizer" || r === "admin";
+  if (portalPath.startsWith("/ops")) return r === "staff" || r === "organizer" || r === "admin" || r === "spoc";
   if (portalPath.startsWith("/team")) return r === "leader" || r === "participant" || r === "admin";
   return false;
 }

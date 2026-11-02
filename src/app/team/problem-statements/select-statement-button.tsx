@@ -27,7 +27,11 @@ export default function SelectStatementButton({
     setSuccess(false);
     startTransition(async () => {
       try {
-        await selectProblemStatement(statementId, withCsrfToken()[CSRF_HEADER_NAME] || undefined);
+        const res = await selectProblemStatement(statementId, withCsrfToken()[CSRF_HEADER_NAME] || undefined);
+        if (res && !res.success) {
+          setError(res.error || "Failed to select problem statement.");
+          return;
+        }
         setSuccess(true);
         router.refresh();
       } catch (err: unknown) {
@@ -39,22 +43,22 @@ export default function SelectStatementButton({
   };
 
   return (
-    <div className="mt-3">
+    <div>
       <button
         type="button"
         onClick={handleSelect}
         disabled={disabled || isPending}
-        className="inline-flex items-center gap-1.5 px-3 py-1 text-xs bg-accent-secondary text-black rounded hover:bg-accent-primary transition disabled:opacity-50 disabled:cursor-not-allowed"
+        className="inline-flex items-center justify-center gap-2 px-4 py-2 text-xs font-tech font-bold uppercase tracking-wider bg-accent-secondary text-black rounded hover:bg-accent-primary active:scale-95 transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed shadow-md w-full sm:w-auto"
       >
         {isPending ? (
-          <Loader2 size={12} className="animate-spin" />
+          <Loader2 size={13} className="animate-spin" />
         ) : success ? (
-          <Check size={12} />
+          <Check size={13} />
         ) : null}
-        {success ? "Selected" : isPending ? "Selecting..." : "Select"}
+        {success ? "Selected" : isPending ? "Selecting…" : "Select Statement"}
       </button>
       {error && (
-        <p className="text-xs text-status-error mt-1.5 m-0">{error}</p>
+        <p className="text-xs text-status-error mt-1.5 m-0 font-mono">{error}</p>
       )}
       <span className="sr-only">{statementTitle}</span>
     </div>
