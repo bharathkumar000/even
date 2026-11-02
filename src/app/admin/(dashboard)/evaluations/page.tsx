@@ -1,52 +1,34 @@
-import { supabaseAdmin } from "@/lib/supabase/admin";
+import { getAllTeamsWithEvaluations } from "@/app/actions/admin-evaluations";
+import type { TeamEvaluationRecord } from "@/app/actions/admin-evaluations";
 import EvaluationsClientView, {
-  EvaluationItem,
   RoundItem,
 } from "./evaluations-client";
 
 export const dynamic = "force-dynamic";
 
 export default async function AdminEvaluationsPage() {
-  let evaluations: EvaluationItem[] = [];
+  let teams: TeamEvaluationRecord[] = [];
   let rounds: RoundItem[] = [];
 
   try {
-    const fetchEvalsData = async () => {
-      const [evalsRes, roundsRes] = await Promise.all([
-        supabaseAdmin
-          .from("evaluations")
-          .select(`
-            id,
-            total_score,
-            status,
-            created_at,
-            updated_at,
-            round_id,
-            judge_id,
-            team_id
-          `)
-          .order("created_at", { ascending: false })
-          .limit(100),
-        supabaseAdmin
-          .from("evaluation_rounds")
-          .select("id, title")
-          .order("sequence_order", { ascending: true }),
-      ]);
+    const fetchData = async () => {
+      const { teams: teamsData, rounds: roundsData } =
+        await getAllTeamsWithEvaluations();
       return {
-        evaluations: evalsRes.data || [],
-        rounds: roundsRes.data || [],
+        teams: teamsData || [],
+        rounds: roundsData || [],
       };
     };
 
-    const timeoutPromise = new Promise<{ evaluations: EvaluationItem[]; rounds: RoundItem[] }>(
-      (resolve) => setTimeout(() => resolve({ evaluations: [], rounds: [] }), 2500)
+    const timeoutPromise = new Promise<{ teams: TeamEvaluationRecord[]; rounds: RoundItem[] }>(
+      (resolve) => setTimeout(() => resolve({ teams: [], rounds: [] }), 2500)
     );
 
-    const data = await Promise.race([fetchEvalsData(), timeoutPromise]);
-    evaluations = data.evaluations;
+    const data = await Promise.race([fetchData(), timeoutPromise]);
+    teams = data.teams;
     rounds = data.rounds;
   } catch (err) {
-    console.error("Failed to load evaluation records:", err);
+    console.error("Failed to load evaluation data:", err);
   }
 
   return (
@@ -59,11 +41,11 @@ export default async function AdminEvaluationsPage() {
           Evaluation Monitor
         </h1>
         <p className="font-tech text-text-secondary text-sm mt-2 max-w-2xl">
-          Filter judge evaluations in real-time, inspect marks, and perform audited status overrides.
+          View all registered team evaluations, inspect marks, and perform audited status overrides.
         </p>
       </div>
 
-      <EvaluationsClientView initialEvaluations={evaluations} rounds={rounds} />
+      <EvaluationsClientView initialTeams={teams} rounds={rounds} />
     </div>
   );
 }

@@ -9,12 +9,12 @@ import {
 import { validateCsrfToken, CSRF_CONSTANTS } from "@/lib/csrf-server";
 
 export async function saveOrSubmitEvaluation(data: SubmitEvaluationInput & { [CSRF_CONSTANTS.HEADER_NAME]?: string }) {
-  // 1. Verify judge authentication & team assignment
-  const { user } = await requireActiveJudgeForTeam(data.team_id);
+  // 1. Validate input schema first (need round_id for auth check)
+  const validated = SubmitEvaluationSchema.parse(data);
   await validateCsrfToken(data[CSRF_CONSTANTS.HEADER_NAME] || null);
 
-  // 2. Validate input schema
-  const validated = SubmitEvaluationSchema.parse(data);
+  // 2. Verify judge authentication & team assignment (for this round)
+  const { user } = await requireActiveJudgeForTeam(validated.team_id, validated.round_id);
 
   // 3. Verify evaluation round is open for scoring
   const { data: round, error: roundError } = await supabaseAdmin
@@ -55,6 +55,11 @@ export async function saveOrSubmitEvaluation(data: SubmitEvaluationInput & { [CS
       throw new Error(`Score (${item.score}) exceeds maximum allowed mark (${maxMarks}) for criterion`);
     }
     totalScore += item.score;
+  }
+
+  // 5a. Enforce 50-mark cap per judge
+  if (totalScore > 50) {
+    throw new Error(`Total score (${totalScore}) exceeds the 50-mark maximum per judge`);
   }
 
   // 5. Determine status
