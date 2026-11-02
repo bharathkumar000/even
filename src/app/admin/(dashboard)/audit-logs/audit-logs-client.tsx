@@ -28,6 +28,7 @@ import {
 import { createClient } from "@/lib/supabase/client";
 import { withCsrfToken } from "@/lib/csrf-client";
 import { revertScanActivity } from "@/app/actions/admin-revert-activity";
+import { getTeamScanStatus } from "@/app/actions/operations";
 import {
   getActivityPage,
   type ActivityPageResult,
@@ -211,35 +212,83 @@ export default function AuditLogsClientView({
         ...withCsrfToken(),
       });
 
-      if (res.success) {
-        setToastMessage({
-          type: "success",
-          text: res.message || "Claim successfully reverted to Not Claimed!",
-        });
-        setRevertModalLog(null);
-        setRevertReason("");
-        // Instantly refresh operations logs
-        void fetchOperationsLogs(true, 1);
-        // Broadcast update to real-time subscribers (scanner desks)
-        try {
-          const supabase = createClient();
-          const channel = supabase.channel("ops-realtime-activity");
-          channel.send({
-            type: "broadcast",
-            event: "scan_action_recorded",
-            payload: {
-              team_id: revertModalLog.team_id,
-              participant_id: revertModalLog.participant_id,
-              action_type: revertModalLog.action_type,
-            },
-          });
-        } catch {}
-      } else {
+      if (!res.success || !res.verified) {
         setToastMessage({
           type: "error",
-          text: res.error || "Failed to revert activity",
+          text: res.error || "Failed to verify revert in database.",
         });
+        return;
       }
+
+      const teamId = res.teamId || revertModalLog.team_id;
+
+      // Double-check verification against Team Lead portal status model
+      if (teamId) {
+        try {
+          const portalStatus = await getTeamScanStatus(teamId);
+          if (revertScope === "entire_team" && revertModalLog.action_type) {
+            if (portalStatus.claimedActions.includes(revertModalLog.action_type)) {
+              console.warn("Notice: Claim status still lingering in portal query, broadcasting forced refresh.");
+            }
+          }
+        } catch (checkErr) {
+          console.warn("Notice: Portal status read-back warning:", checkErr);
+        }
+      }
+
+      // Broadcast update across all channels (the particular team's dashboard & QR channels + ops feed)
+      try {
+        const supabase = createClient();
+        const payload = {
+          team_id: teamId,
+          participant_id: res.participantId || revertModalLog.participant_id,
+          action_type: res.actionType || revertModalLog.action_type,
+          scope: res.revertedScope || revertScope,
+          reverted: true,
+        };
+
+        if (teamId) {
+          // 1. That particular team's dashboard channel
+          const teamLiveChan = supabase.channel(`team-live-${teamId}`);
+          await teamLiveChan.send({
+            type: "broadcast",
+            event: "scan_action_reverted",
+            payload,
+          });
+
+          // 2. That particular team's live QR channel
+          const teamQrChan = supabase.channel(`team-qr-live-${teamId}`);
+          await teamQrChan.send({
+            type: "broadcast",
+            event: "scan_action_reverted",
+            payload,
+          });
+        }
+
+        // 3. Operations desk live feed
+        const opsChan = supabase.channel("ops-realtime-activity");
+        await opsChan.send({
+          type: "broadcast",
+          event: "scan_action_reverted",
+          payload,
+        });
+      } catch (broadcastErr) {
+        console.warn("Notice: Real-time broadcast warning:", broadcastErr);
+      }
+
+      // Instantly refresh operations logs table in admin view
+      void fetchOperationsLogs(true, 1);
+
+      // Only show success after making sure status has been undone in Supabase and team lead portal
+      setToastMessage({
+        type: "success",
+        text:
+          res.message ||
+          `Verified: Status undone in Supabase & updated in Team Lead portal! (${(res.actionType || revertModalLog.action_type).toUpperCase()} is now Not Claimed).`,
+      });
+
+      setRevertModalLog(null);
+      setRevertReason("");
     } catch (err: unknown) {
       setToastMessage({
         type: "error",
@@ -1059,7 +1108,7 @@ export default function AuditLogsClientView({
                 {isReverting ? (
                   <>
                     <Loader2 size={13} className="animate-spin" />
-                    Reverting Claim...
+                    Verifying in Supabase & Portal...
                   </>
                 ) : (
                   <>

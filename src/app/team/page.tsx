@@ -32,6 +32,7 @@ import { getActiveAnnouncements } from "@/app/actions/announcements";
 import { getContentForPortal } from "@/app/actions/content-hub";
 import AnnouncementBanner from "@/components/AnnouncementBanner";
 import PitchAlertListener from "@/components/team/PitchAlertListener";
+import TeamActivitySyncListener from "@/components/team/TeamActivitySyncListener";
 import { getTeamRegistrationByEmail } from "@/lib/googleSheet";
 import { ContentActivityHub } from "@/components/content-hub";
 
@@ -168,6 +169,9 @@ export default async function TeamDashboardPage() {
     <div className="space-y-8 animate-fade-in font-tech">
       {/* Real-time Jury Pitch Call Alert */}
       <PitchAlertListener teamId={effectiveTeamId} teamName={teamInfo?.name} />
+
+      {/* Real-time Activity Sync Listener (auto-updates claims & distribution status on revert) */}
+      <TeamActivitySyncListener teamId={effectiveTeamId} />
 
       {/* Live Announcement Banner */}
 
@@ -379,22 +383,9 @@ export default async function TeamDashboardPage() {
                     ) : (
                       <span className="text-[10px] opacity-50 italic">No phone</span>
                     )}
-</div>
-
-
-      {/* Content & Activity Hub */}
-      <ContentActivityHub
-        portalAudience="team_leader"
-        showFilters={true}
-        showSearch={true}
-        showCreateButton={false}
-        initialItems={[]}
-        emptyMessage="No content published for your team yet."
-        loadingMessage="Loading team content..."
-        errorMessage="Failed to load team content."
-      />
-    </div>
-  );
+                  </div>
+                </div>
+              );
             })
           )}
         </div>
@@ -587,7 +578,17 @@ export default async function TeamDashboardPage() {
         </div>
       </div>
 
-
+      {/* Content & Activity Hub */}
+      <ContentActivityHub
+        portalAudience="team_leader"
+        showFilters={true}
+        showSearch={true}
+        showCreateButton={false}
+        initialItems={contentItems}
+        emptyMessage="No content published for your team yet."
+        loadingMessage="Loading team content..."
+        errorMessage="Failed to load team content."
+      />
     </div>
   );
 }
