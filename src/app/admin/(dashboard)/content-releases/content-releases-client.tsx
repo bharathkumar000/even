@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState, useTransition } from "react";
 import type { FormEvent } from "react";
 import type { LucideIcon } from "lucide-react";
+import Link from "next/link";
 import {
   AlertCircle,
   ArrowLeft,
@@ -49,6 +50,26 @@ import {
   scheduleContentActivity,
   cancelActivitySchedule,
 } from "@/app/actions/admin-content-hub";
+import {
+  deleteFormSection,
+} from "@/app/actions/submission-form-builder";
+import {
+  getProjectSubmissionForms,
+  getProjectSubmissionFormById,
+  createProjectSubmissionForm,
+  updateProjectSubmissionForm,
+  publishProjectSubmissionForm,
+  unpublishProjectSubmissionForm,
+  archiveProjectSubmissionForm,
+  deleteProjectSubmissionForm,
+} from "@/app/actions/project-submission-forms";
+import { PublishConfirmationModal } from "@/components/admin/PublishConfirmationModal";
+import { unpublishProblemStatement } from "@/app/actions/admin-problem-statements";
+import {
+  importPdfExtract,
+  importPdfContentWithoutStorage,
+} from "@/app/actions/pdf-import";
+import PdfImportDialog from "@/components/admin/PdfImportDialog";
 import type {
   ActivityType,
   ContentActivity,
@@ -56,6 +77,7 @@ import type {
   ContentHistoryEntry,
   ContentItem,
 } from "@/app/actions/admin-content-hub";
+import type { ProjectSubmissionForm } from "@/app/actions/project-submission-forms";
 
 interface ContentHubClientViewProps {
   initialActivities: ContentActivity[];
@@ -91,6 +113,7 @@ const ACTIVITY_LABELS: Record<ActivityType, string> = {
   announcements: "Announcements",
   resources: "Resource Library",
   custom: "Custom Activity",
+  project_submissions: "Project Submissions",
 };
 
 const ACTIVITY_ICONS: Record<ActivityType, LucideIcon> = {
@@ -99,6 +122,7 @@ const ACTIVITY_ICONS: Record<ActivityType, LucideIcon> = {
   announcements: Megaphone,
   resources: BookOpen,
   custom: FolderKanban,
+  project_submissions: Upload,
 };
 
 const ACTIVITY_ACCENTS: Record<ActivityType, string> = {
@@ -107,6 +131,7 @@ const ACTIVITY_ACCENTS: Record<ActivityType, string> = {
   announcements: "text-status-warning border-status-warning/40 bg-status-warning/10",
   resources: "text-accent-tertiary border-accent-tertiary/40 bg-accent-tertiary/10",
   custom: "text-text-primary border-border-color bg-surface-color-light",
+  project_submissions: "text-accent-secondary border-accent-secondary/40 bg-accent-secondary/10",
 };
 
 const EMPTY_FORM: ItemFormState = {
@@ -200,6 +225,8 @@ function metadataFor(
         resource_url: form.resourceUrl.trim() || null,
         category: form.category.trim() || null,
       };
+    case "project_submissions":
+      return { category: form.category.trim() || null };
     default:
       return { category: form.category.trim() || null };
   }
@@ -308,6 +335,7 @@ export default function ContentHubClientView({
   } | null>(null);
 
   const [isPending, startTransition] = useTransition();
+  const [unpublishing, setUnpublishing] = useState<Set<string>>(new Set());
 
   const [selectedActivityId, setSelectedActivityId] = useState<string | null>(
     null
@@ -344,6 +372,14 @@ export default function ContentHubClientView({
   const [uploadingFile, setUploadingFile] = useState(false);
   const [importing, setImporting] = useState(false);
 
+  // Project Submissions workspace state
+  const [submissionForms, setSubmissionForms] = useState<ProjectSubmissionForm[]>([]);
+  const [selectedFormId, setSelectedFormId] = useState<string | null>(null);
+  const [formModalOpen, setFormModalOpen] = useState(false);
+  const [creatingForm, setCreatingForm] = useState(false);
+  const [formTitle, setFormTitle] = useState("");
+  const [formDescription, setFormDescription] = useState("");
+
   const [previewItem, setPreviewItem] = useState<ContentItem | null>(null);
   const [historyItem, setHistoryItem] = useState<ContentItem | null>(null);
   const [historyEntries, setHistoryEntries] = useState<ContentHistoryEntry[]>(
@@ -352,6 +388,40 @@ export default function ContentHubClientView({
   const [historyLoading, setHistoryLoading] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<ContentItem | null>(null);
   const [deleting, setDeleting] = useState(false);
+
+  // Publish confirmation modal state
+  const [publishConfirmOpen, setPublishConfirmOpen] = useState(false);
+  const [publishConfirmItem, setPublishConfirmItem] = useState<{
+    id: string;
+    title: string;
+    type: string;
+    currentStatus: string;
+    visibility: string;
+    action: "publish" | "unpublish";
+  } | null>(null);
+  const [publishConfirmBulk, setPublishConfirmBulk] = useState(false);
+  const [publishConfirmItems, setPublishConfirmItems] = useState<Array<{
+    id: string;
+    title: string;
+    type: string;
+    currentStatus: string;
+    visibility: string;
+  }>>([]);
+  const [publishConfirmLoading, setPublishConfirmLoading] = useState(false);
+
+  // Form publish confirmation modal state
+  const [formPublishConfirmOpen, setFormPublishConfirmOpen] = useState(false);
+  const [formPublishConfirmItem, setFormPublishConfirmItem] = useState<{
+    id: string;
+    title: string;
+    action: "publish" | "unpublish";
+  } | null>(null);
+  const [formPublishConfirmLoading, setFormPublishConfirmLoading] = useState(false);
+
+  // PDF Import dialog state
+  const [pdfImportOpen, setPdfImportOpen] = useState(false);
+  const [importingPdf, setImportingPdf] = useState(false);
+
 
   const selectedActivity = useMemo(
     () => activities.find((activity) => activity.id === selectedActivityId) || null,
@@ -502,6 +572,15 @@ export default function ContentHubClientView({
     }
   }, [selectedActivityId]);
 
+  // Load submission forms when Project Submissions activity is selected
+  useEffect(() => {
+    if (!selectedActivity || selectedActivity.type !== "project_submissions") {
+      setSubmissionForms([]);
+      return;
+    }
+    loadFormsForActivity(selectedActivity.id);
+  }, [selectedActivity]);
+
   // Interval ticker for live countdown and auto-publish trigger
   useEffect(() => {
     if (!activityTimerEnd || !selectedActivityId) return;
@@ -627,6 +706,136 @@ export default function ContentHubClientView({
     }
   };
 
+  // Project Submissions workspace handlers
+
+  const loadFormsForActivity = async (_activityId: string) => {
+    try {
+      const { forms, error } = await getProjectSubmissionForms();
+      if (error) {
+        throw new Error(error);
+      }
+      setSubmissionForms(forms);
+    } catch (err: unknown) {
+      setNotification({
+        type: "error",
+        message: err instanceof Error ? err.message : "Failed to load submission forms.",
+      });
+    }
+  };
+
+  const openCreateForm = () => {
+    setFormTitle("");
+    setFormDescription("");
+    setFormModalOpen(true);
+  };
+
+  const submitCreateForm = async () => {
+    if (!selectedActivity) return;
+    if (!formTitle.trim()) {
+      setNotification({ type: "error", message: "Form title is required." });
+      return;
+    }
+    setCreatingForm(true);
+    try {
+      const created = await createProjectSubmissionForm({
+        title: formTitle.trim(),
+        description: formDescription.trim() || undefined,
+        form_config: { sections: [], questions: [] },
+      });
+      setSubmissionForms((prev) => [created.form as ProjectSubmissionForm, ...prev]);
+      setFormModalOpen(false);
+      setNotification({
+        type: "success",
+        message: `Form “${created.form.title}” created.`,
+      });
+    } catch (err: unknown) {
+      setNotification({
+        type: "error",
+        message: err instanceof Error ? err.message : "Failed to create form.",
+      });
+    } finally {
+      setCreatingForm(false);
+    }
+  };
+
+  const handlePublishForm = async (form: ProjectSubmissionForm) => {
+    setFormPublishConfirmItem({
+      id: form.id,
+      title: form.title,
+      action: "publish",
+    });
+    setFormPublishConfirmOpen(true);
+  };
+
+  const handleUnpublishForm = async (form: ProjectSubmissionForm) => {
+    setFormPublishConfirmItem({
+      id: form.id,
+      title: form.title,
+      action: "unpublish",
+    });
+    setFormPublishConfirmOpen(true);
+  };
+
+  const confirmPublishForm = async () => {
+    if (!formPublishConfirmItem) return;
+    setFormPublishConfirmLoading(true);
+    try {
+      const updated =
+        formPublishConfirmItem.action === "publish"
+          ? await publishProjectSubmissionForm(formPublishConfirmItem.id)
+          : await unpublishProjectSubmissionForm(formPublishConfirmItem.id);
+      setSubmissionForms((prev) =>
+        prev.map((f) => (f.id === updated.id ? updated : f))
+      );
+      setNotification({
+        type: "success",
+        message:
+          updated.form_status === "published"
+            ? `“${updated.title}” is now published.`
+            : `“${updated.title}” returned to draft.`,
+      });
+    } catch (err: unknown) {
+      setNotification({
+        type: "error",
+        message: err instanceof Error ? err.message : "Failed to change publication.",
+      });
+    } finally {
+      setFormPublishConfirmLoading(false);
+      setFormPublishConfirmOpen(false);
+      setFormPublishConfirmItem(null);
+    }
+  };
+
+  const handleArchiveForm = async (form: ProjectSubmissionForm) => {
+    try {
+      const updated = await archiveProjectSubmissionForm(form.id);
+      setSubmissionForms((prev) =>
+        prev.map((f) => (f.id === form.id ? updated : f))
+      );
+      setNotification({
+        type: "success",
+        message: `Form “${updated.title}” archived.`,
+      });
+    } catch (err: unknown) {
+      setNotification({
+        type: "error",
+        message: err instanceof Error ? err.message : "Failed to archive form.",
+      });
+    }
+  };
+
+  const handleDeleteFormSection = async (sectionId: string) => {
+    try {
+      await deleteFormSection(sectionId);
+      setNotification({ type: "success", message: "Section deleted." });
+    } catch (err: unknown) {
+      setNotification({
+        type: "error",
+        message: err instanceof Error ? err.message : "Failed to delete section.",
+      });
+    }
+  };
+
   const openCreateItem = () => {
     if (!selectedActivity) return;
     setEditingItem(null);
@@ -742,29 +951,120 @@ export default function ContentHubClientView({
     }
   };
 
+  const handleUnpublishProblemStatement = async (item: ContentItem) => {
+    if (unpublishing.has(item.id)) return;
+    setUnpublishing((prev) => new Set([...prev, item.id]));
+    try {
+      await unpublishProblemStatement(item.id);
+      setItems((prev) =>
+        prev.map((i) =>
+          i.id === item.id
+            ? {
+                ...i,
+                status: "draft",
+                published_by: null,
+                published_at: null,
+                updated_at: new Date().toISOString(),
+              }
+            : i
+        )
+      );
+      setNotification({
+        type: "success",
+        message: "Content successfully unpublished and moved to drafts.",
+      });
+    } catch (err: unknown) {
+      setNotification({
+        type: "error",
+        message:
+          err instanceof Error ? err.message : "Failed to unpublish content.",
+      });
+    } finally {
+      setUnpublishing((prev) => {
+        const next = new Set(prev);
+        next.delete(item.id);
+        return next;
+      });
+    }
+  };
+
   const togglePublish = (item: ContentItem) => {
-    startTransition(async () => {
-      try {
-        const updated =
-          item.status === "published"
-            ? await unpublishContentItem(item.id)
-            : await publishContentItem(item.id);
-        replaceItem(updated);
-        setNotification({
-          type: "success",
-          message:
-            updated.status === "published"
-              ? `“${updated.title}” is now published.`
-              : `“${updated.title}” returned to draft.`,
-        });
-      } catch (err: unknown) {
-        setNotification({
-          type: "error",
-          message:
-            err instanceof Error ? err.message : "Failed to change publication.",
-        });
-      }
+    const isPublish = item.status !== "published";
+    setPublishConfirmItem({
+      id: item.id,
+      title: item.title,
+      type: item.activity_type || "Content",
+      currentStatus: item.status,
+      visibility: item.status === "published" ? "Restricted (draft)" : "All portal users",
+      action: isPublish ? "publish" : "unpublish",
     });
+    setPublishConfirmOpen(true);
+  };
+
+  const confirmPublishItem = async () => {
+    if (!publishConfirmItem) return;
+    setPublishConfirmLoading(true);
+    try {
+      const updated =
+        publishConfirmItem.action === "publish"
+          ? await publishContentItem(publishConfirmItem.id)
+          : await unpublishContentItem(publishConfirmItem.id);
+      replaceItem(updated);
+      setNotification({
+        type: "success",
+        message:
+          updated.status === "published"
+            ? `“${updated.title}” is now published.`
+            : `“${updated.title}” returned to draft.`,
+      });
+    } catch (err: unknown) {
+      setNotification({
+        type: "error",
+        message:
+          err instanceof Error ? err.message : "Failed to change publication.",
+      });
+    } finally {
+      setPublishConfirmLoading(false);
+      setPublishConfirmOpen(false);
+      setPublishConfirmItem(null);
+    }
+  };
+
+  const confirmPublishBulk = async () => {
+    setPublishConfirmLoading(true);
+    try {
+      const draftItems = items.filter(
+        (item) => item.activity_id === selectedActivityId && item.status !== "published"
+      );
+      const publishedIds: string[] = [];
+      const errorIds: string[] = [];
+      for (const item of draftItems) {
+        try {
+          const updated = await publishContentItem(item.id);
+          publishedIds.push(item.id);
+          replaceItem(updated);
+        } catch {
+          errorIds.push(item.id);
+        }
+      }
+      setNotification({
+        type: errorIds.length > 0 ? "error" : "success",
+        message:
+          publishedIds.length > 0
+            ? `Published ${publishedIds.length} item(s)${errorIds.length > 0 ? `; ${errorIds.length} failed` : ""}.`
+            : "No items were published.",
+      });
+    } catch (err: unknown) {
+      setNotification({
+        type: "error",
+        message: err instanceof Error ? err.message : "Bulk publish failed",
+      });
+    } finally {
+      setPublishConfirmLoading(false);
+      setPublishConfirmOpen(false);
+      setPublishConfirmBulk(false);
+      setPublishConfirmItems([]);
+    }
   };
 
   const confirmDelete = async () => {
@@ -1146,10 +1446,10 @@ export default function ContentHubClientView({
                   </span>
                 </div>
 
-                <div className="space-y-1.5 flex-1">
-                  <p className="text-[10px] uppercase tracking-[2px] text-accent-tertiary font-bold m-0">
-                    {ACTIVITY_LABELS[activity.type]}
-                  </p>
+              <div className="space-y-1.5 flex-1">
+                <p className="text-[10px] uppercase tracking-[2px] text-accent-tertiary font-bold m-0">
+                  {activity.type === "project_submissions" ? "Team Submissions" : ACTIVITY_LABELS[activity.type]}
+                </p>
                   <h2 className="font-heading text-lg text-text-primary uppercase tracking-wide m-0">
                     {activity.title}
                   </h2>
@@ -1255,6 +1555,16 @@ export default function ContentHubClientView({
               <Plus size={15} />
               <span>New Content</span>
             </button>
+
+            {selectedActivity.type === "problem_statements" && (
+              <button
+                onClick={() => setPdfImportOpen(true)}
+                className="inline-flex items-center justify-center gap-2 px-4 py-2.5 border border-accent-secondary/40 bg-accent-secondary/5 text-accent-secondary font-tech font-bold uppercase tracking-wider text-xs rounded transition-all hover:bg-accent-secondary/10"
+              >
+                <Import size={15} />
+                <span>Import from PDF</span>
+              </button>
+            )}
 
             {/* Bulk publish button – publishes all draft items in the current activity */}
             <button
@@ -1473,18 +1783,29 @@ export default function ContentHubClientView({
                     >
                       <FileJson size={14} />
                     </button>
-                     <button
-                       onClick={() => togglePublish(item)}
-                       disabled={isPending}
-                       className={`inline-flex items-center gap-1.5 px-3 py-2 rounded border text-[10px] font-bold uppercase tracking-wider transition-colors disabled:opacity-50 ${
-                         published
-                           ? "border-status-warning/40 text-status-warning hover:bg-status-warning/10"
-                           : "border-status-success/40 text-status-success hover:bg-status-success/10"
-                       }`}
-                     >
-                       {published ? <X size={13} /> : <Send size={13} />}
-                       {published ? "Unpublish" : "Publish"}
-                     </button>
+                     {item.activity_type === "problem_statements" && published ? (
+                       <button
+                         onClick={() => handleUnpublishProblemStatement(item)}
+                         disabled={isPending || unpublishing.has(item.id)}
+                         className="inline-flex items-center gap-1.5 px-3 py-2 rounded border text-[10px] font-bold uppercase tracking-wider transition-colors disabled:opacity-50 border-status-warning/40 text-status-warning hover:bg-status-warning/10"
+                       >
+                         <X size={13} />
+                         Unpublish
+                       </button>
+                     ) : (
+                       <button
+                         onClick={() => togglePublish(item)}
+                         disabled={isPending}
+                         className={`inline-flex items-center gap-1.5 px-3 py-2 rounded border text-[10px] font-bold uppercase tracking-wider transition-colors disabled:opacity-50 ${
+                           published
+                             ? "border-status-warning/40 text-status-warning hover:bg-status-warning/10"
+                             : "border-status-success/40 text-status-success hover:bg-status-success/10"
+                         }`}
+                       >
+                         {published ? <X size={13} /> : <Send size={13} />}
+                         {published ? "Unpublish" : "Publish"}
+                       </button>
+                     )}
                     <button
                       onClick={() => setDeleteTarget(item)}
                       className="p-2 border border-border-color rounded text-text-secondary hover:text-status-error hover:border-status-error/50 transition-colors"
@@ -1500,6 +1821,296 @@ export default function ContentHubClientView({
         )}
       </div>
     );
+  };
+
+  const renderProjectSubmissionsWorkspace = () => {
+    if (!selectedActivity) return null;
+    const Icon = ACTIVITY_ICONS[selectedActivity.type];
+    const accent = ACTIVITY_ACCENTS[selectedActivity.type];
+
+    const totalForms = submissionForms.length;
+    const publishedForms = submissionForms.filter(
+      (f) => f.form_status === "published"
+    ).length;
+    const draftForms = submissionForms.filter(
+      (f) => f.form_status === "draft"
+    ).length;
+
+    return (
+      <div className="space-y-5">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-border-color pb-5">
+          <div className="flex items-start gap-3">
+            <button
+              onClick={() => {
+                setSelectedActivityId(null);
+                setSearch("");
+                setStatusFilter("all");
+              }}
+              className="mt-1 p-2 border border-border-color rounded hover:border-accent-secondary text-text-secondary hover:text-text-primary transition-colors"
+              title="Back to all activities"
+            >
+              <ArrowLeft size={16} />
+            </button>
+            <div className={`p-3 rounded border ${accent}`}>
+              <Icon size={22} />
+            </div>
+            <div>
+              <p className="text-[10px] uppercase tracking-[2px] text-accent-tertiary font-bold m-0">
+                {ACTIVITY_LABELS[selectedActivity.type]}
+              </p>
+              <h2 className="font-heading text-2xl text-text-primary uppercase tracking-wide m-0">
+                {selectedActivity.title}
+              </h2>
+              <p className="text-xs text-text-secondary m-0 mt-1 max-w-2xl">
+                {selectedActivity.description || "No description provided."}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-3">
+            <button
+              onClick={openCreateForm}
+              className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-accent-secondary to-accent-primary text-black font-tech font-bold uppercase tracking-wider text-xs rounded transition-all hover:opacity-90 shadow-[0_0_18px_rgba(255,0,127,0.28)]"
+            >
+              <Plus size={15} />
+              <span>Create Submission Form</span>
+            </button>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-3 gap-3">
+          <div className="border border-border-color bg-surface-color/50 rounded p-3">
+            <p className="text-[10px] uppercase tracking-wider text-text-secondary m-0">
+              Total Forms
+            </p>
+            <p className="font-heading text-xl text-accent-tertiary m-0">
+              {totalForms}
+            </p>
+          </div>
+          <div className="border border-border-color bg-surface-color/50 rounded p-3">
+            <p className="text-[10px] uppercase tracking-wider text-text-secondary m-0">
+              Published
+            </p>
+            <p className="font-heading text-xl text-status-success m-0">
+              {publishedForms}
+            </p>
+          </div>
+          <div className="border border-border-color bg-surface-color/50 rounded p-3">
+            <p className="text-[10px] uppercase tracking-wider text-text-secondary m-0">
+              Drafts
+            </p>
+            <p className="font-heading text-xl text-accent-primary m-0">
+              {draftForms}
+            </p>
+          </div>
+        </div>
+
+        {submissionForms.length === 0 ? (
+          <div className="border border-dashed border-border-color bg-surface-color/30 rounded-lg p-12 text-center">
+            <Upload className="w-10 h-10 text-accent-secondary mx-auto mb-3" />
+            <h3 className="font-heading text-lg text-text-primary uppercase m-0">
+              No submission forms yet
+            </h3>
+            <p className="text-xs text-text-secondary mt-2">
+              Create your first project submission form to collect team entries.
+            </p>
+            <button
+              onClick={openCreateForm}
+              className="mt-4 inline-flex items-center gap-2 px-4 py-2 border border-accent-secondary/40 text-accent-secondary rounded text-xs font-bold uppercase tracking-wider hover:bg-accent-secondary/10"
+            >
+              <Plus size={14} />
+              Create Form
+            </button>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {submissionForms.map((form) => {
+              const isPublished = form.form_status === "published";
+              return (
+                <article
+                  key={form.id}
+                  className="border border-border-color bg-surface-color/40 rounded-lg p-4 flex flex-col xl:flex-row xl:items-center justify-between gap-4 hover:border-accent-secondary/40 transition-colors cursor-pointer"
+                  onClick={() => (window.location.href = `/admin/submission-forms/${form.id}`)}
+                >
+                  <div className="min-w-0 space-y-1.5">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h3 className="font-heading text-base text-text-primary uppercase tracking-wide m-0 truncate">
+                        {form.title}
+                      </h3>
+                      <span
+                        className={`px-2 py-0.5 border rounded text-[9px] uppercase tracking-wider font-bold ${
+                          isPublished
+                            ? "bg-status-success/10 text-status-success border-status-success/40"
+                            : "bg-surface-color-light text-text-secondary border-border-color"
+                        }`}
+                      >
+                        {form.form_status}
+                      </span>
+                      {form.submission_state && (
+                        <span
+                          className={`px-2 py-0.5 border border-border-color rounded text-[9px] uppercase tracking-wider font-bold text-text-secondary`}
+                        >
+                          {form.submission_state}
+                        </span>
+                      )}
+                    </div>
+                    {form.description && (
+                      <p className="text-xs text-text-secondary m-0 line-clamp-2">
+                        {form.description}
+                      </p>
+                    )}
+                    <div className="flex flex-wrap gap-3 text-[10px] text-text-secondary font-mono">
+                      {form.submission_open_at && (
+                        <span>
+                          Opens:{" "}
+                          {new Date(form.submission_open_at).toLocaleDateString()}
+                        </span>
+                      )}
+                      {form.submission_close_at && (
+                        <span>
+                          Closes:{" "}
+                          {new Date(form.submission_close_at).toLocaleDateString()}
+                        </span>
+                      )}
+                      <span>
+                        Updated {formatDate(form.updated_at)}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-1.5 shrink-0">
+                    <Link
+                      href={`/admin/submission-forms/${form.id}/submissions`}
+                      className="inline-flex items-center gap-1.5 px-3 py-2 border border-accent-secondary/40 bg-accent-secondary/5 text-accent-secondary hover:bg-accent-secondary/10 rounded text-[10px] font-bold uppercase tracking-wider transition-colors"
+                    >
+                      <ArrowLeft size={13} className="rotate-180" />
+                      <span>View Submissions</span>
+                    </Link>
+                    {isPublished ? (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleUnpublishForm(form);
+                        }}
+                        className="inline-flex items-center gap-1.5 px-3 py-2 rounded border text-[10px] font-bold uppercase tracking-wider transition-colors border-status-warning/40 text-status-warning hover:bg-status-warning/10"
+                      >
+                        <X size={13} />
+                        <span>Unpublish</span>
+                      </button>
+                    ) : (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handlePublishForm(form);
+                        }}
+                        className="inline-flex items-center gap-1.5 px-3 py-2 rounded border text-[10px] font-bold uppercase tracking-wider transition-colors border-status-success/40 text-status-success hover:bg-status-success/10"
+                      >
+                        <Send size={13} />
+                        <span>Publish</span>
+                      </button>
+                    )}
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleArchiveForm(form);
+                      }}
+                      className="p-2 border border-border-color rounded text-text-secondary hover:text-status-error hover:border-status-error/50 transition-colors"
+                      title="Archive form"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+        )}
+
+        {formModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+            <div className="bg-surface-color border border-border-color rounded-lg w-full max-w-lg p-6 space-y-4 shadow-2xl">
+              <div className="flex items-start justify-between border-b border-border-color pb-3">
+                <div>
+                  <h3 className="font-heading text-lg text-text-primary uppercase m-0">
+                    Create Submission Form
+                  </h3>
+                  <p className="text-[11px] text-text-secondary m-0 mt-1">
+                    Build a dynamic form for team project submissions.
+                  </p>
+                </div>
+                <button
+                  onClick={() => setFormModalOpen(false)}
+                  className="text-text-secondary hover:text-text-primary"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  submitCreateForm();
+                }}
+                className="space-y-4"
+              >
+                <div>
+                  <label className="block text-[10px] uppercase tracking-wider text-text-secondary mb-1.5">
+                    Form Title
+                  </label>
+                  <input
+                    required
+                    value={formTitle}
+                    onChange={(event) => setFormTitle(event.target.value)}
+                    placeholder="e.g. Final Project Submission"
+                    className="w-full px-3 py-2.5 bg-surface-color-light border border-border-color rounded text-xs text-text-primary focus:border-accent-secondary outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] uppercase tracking-wider text-text-secondary mb-1.5">
+                    Description
+                  </label>
+                  <textarea
+                    rows={3}
+                    value={formDescription}
+                    onChange={(event) => setFormDescription(event.target.value)}
+                    placeholder="Describe what teams should submit..."
+                    className="w-full px-3 py-2.5 bg-surface-color-light border border-border-color rounded text-xs text-text-primary focus:border-accent-secondary outline-none"
+                  />
+                </div>
+                <div className="flex justify-end gap-2 border-t border-border-color pt-3">
+                  <button
+                    type="button"
+                    onClick={() => setFormModalOpen(false)}
+                    className="px-4 py-2 border border-border-color text-text-secondary text-xs uppercase font-bold rounded hover:text-text-primary"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={creatingForm}
+                    className="px-5 py-2 bg-gradient-to-r from-accent-secondary to-accent-primary text-black text-xs uppercase font-bold tracking-wider rounded hover:opacity-90 disabled:opacity-50"
+                  >
+                    {creatingForm ? "Creating..." : "Create Form"}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const handlePdfImportComplete = (newItemId: string) => {
+    setPdfImportOpen(false);
+    setImportingPdf(false);
+    // The new item will appear after page reload via revalidation
+    // Optionally, we could fetch and add it directly, but revalidation
+    // via revalidatePath in the server action handles it.
+    setNotification({
+      type: "success",
+      message: "PDF content imported as a draft.",
+    });
   };
 
   return (
@@ -1529,7 +2140,11 @@ export default function ContentHubClientView({
         </div>
       )}
 
-      {selectedActivity ? renderWorkspace() : renderHub()}
+      {selectedActivity
+        ? selectedActivity.type === "project_submissions"
+          ? renderProjectSubmissionsWorkspace()
+          : renderWorkspace()
+        : renderHub()}
 
       {activityTimerModalOpen && selectedActivity && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-4">
@@ -2562,6 +3177,31 @@ export default function ContentHubClientView({
             </div>
           </div>
         </div>
+      )}
+
+      {pdfImportOpen && (
+        <PdfImportDialog
+          activityId={selectedActivity?.id || ""}
+          onImportComplete={handlePdfImportComplete}
+          onClose={() => setPdfImportOpen(false)}
+        />
+      )}
+
+      {formPublishConfirmOpen && formPublishConfirmItem && (
+        <PublishConfirmationModal
+          open={formPublishConfirmOpen}
+          onClose={() => setFormPublishConfirmOpen(false)}
+          onConfirm={confirmPublishForm}
+          content={{
+            id: formPublishConfirmItem.id,
+            title: formPublishConfirmItem.title,
+            type: "Submission Form",
+            currentStatus:
+              formPublishConfirmItem.action === "publish" ? "Draft" : "Published",
+            visibility: "All Teams",
+          }}
+          loading={formPublishConfirmLoading}
+        />
       )}
     </div>
   );

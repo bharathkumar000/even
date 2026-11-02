@@ -1,8 +1,21 @@
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { getAuthorizedPortalUrl, normalizeRole } from "@/lib/auth/portal-route";
+
+const PROTECTED_PREFIXES = [
+  "/admin",
+  "/judge",
+  "/team",
+  "/ops",
+];
+const AUTH_COOKIE_PREFIXES = ["-auth-token", "sb-"];
 
 export async function middleware(request: NextRequest) {
-  let response = NextResponse.next({
+  const pathname = request.nextUrl.pathname;
+  const host = request.headers.get("host") || "";
+  const port = request.nextUrl.port || host.split(":")[1] || "";
+
+  const response = NextResponse.next({
     request: {
       headers: request.headers,
     },
@@ -11,58 +24,115 @@ export async function middleware(request: NextRequest) {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-  if (!supabaseUrl) {
-    throw new Error("Missing env var: NEXT_PUBLIC_SUPABASE_URL. Set it in your .env file.");
-  }
-  if (!supabaseAnonKey) {
-    throw new Error("Missing env var: NEXT_PUBLIC_SUPABASE_ANON_KEY. Set it in your .env file.");
+  if (!supabaseUrl || !supabaseAnonKey) {
+    throw new Error("Missing env var: NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY.");
   }
 
-  const supabase = createServerClient(supabaseUrl, supabaseAnonKey, {
-    cookies: {
-      getAll() {
-        return request.cookies.getAll();
-      },
-      setAll(cookiesToSet: Array<{ name: string; value: string; options: CookieOptions }>) {
-        cookiesToSet.forEach(({ name, value }) => {
-          request.cookies.set(name, value);
-        });
-        response = NextResponse.next({
-          request: {
-            headers: request.headers,
-          },
-        });
-        cookiesToSet.forEach(({ name, value, options }) => {
-          response.cookies.set(name, value, {
-            ...options,
-            httpOnly: true,
-            secure: process.env.NODE_ENV === "production",
-            sameSite: "lax",
-            path: "/",
+  // Determine if this is a protected portal path
+  const isProtectedPortal = PROTECTED_PREFIXES.some((p) => pathname.startsWith(p));
+
+  // Only initialize Supabase client for protected routes or auth-related paths
+  let supabase: ReturnType<typeof createServerClient> | null = null;
+  let userRole: string | null = null;
+  let hasAuthCookie = false;
+
+  if (isProtectedPortal || pathname === "/" || pathname === "/login") {
+    supabase = createServerClient(supabaseUrl, supabaseAnonKey, {
+      cookies: {
+        getAll() {
+          return request.cookies.getAll();
+        },
+        setAll(cookiesToSet: Array<{ name: string; value: string; options: CookieOptions }>) {
+          cookiesToSet.forEach(({ name, value }) => {
+            request.cookies.set(name, value);
           });
-        });
+          cookiesToSet.forEach(({ name, value, options }) => {
+            response.cookies.set(name, value, {
+              ...options,
+              httpOnly: true,
+              secure: process.env.NODE_ENV === "production",
+              sameSite: "lax",
+              path: "/",
+            });
+          });
+        },
       },
-    },
-  });
+    });
 
-  // Refresh auth session only when session cookies exist
-  const allCookies = request.cookies.getAll();
-  const hasAuthCookie = allCookies.some(
-    (c) => c.name.includes("-auth-token") || c.name.startsWith("sb-")
-  );
+    const allCookies = request.cookies.getAll();
+    hasAuthCookie = allCookies.some(
+      (c) => c.name.includes("-auth-token") || c.name.startsWith("sb-")
+    );
 
-  if (hasAuthCookie) {
-    try {
-      await supabase.auth.getUser();
-    } catch {
-      // Ignore network timeout on invalid or expired token
+    // Resolve the authenticated user's role from Supabase for portal authorization.
+    // profiles.role is the canonical source of truth.
+    // JWT metadata (user_metadata.role, app_metadata.role) is NOT authoritative
+    // and must not be used for authorization decisions.
+    if (hasAuthCookie) {
+      try {
+        const { data: { user }, error } = await supabase.auth.getUser();
+        if (user && !error) {
+          // 1. Canonical: Query profiles table by user UUID (not email)
+          let profileRole: string | null = null;
+          let profileQueryError: { code?: string; message?: string; details?: string; hint?: string } | null = null;
+          let profileQueryData: { role?: string } | null = null;
+          try {
+            const { data: profile, error: profileError } = await supabase
+              .from("profiles")
+              .select("role")
+              .eq("id", user.id)
+              .maybeSingle();
+
+            if (profileError) {
+              profileQueryError = {
+                code: (profileError as { code?: string })?.code,
+                message: profileError.message,
+                details: (profileError as { details?: string })?.details,
+                hint: (profileError as { hint?: string })?.hint,
+              };
+            } else {
+              profileQueryData = profile as { role?: string } | null;
+              profileRole = (profile as { role?: string } | null)?.role || null;
+            }
+          } catch (err: unknown) {
+            profileQueryError = {
+              message: err instanceof Error ? err.message : String(err),
+            };
+          }
+
+          // DIAGNOSTIC LOGGING (temporary) — capture actual Supabase error
+          console.log("[AUTH] Profile query debug:", {
+            userId: user.id,
+            user_email: user.email,
+            hasData: !!profileQueryData,
+            data: profileQueryData,
+            error_code: profileQueryError?.code ?? null,
+            error_message: profileQueryError?.message ?? null,
+            error_details: profileQueryError?.details ?? null,
+            error_hint: profileQueryError?.hint ?? null,
+          });
+
+          // Use profiles.role exclusively; do not fall back to metadata.
+          if (profileRole) {
+            userRole = normalizeRole(profileRole);
+          } else {
+            userRole = null;
+          }
+
+          // DIAGNOSTIC LOGGING (temporary)
+          console.log("[AUTH] Middleware role resolution:", {
+            userId: user.id,
+            user_email: user.email,
+            profileRole,
+            normalizedRole: userRole,
+            pathname,
+          });
+        }
+      } catch {
+        // Role stays null; authorization will deny access below
+      }
     }
   }
-
-  const pathname = request.nextUrl.pathname;
-
-  const host = request.headers.get("host") || "";
-  const port = request.nextUrl.port || host.split(":")[1] || "";
 
   // Handle direct /ops root path navigation cleanly
   if (pathname === "/ops") {
@@ -74,35 +144,81 @@ export async function middleware(request: NextRequest) {
   const isTeamPort = port === "3002" || port === "4002" || port === "3012";
   const isOpsPort = port === "3003" || port === "4003" || port === "3013";
 
+  // Protect portal paths: unauthenticated users cannot access them directly
+  if (isProtectedPortal && !hasAuthCookie) {
+    return NextResponse.redirect(new URL("/login", request.url));
+  }
+
+  // If authenticated but role cannot be determined, deny access
+  if (isProtectedPortal && hasAuthCookie && !userRole) {
+    return NextResponse.redirect(new URL("/login", request.url));
+  }
+
   if (isJudgePort) {
-    // Dedicated Judge Portal Port
     if (pathname === "/") {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return NextResponse.redirect(new URL("/login", request.url));
-      return NextResponse.redirect(new URL("/judge", request.url));
+      if (!hasAuthCookie) return NextResponse.redirect(new URL("/login", request.url));
+      if (userRole) {
+        try {
+          return NextResponse.redirect(new URL(getAuthorizedPortalUrl(userRole), request.url));
+        } catch {
+          return NextResponse.redirect(new URL("/login", request.url));
+        }
+      }
+      return NextResponse.redirect(new URL("/login", request.url));
     }
     if (pathname.startsWith("/admin") || pathname.startsWith("/team") || pathname.startsWith("/ops")) {
-      return NextResponse.redirect(new URL("/judge", request.url));
+      if (userRole) {
+        try {
+          return NextResponse.redirect(new URL(getAuthorizedPortalUrl(userRole), request.url));
+        } catch {
+          return NextResponse.redirect(new URL("/login", request.url));
+        }
+      }
+      return NextResponse.redirect(new URL("/login", request.url));
     }
   } else if (isTeamPort) {
-    // Dedicated Team Lead & Participant Portal Port
     if (pathname === "/") {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return NextResponse.redirect(new URL("/login", request.url));
-      return NextResponse.redirect(new URL("/team", request.url));
+      if (!hasAuthCookie) return NextResponse.redirect(new URL("/login", request.url));
+      if (userRole) {
+        try {
+          return NextResponse.redirect(new URL(getAuthorizedPortalUrl(userRole), request.url));
+        } catch {
+          return NextResponse.redirect(new URL("/login", request.url));
+        }
+      }
+      return NextResponse.redirect(new URL("/login", request.url));
     }
     if (pathname.startsWith("/admin") || pathname.startsWith("/judge") || pathname.startsWith("/ops")) {
-      return NextResponse.redirect(new URL("/team", request.url));
+      if (userRole) {
+        try {
+          return NextResponse.redirect(new URL(getAuthorizedPortalUrl(userRole), request.url));
+        } catch {
+          return NextResponse.redirect(new URL("/login", request.url));
+        }
+      }
+      return NextResponse.redirect(new URL("/login", request.url));
     }
   } else if (isOpsPort) {
-    // Dedicated Operations / Scanner Port
     if (pathname === "/") {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return NextResponse.redirect(new URL("/login", request.url));
-      return NextResponse.redirect(new URL("/ops/scanner", request.url));
+      if (!hasAuthCookie) return NextResponse.redirect(new URL("/login", request.url));
+      if (userRole) {
+        try {
+          return NextResponse.redirect(new URL(getAuthorizedPortalUrl(userRole), request.url));
+        } catch {
+          return NextResponse.redirect(new URL("/login", request.url));
+        }
+      }
+      return NextResponse.redirect(new URL("/login", request.url));
     }
     if (pathname.startsWith("/admin") || pathname.startsWith("/judge") || pathname.startsWith("/team")) {
-      return NextResponse.redirect(new URL("/ops/scanner", request.url));
+      if (userRole) {
+        try {
+          return NextResponse.redirect(new URL(getAuthorizedPortalUrl(userRole), request.url));
+        } catch {
+          return NextResponse.redirect(new URL("/login", request.url));
+        }
+      }
+      return NextResponse.redirect(new URL("/login", request.url));
     }
   } else if (pathname === "/" || pathname === "/login") {
     // Both / and /login directly serve the unified authentication portal
@@ -114,7 +230,7 @@ export async function middleware(request: NextRequest) {
   response.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
   response.headers.set("X-XSS-Protection", "1; mode=block");
   response.headers.set("Permissions-Policy", "camera=(self), microphone=(), geolocation=()");
-  
+
   // Content Security Policy
   const csp = [
     "default-src 'self'",
@@ -128,9 +244,8 @@ export async function middleware(request: NextRequest) {
     "form-action 'self'",
     "object-src 'none'",
   ].join("; ");
-  
   response.headers.set("Content-Security-Policy", csp);
-  
+
   // HSTS (only in production with HTTPS)
   if (process.env.NODE_ENV === "production") {
     response.headers.set("Strict-Transport-Security", "max-age=31536000; includeSubDomains; preload");

@@ -5,33 +5,28 @@ import { supabaseAdmin } from "@/lib/supabase/admin";
 export async function requireOperationsRole() {
   const supabase = await createClient();
 
-  const { data: sessionData } = await supabase.auth.getSession();
-  let user = sessionData?.session?.user;
-
-  if (!user) {
-    const { data: userData, error: authError } = await supabase.auth.getUser();
-    if (authError || !userData?.user) {
-      throw new Error("Unauthorized: Authentication required");
-    }
-    user = userData.user;
+  // Use getUser() for secure server-side identity verification.
+  // Never trust session.user from getSession() as proof of identity.
+  const { data: { user }, error } = await supabase.auth.getUser();
+  if (error || !user) {
+    throw new Error("Unauthorized: Authentication required");
   }
 
-  // Fast-path: Check metadata first
-  const metaRole =
-    (user.user_metadata?.role as string | undefined) ||
-    (user.app_metadata?.role as string | undefined);
-
-  if (metaRole && ["admin", "staff", "organizer", "spoc"].includes(metaRole)) {
-    return { user, profile: { role: metaRole } };
+  // profiles.role is the canonical source of truth for user roles.
+  // Never trust user_metadata.role or app_metadata.role for authorization.
+  let profile: { role?: string } | null = null;
+  try {
+    const { data } = await supabaseAdmin
+      .from("profiles")
+      .select("role")
+      .eq("id", user.id)
+      .maybeSingle();
+    profile = data;
+  } catch {
+    // Profile lookup failed; deny access
   }
 
-  const { data: profile } = await supabaseAdmin
-    .from("profiles")
-    .select("role")
-    .eq("id", user.id)
-    .maybeSingle();
-
-  const role = profile?.role || metaRole;
+  const role = profile?.role;
   if (!role || !["admin", "staff", "organizer", "spoc"].includes(role)) {
     throw new Error("Forbidden: Operational staff privileges required");
   }

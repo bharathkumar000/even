@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
 import { createClient } from "@/lib/supabase/client";
+import { signInWithCredentials } from "@/app/actions/auth-login";
 import { getRoleRedirectUrl } from "@/lib/auth/redirect";
 import {
   Lock,
@@ -41,6 +42,10 @@ export default function AuthPage({ isSignUp = false }: { isSignUp?: boolean }) {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
+  // Local development disables login rate limiting, so the client-side
+  // cooldown / remaining-attempts warning is suppressed here.
+  const isDev = process.env.NODE_ENV === "development";
+
   // Load remembered username/email
   useEffect(() => {
     try {
@@ -61,16 +66,17 @@ export default function AuthPage({ isSignUp = false }: { isSignUp?: boolean }) {
     return () => clearInterval(timer);
   }, [resendCooldown]);
 
-  // Rate-limiting security cooldown timer
+  // Rate-limiting security cooldown timer (production only)
   useEffect(() => {
-    if (rateLimitCooldown <= 0) return;
+    if (isDev || rateLimitCooldown <= 0) return;
     const timer = setInterval(() => {
       setRateLimitCooldown((prev) => Math.max(0, prev - 1));
     }, 1000);
     return () => clearInterval(timer);
-  }, [rateLimitCooldown]);
+  }, [isDev, rateLimitCooldown]);
 
-  // Robust sign-in execution
+  // Robust sign-in execution — delegates to server action that handles
+  // email/username resolution, Supabase authentication, role lookup, and redirect.
   const executeSignIn = async (userEmail: string, userPass: string, preferredPortal?: string) => {
     setLoading(true);
     setErrorMsg(null);
@@ -86,39 +92,72 @@ export default function AuthPage({ isSignUp = false }: { isSignUp?: boolean }) {
     } catch {}
 
     const effectivePass = userPass;
-    const supabase = createClient();
+
     try {
-      let { data, error } = await supabase.auth.signInWithPassword({
-        email: userEmail.trim().toLowerCase(),
-        password: effectivePass,
-      });
+      const result = await signInWithCredentials(userEmail, effectivePass);
 
-      if (error) throw error;
+      if (result.error) {
+        throw new Error(result.error);
+      }
 
-      if (data?.user) {
+      if (result.success) {
+        // Authentication succeeded — reset all failure state
         setFailedAttempts(0);
         setRateLimitCooldown(0);
-        setSuccessMsg("Authenticated! Entering portal...");
-        const redirectUrl = preferredPortal || (await getRoleRedirectUrl(data.user));
-        // Fast client navigation & session sync
-        router.push(redirectUrl);
-        router.refresh();
-        setTimeout(() => {
+
+        // DIAGNOSTIC LOGGING (temporary)
+        console.log("[AUTH] Sign-in succeeded via server action:", {
+          redirectUrl: result.redirectUrl,
+        });
+
+        try {
+          const redirectUrl = preferredPortal || result.redirectUrl;
+          setSuccessMsg("Authenticated! Entering portal...");
+
+          // DIAGNOSTIC LOGGING (temporary)
+          console.log("[AUTH] Redirecting after sign-in:", {
+            redirectUrl,
+          });
+
+          // Full page navigation ensures session cookies are fully propagated before middleware runs
           window.location.assign(redirectUrl);
-        }, 400);
+        } catch (roleErr) {
+          const errMsg =
+            roleErr instanceof Error
+              ? roleErr.message
+              : "Unable to determine user role. Please contact support.";
+          setErrorMsg(errMsg);
+          setLoading(false);
+        }
       } else {
         throw new Error("No user record returned from authentication service.");
       }
     } catch (err: unknown) {
-      const nextAttempts = failedAttempts + 1;
-      setFailedAttempts(nextAttempts);
-      if (nextAttempts >= 5) {
-        setRateLimitCooldown(30);
-        setErrorMsg("Excessive failed login attempts. For security, please wait 30 seconds before retrying.");
+      // Auth failure — in local development rate limiting is disabled, so
+      // never block repeated attempts or show a cooldown warning here.
+      if (!isDev) {
+        const nextAttempts = failedAttempts + 1;
+        setFailedAttempts(nextAttempts);
+
+        // DIAGNOSTIC LOGGING (temporary)
+        console.log("[AUTH] Sign-in failed:", {
+          email: userEmail,
+          nextAttempts,
+          error: err instanceof Error ? err.message : String(err),
+          rateLimited: nextAttempts >= 5,
+        });
+
+        if (nextAttempts >= 5) {
+          setRateLimitCooldown(30);
+          setErrorMsg("Excessive failed login attempts. For security, please wait 30 seconds before retrying.");
+        } else {
+          const remaining = 5 - nextAttempts;
+          const msg = err instanceof Error ? err.message : "Authentication failed";
+          setErrorMsg(remaining <= 2 ? `${msg} (${remaining} attempts remaining before cooldown)` : msg);
+        }
       } else {
-        const remaining = 5 - nextAttempts;
         const msg = err instanceof Error ? err.message : "Authentication failed";
-        setErrorMsg(remaining <= 2 ? `${msg} (${remaining} attempts remaining before cooldown)` : msg);
+        setErrorMsg(msg);
       }
       setLoading(false);
     }
@@ -153,13 +192,13 @@ const normalizedEmail = email.includes("@") ? email.trim() : `${email.trim()}@iv
 
         if (error) throw error;
 
-        if (data?.session && data?.user) {
-          const redirectUrl = await getRoleRedirectUrl(data.user);
-          router.push(redirectUrl);
-          router.refresh();
-          setTimeout(() => {
-            window.location.assign(redirectUrl);
-          }, 2000);
+        if (data?.user) {
+        const redirectUrl = await getRoleRedirectUrl(data.user, supabase);
+        router.push(redirectUrl);
+        router.refresh();
+        setTimeout(() => {
+          window.location.assign(redirectUrl);
+        }, 2000);
           return;
         }
 
@@ -167,12 +206,8 @@ const normalizedEmail = email.includes("@") ? email.trim() : `${email.trim()}@iv
         setSuccessMsg(`A 6-digit verification code was dispatched to ${email}.`);
         setResendCooldown(60);
       } else {
-        let targetEmail = email.trim();
+        const targetEmail = email.trim();
         const targetPass = password.trim();
-
-        if (!targetEmail.includes("@")) {
-          targetEmail = `${targetEmail}@ivc.pulse`;
-        }
 
         if (!targetPass) {
           setErrorMsg("Password is required");
@@ -213,7 +248,7 @@ const normalizedEmail = email.includes("@") ? email.trim() : `${email.trim()}@iv
       if (error) throw error;
 
       if (data?.user) {
-        const redirectUrl = await getRoleRedirectUrl(data.user);
+        const redirectUrl = await getRoleRedirectUrl(data.user, supabase);
         router.push(redirectUrl);
         router.refresh();
         setTimeout(() => {
@@ -236,36 +271,31 @@ const normalizedEmail = email.includes("@") ? email.trim() : `${email.trim()}@iv
     }
   };
 
-const handleDemoClick = async (demoEmail: string, roleName: string, targetPath: string) => {
+const DEMO_PASSWORD = "Password@123";
+
+  const handleDemoClick = async (demoEmail: string, roleName: string, targetPath?: string) => {
     // Only allow demo credentials in development environment
     if (process.env.NODE_ENV === "production") {
       setErrorMsg("Demo credentials are not available in production.");
       return;
     }
-    // Demo accounts should have proper credentials set up in the auth system
-    // This is a placeholder - actual demo credentials should be configured in Supabase
+
     setEmail(demoEmail);
-    setPassword(""); // User must enter the actual demo password
+    setPassword(DEMO_PASSWORD);
     setErrorMsg(null);
-    setSuccessMsg(`Demo account ${roleName} selected. Please enter the demo password.`);
-  };
+    setSuccessMsg(`Logging in as ${roleName}...`);
 
-  const handleForgotPassword = async () => {
-    if (!email.trim()) {
-      setErrorMsg("Enter your username or email above first to receive reset instructions.");
-      return;
-    }
-    const supabase = createClient();
-    const normalizedEmail = email.includes("@") ? email.trim() : `${email.trim()}@ivc.pulse`;
     try {
-      const { error } = await supabase.auth.resetPasswordForEmail(normalizedEmail, {
-        redirectTo: `${typeof window !== "undefined" ? window.location.origin : ""}/login`,
-      });
-
-      if (error) throw error;
-      setSuccessMsg(`Password reset instructions sent to ${normalizedEmail}`);
+      // Demo logins must resolve role from profiles table via getRoleRedirectUrl.
+      // Never pass targetPath here, as that would bypass role-based routing.
+      await executeSignIn(demoEmail, DEMO_PASSWORD);
     } catch (err: unknown) {
-      setErrorMsg(err instanceof Error ? err.message : "Failed to send reset instructions.");
+      setErrorMsg(
+        err instanceof Error
+          ? `Demo login failed: ${err.message}`
+          : `Demo login failed for ${roleName}. Please check credentials.`
+      );
+      setLoading(false);
     }
   };
 
@@ -570,7 +600,7 @@ const handleDemoClick = async (demoEmail: string, roleName: string, targetPath: 
                     {/* Username or Email Input */}
                     <div className="space-y-1">
                       <label className="block text-[9px] font-mono font-bold uppercase tracking-[1.2px] text-[#a1a1aa]">
-                        Username or Email
+                        Email or Username
                       </label>
                       <div className="relative">
                         <Mail size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#71717a]" />
@@ -579,7 +609,7 @@ const handleDemoClick = async (demoEmail: string, roleName: string, targetPath: 
                           required
                           value={email}
                           onChange={(e) => setEmail(e.target.value)}
-                          placeholder="username or email"
+                          placeholder="Enter your email or username"
                           className="w-full bg-[#050507] border border-white/10 rounded-lg py-2.5 px-3 pl-9 text-xs sm:text-sm text-white placeholder-[#52525b] focus:border-[#ff007f] focus:ring-1 focus:ring-[#ff007f]/40 outline-none transition-all font-sans"
                         />
                       </div>
@@ -611,7 +641,7 @@ const handleDemoClick = async (demoEmail: string, roleName: string, targetPath: 
                       </div>
                     </div>
 
-                    {/* Remember Me & Forgot Password Row */}
+                    {/* Remember Me Row */}
                     {!isSignUp && (
                       <div className="flex items-center justify-between text-[10px] pt-0.5">
                         <label className="flex items-center gap-1.5 cursor-pointer select-none text-[#94a3b8] hover:text-white transition-colors">
@@ -623,32 +653,25 @@ const handleDemoClick = async (demoEmail: string, roleName: string, targetPath: 
                           />
                           <span className="text-[10px]">Remember me</span>
                         </label>
-                        <button
-                          type="button"
-                          onClick={handleForgotPassword}
-                          className="text-[#ff007f] hover:text-[#ff3399] font-medium transition-colors text-[10px]"
-                        >
-                          Forgot password?
-                        </button>
                       </div>
                     )}
 
                     {/* Primary SIGN IN Button */}
                     <button
                       type="submit"
-                      disabled={loading || rateLimitCooldown > 0}
+                      disabled={loading || (!isDev && rateLimitCooldown > 0)}
                       className="w-full py-3 px-5 bg-[#ff007f] hover:bg-[#e60072] disabled:opacity-50 text-white font-bold text-[10px] uppercase tracking-[1.2px] rounded-lg transition-all shadow-[0_0_18px_rgba(255,0,127,0.35)] flex items-center justify-center gap-2 mt-1 cursor-pointer active:scale-[0.99]"
                     >
                       <span>
-                        {rateLimitCooldown > 0
+                        {!isDev && rateLimitCooldown > 0
                           ? `Rate Limited (${rateLimitCooldown}s)`
                           : loading
-                          ? isSignUp
-                            ? "Creating Account..."
-                            : "Signing in..."
-                          : isSignUp
-                          ? "Sign Up"
-                          : "Sign In"}
+                            ? isSignUp
+                              ? "Creating Account..."
+                              : "Signing in..."
+                            : isSignUp
+                              ? "Sign Up"
+                              : "Sign In"}
                       </span>
                       <ArrowRight size={13} />
                     </button>
@@ -670,7 +693,7 @@ const handleDemoClick = async (demoEmail: string, roleName: string, targetPath: 
                       {/* ADMIN BUTTON */}
                       <button
                         type="button"
-                        onClick={() => handleDemoClick("admin@demo.com", "Admin", "/admin")}
+                        onClick={() => handleDemoClick("admin@demo.com", "Admin")}
                         className="flex items-center justify-center gap-1 py-2 px-1.5 rounded-lg border border-[#ff007f]/40 hover:border-[#ff007f] bg-[#ff007f]/5 hover:bg-[#ff007f]/15 transition-all cursor-pointer group shadow-[0_0_8px_rgba(255,0,127,0.1)] hover:shadow-[0_0_12px_rgba(255,0,127,0.25)]"
                       >
                         <ShieldCheck size={12} className="text-[#ff007f] group-hover:scale-110 transition-transform" />
@@ -680,7 +703,7 @@ const handleDemoClick = async (demoEmail: string, roleName: string, targetPath: 
                       {/* JUDGE BUTTON */}
                       <button
                         type="button"
-                        onClick={() => handleDemoClick("judge@demo.com", "Judge", "/judge")}
+                        onClick={() => handleDemoClick("judge@demo.com", "Judge")}
                         className="flex items-center justify-center gap-1 py-2 px-1.5 rounded-lg border border-[#FBC815]/40 hover:border-[#FBC815] bg-[#FBC815]/5 hover:bg-[#FBC815]/15 transition-all cursor-pointer group shadow-[0_0_8px_rgba(251,200,21,0.1)] hover:shadow-[0_0_12px_rgba(251,200,21,0.25)]"
                       >
                         <Gavel size={12} className="text-[#FBC815] group-hover:scale-110 transition-transform" />
@@ -690,7 +713,7 @@ const handleDemoClick = async (demoEmail: string, roleName: string, targetPath: 
                       {/* OPS BUTTON */}
                       <button
                         type="button"
-                        onClick={() => handleDemoClick("ops@demo.com", "Ops", "/ops/scanner")}
+                        onClick={() => handleDemoClick("ops@demo.com", "Ops")}
                         className="flex items-center justify-center gap-1 py-2 px-1.5 rounded-lg border border-[#ff007f]/40 hover:border-[#ff007f] bg-[#ff007f]/5 hover:bg-[#ff007f]/15 transition-all cursor-pointer group shadow-[0_0_8px_rgba(255,0,127,0.1)] hover:shadow-[0_0_12px_rgba(255,0,127,0.25)]"
                       >
                         <Layers size={12} className="text-[#ff007f] group-hover:scale-110 transition-transform" />
@@ -700,7 +723,7 @@ const handleDemoClick = async (demoEmail: string, roleName: string, targetPath: 
                       {/* TEAM BUTTON */}
                       <button
                         type="button"
-                        onClick={() => handleDemoClick("team@demo.com", "Team Leader", "/team")}
+                        onClick={() => handleDemoClick("team@demo.com", "Team Leader")}
                         className="flex items-center justify-center gap-1 py-2 px-1.5 rounded-lg border border-[#FBC815]/40 hover:border-[#FBC815] bg-[#FBC815]/5 hover:bg-[#FBC815]/15 transition-all cursor-pointer group shadow-[0_0_8px_rgba(251,200,21,0.1)] hover:shadow-[0_0_12px_rgba(251,200,21,0.25)]"
                       >
                         <Users size={12} className="text-[#FBC815] group-hover:scale-110 transition-transform" />

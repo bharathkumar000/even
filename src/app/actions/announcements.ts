@@ -15,7 +15,7 @@ export interface AnnouncementItem {
   title: string;
   message: string;
   priority: AnnouncementPriority;
-  target_audience: AnnouncementAudience;
+  target_audience: AnnouncementAudience | AnnouncementAudience[];
   category?: AnnouncementCategory;
   created_at: string;
   published_at?: string | null;
@@ -32,7 +32,8 @@ export interface Announcement {
   category: AnnouncementCategory;
   priority_level: AnnouncementPriority;
   priority?: AnnouncementPriority;
-  target_audience: AnnouncementAudience;
+  target_audience: AnnouncementAudience | AnnouncementAudience[];
+  target_audiences?: AnnouncementAudience[];
   status: AnnouncementStatus;
   is_active: boolean;
   pin_to_top: boolean;
@@ -60,6 +61,11 @@ function mapDbToAnnouncement(row: any): Announcement {
   const status = (row.status || (row.is_active ? "published" : "draft")) as AnnouncementStatus;
   const category = (row.category || "general") as AnnouncementCategory;
   const audience = (row.target_audience || "all") as AnnouncementAudience;
+  const targetAudiences = (Array.isArray(row.target_audiences)
+    ? (row.target_audiences as AnnouncementAudience[])
+    : audience === "all" || !audience
+      ? ["all"]
+      : [audience]) as AnnouncementAudience[];
 
   let links: Record<string, string>[] = [];
   if (Array.isArray(row.resource_links)) {
@@ -68,15 +74,16 @@ function mapDbToAnnouncement(row: any): Announcement {
     links = row.attachments;
   }
 
-  return {
-    id: row.id,
-    title: row.title || "",
-    message: row.message || "",
-    category,
-    priority_level: priority,
-    priority,
-    target_audience: audience,
-    status,
+    return {
+      id: row.id,
+      title: row.title || "",
+      message: row.message || "",
+      category,
+      priority_level: priority,
+      priority,
+      target_audience: targetAudiences.length === 1 && targetAudiences[0] === "all" ? "all" : targetAudiences,
+      target_audiences: targetAudiences,
+      status,
     is_active: row.is_active ?? true,
     pin_to_top: isPinned,
     is_pinned: isPinned,
@@ -143,10 +150,12 @@ function mapAnnouncementToDb(data: Partial<any>): Record<string, any> {
  * Fetch active announcements tailored for a given audience role
  */
 export async function getActiveAnnouncements(
-  audience: "all" | "teams" | "judges" | "ops" | "admin" = "all"
+  audience: AnnouncementAudience | AnnouncementAudience[] = "all"
 ): Promise<AnnouncementItem[]> {
   try {
-    const list = await getAnnouncementsForPortal(audience);
+    const audiences = Array.isArray(audience) ? audience : [audience];
+    // Use the first audience for portal lookup; the RPC handles array matching
+    const list = await getAnnouncementsForPortal(audiences[0] || "all", 50);
     return list.map((item) => ({
       id: item.id,
       title: item.title,
@@ -186,10 +195,14 @@ export async function getAnnouncementsForPortal(
       .or(`expires_at.is.null,expires_at.gt.${nowIso}`);
 
     if (audience && audience !== "all") {
-      const validAudiences = ["all", audience];
+      const validAudiences: AnnouncementAudience[] = ["all", audience];
       if (audience === "teams") validAudiences.push("participants");
       if (audience === "ops") validAudiences.push("staff", "organizers");
-      query = query.in("target_audience", validAudiences);
+      // Use Supabase array overlap operator: check if target_audiences overlaps with valid audiences
+      // Also check legacy single-value target_audience column for backward compatibility
+      query = query.or(
+        `target_audience.in.(${validAudiences.join(",")}),target_audiences.cs.{"${validAudiences.join('","')}"}`
+      );
     }
 
     query = query
@@ -259,7 +272,12 @@ export async function getAnnouncementsAdmin(filters?: {
       query = query.eq("status", filters.status);
     }
     if (filters?.audience && filters.audience !== "all") {
-      query = query.in("target_audience", ["all", filters.audience]);
+      const validAudiences: AnnouncementAudience[] = ["all", filters.audience];
+      if (filters.audience === "teams") validAudiences.push("participants");
+      if (filters.audience === "ops") validAudiences.push("staff", "organizers");
+      query = query.or(
+        `target_audience.in.(${validAudiences.join(",")}),target_audiences.cs.{"${validAudiences.join('","')}"}`
+      );
     }
     if (filters?.search) {
       query = query.ilike("title", `%${filters.search}%`);
@@ -322,7 +340,7 @@ export async function createAnnouncement({
   message,
   priority = "normal",
   priority_level,
-  target_audience = "all",
+  target_audience = ["all"],
   category = "general",
   status = "published",
   is_pinned,
@@ -339,7 +357,7 @@ export async function createAnnouncement({
   message: string;
   priority?: AnnouncementPriority;
   priority_level?: AnnouncementPriority;
-  target_audience?: AnnouncementAudience;
+  target_audience?: AnnouncementAudience | AnnouncementAudience[];
   category?: AnnouncementCategory;
   status?: AnnouncementStatus;
   is_pinned?: boolean;
@@ -361,6 +379,18 @@ export async function createAnnouncement({
     }
   }
 
+  // Validate and normalize target_audience
+  const audiences = Array.isArray(target_audience) ? target_audience : [target_audience];
+  const validAudiences: AnnouncementAudience[] = [
+    "all", "teams", "judges", "ops", "admin", "participants", "staff", "organizers",
+  ];
+  const filteredAudiences = audiences.filter((a) => validAudiences.includes(a));
+  const normalizedAudience = filteredAudiences.length > 0 ? filteredAudiences : ["all"];
+  // If 'all' is selected with others, normalize to just ['all']
+  const finalAudience = normalizedAudience.includes("all") && normalizedAudience.length > 1
+    ? ["all"]
+    : normalizedAudience;
+
   const effectivePriority = priority_level || priority || "normal";
   const effectivePinned = Boolean(is_pinned ?? pin_to_top ?? false);
   const now = new Date().toISOString();
@@ -374,7 +404,7 @@ export async function createAnnouncement({
     title: title.trim(),
     message: message.trim(),
     priority: effectivePriority,
-    target_audience,
+    target_audience: finalAudience,
     category,
     status: effectiveStatus,
     is_active: effectiveStatus === "published",
@@ -419,7 +449,7 @@ export async function updateAnnouncement(
     category: AnnouncementCategory;
     priority_level: AnnouncementPriority;
     priority: AnnouncementPriority;
-    target_audience: AnnouncementAudience;
+    target_audience: AnnouncementAudience | AnnouncementAudience[];
     status: AnnouncementStatus;
     scheduled_at: string | null;
     published_at: string | null;
@@ -437,6 +467,19 @@ export async function updateAnnouncement(
     try {
       await validateCsrfToken(csrfToken);
     } catch {}
+  }
+
+  // Validate and normalize target_audience if provided
+  if (data.target_audience !== undefined) {
+    const audiences = Array.isArray(data.target_audience) ? data.target_audience : [data.target_audience];
+    const validAudiences: AnnouncementAudience[] = [
+      "all", "teams", "judges", "ops", "admin", "participants", "staff", "organizers",
+    ];
+    const filteredAudiences = audiences.filter((a) => validAudiences.includes(a));
+    const normalizedAudience = filteredAudiences.length > 0 ? filteredAudiences : (["all"] as AnnouncementAudience[]);
+    data.target_audience = normalizedAudience.includes("all") && normalizedAudience.length > 1
+      ? (["all"] as AnnouncementAudience[])
+      : normalizedAudience;
   }
 
   const dbRow = mapAnnouncementToDb(data);
@@ -599,7 +642,7 @@ export async function duplicateAnnouncement(id: string, csrfToken?: string) {
     title: `(Copy) ${original.title}`,
     message: original.message,
     priority: original.priority_level,
-    target_audience: original.target_audience,
+    target_audience: original.target_audiences || original.target_audience,
     category: original.category,
     status: "draft",
     is_pinned: original.pin_to_top,
