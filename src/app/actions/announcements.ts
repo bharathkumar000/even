@@ -107,22 +107,47 @@ function mapAnnouncementToDb(data: Partial<any>): Record<string, any> {
   if (data.message !== undefined) row.message = String(data.message).trim();
   if (data.category !== undefined) row.category = data.category;
   
-  if (data.priority !== undefined) {
-    row.priority = data.priority;
-  } else if (data.priority_level !== undefined) {
-    row.priority = data.priority_level;
+  const prio = data.priority || data.priority_level || "normal";
+  row.priority = prio;
+  row.priority_level = prio === "urgent" ? 2 : (prio === "important" || prio === "high") ? 1 : 0;
+
+  // Handle target_audience and target_audiences safely
+  if (data.target_audience !== undefined || data.target_audiences !== undefined) {
+    const raw = data.target_audiences ?? data.target_audience;
+    let audienceList: string[] = [];
+    if (Array.isArray(raw)) {
+      audienceList = raw.map(String).filter(Boolean);
+    } else if (typeof raw === "string") {
+      try {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) {
+          audienceList = parsed.map(String).filter(Boolean);
+        } else {
+          audienceList = [raw];
+        }
+      } catch {
+        audienceList = [raw];
+      }
+    }
+    if (audienceList.length === 0) audienceList = ["all"];
+    if (audienceList.includes("all")) {
+      row.target_audience = "all";
+      row.target_audiences = ["all"];
+    } else {
+      row.target_audience = audienceList[0];
+      row.target_audiences = audienceList;
+    }
   }
 
-  if (data.target_audience !== undefined) row.target_audience = data.target_audience;
   if (data.status !== undefined) {
     row.status = data.status === "unpublished" ? "draft" : data.status;
   }
   if (data.is_active !== undefined) row.is_active = data.is_active;
 
-  if (data.is_pinned !== undefined) {
-    row.is_pinned = Boolean(data.is_pinned);
-  } else if (data.pin_to_top !== undefined) {
-    row.is_pinned = Boolean(data.pin_to_top);
+  if (data.is_pinned !== undefined || data.pin_to_top !== undefined) {
+    const pinVal = Boolean(data.is_pinned ?? data.pin_to_top);
+    row.is_pinned = pinVal;
+    row.pin_to_top = pinVal;
   }
 
   if (data.scheduled_at !== undefined) row.scheduled_at = data.scheduled_at || null;
@@ -198,23 +223,27 @@ export async function getAnnouncementsForPortal(
       const validAudiences: AnnouncementAudience[] = ["all", audience];
       if (audience === "teams") validAudiences.push("participants");
       if (audience === "ops") validAudiences.push("staff", "organizers");
-      // Use Supabase array overlap operator: check if target_audiences overlaps with valid audiences
-      // Also check legacy single-value target_audience column for backward compatibility
       query = query.or(
-        `target_audience.in.(${validAudiences.join(",")}),target_audiences.cs.{"${validAudiences.join('","')}"}`
+        `target_audience.in.(${validAudiences.join(",")}),target_audiences.cs.{"${validAudiences.join('","')}"},target_audience.eq.all,target_audience.eq.["all"]`
       );
     }
 
     query = query
-      .order("is_pinned", { ascending: false })
+      .order("is_pinned", { ascending: false, nullsFirst: false })
       .order("published_at", { ascending: false, nullsFirst: false })
       .order("created_at", { ascending: false })
       .limit(limit);
 
-    const { data, error } = await query;
+    let { data, error } = await query;
     if (error) {
-      console.error("Failed to query announcements for portal:", error.message);
-      return [];
+      console.warn("Retrying announcements query fallback:", error.message);
+      const fallbackQuery = await supabaseAdmin
+        .from("announcements")
+        .select("*")
+        .eq("is_active", true)
+        .order("created_at", { ascending: false })
+        .limit(limit);
+      data = fallbackQuery.data || [];
     }
 
     return (data || []).map(mapDbToAnnouncement);

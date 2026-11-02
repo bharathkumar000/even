@@ -72,9 +72,9 @@ export default async function OpsLayout({
   return (
     <div className="flex flex-col md:flex-row min-h-screen md:h-screen md:overflow-hidden bg-[#050508] text-text-primary">
       <div className="hidden md:block"><OpsSidebar /></div>
-      <div className="md:hidden"><OpsMobileNav /></div>
+      <div className="md:hidden sticky top-0 z-30"><OpsMobileNav /></div>
         <main
-          className="flex-1 p-6 md:p-10 md:overflow-y-auto overscroll-contain h-full mt-14 md:mt-0"
+          className="flex-1 p-4 sm:p-6 md:p-10 md:overflow-y-auto overscroll-contain h-full"
           style={{
             background:
               "radial-gradient(circle at top right, rgba(0, 240, 255, 0.05), transparent 500px), radial-gradient(circle at bottom left, rgba(251, 200, 21, 0.04), transparent 500px)",
