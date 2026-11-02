@@ -70,5 +70,43 @@ export async function requireAuthenticatedTeamUser() {
     redirect("/login");
   }
 
-  return { user, teamId: membership?.team_id || null, role: membership?.role || "member" };
+  let teamId = membership?.team_id || null;
+  let role = membership?.role || "member";
+
+  // Fallback: If user is not in team_members, check teams table by user email
+  if (!teamId && user.email) {
+    try {
+      const { data: teamByLeader } = await supabaseAdmin
+        .from("teams")
+        .select("id, leader_name")
+        .ilike("leader_email", user.email)
+        .limit(1)
+        .maybeSingle();
+
+      if (teamByLeader) {
+        teamId = teamByLeader.id;
+        role = "leader";
+      }
+    } catch {
+      // Ignore fallback query error
+    }
+  }
+
+  // Check profile role to allow designated leaders/admins
+  if (role !== "leader") {
+    try {
+      const { data: prof } = await supabaseAdmin
+        .from("profiles")
+        .select("role")
+        .eq("id", user.id)
+        .maybeSingle();
+      if (prof?.role === "leader" || prof?.role === "admin") {
+        role = "leader";
+      }
+    } catch {
+      // Ignore
+    }
+  }
+
+  return { user, teamId, role };
 }

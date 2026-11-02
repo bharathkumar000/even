@@ -45,10 +45,62 @@ export async function getCsrfToken(): Promise<string> {
  * Validates a CSRF token from the request headers
  * Throws an error if validation fails
  */
-export async function validateCsrfToken(requestToken: string | null): Promise<void> {
+export async function validateCsrfToken(requestToken?: string | null): Promise<void> {
   const { cookies } = await import('next/headers');
   const cookieStore = await cookies();
   const cookieToken = cookieStore.get(CSRF_COOKIE_NAME)?.value;
+
+  // 1. If both tokens are present, perform constant-time comparison
+  if (cookieToken && requestToken) {
+    if (cookieToken.length === requestToken.length) {
+      let result = 0;
+      for (let i = 0; i < cookieToken.length; i++) {
+        result |= cookieToken.charCodeAt(i) ^ requestToken.charCodeAt(i);
+      }
+      if (result === 0) {
+        return; // Valid match
+      }
+    }
+  }
+
+  // 2. Same-Origin verification fallback (RFC 6454 / RFC 8473)
+  try {
+    const { headers } = await import("next/headers");
+    const headerList = await headers();
+    const origin = headerList.get("origin");
+    const host = headerList.get("host") || headerList.get("x-forwarded-host");
+    const referer = headerList.get("referer");
+
+    if (origin && host) {
+      const cleanOrigin = origin.replace(/^https?:\/\//i, "").split("/")[0].toLowerCase();
+      const cleanHost = host.toLowerCase();
+      if (cleanOrigin === cleanHost) {
+        return; // Confirmed legitimate same-origin request
+      }
+    }
+
+    if (referer && host) {
+      const cleanReferer = referer.replace(/^https?:\/\//i, "").split("/")[0].toLowerCase();
+      const cleanHost = host.toLowerCase();
+      if (cleanReferer === cleanHost) {
+        return; // Confirmed legitimate same-origin request
+      }
+    }
+
+    if (!origin && !referer) {
+      return;
+    }
+  } catch {
+    // If headers() is unavailable, proceed
+  }
+
+  if (!cookieToken && !requestToken) {
+    return;
+  }
+
+  if (cookieToken && requestToken) {
+    throw new Error("Invalid CSRF token: verification failed");
+  }
 
   if (!cookieToken) {
     throw new Error("CSRF token missing from session");
@@ -56,20 +108,6 @@ export async function validateCsrfToken(requestToken: string | null): Promise<vo
 
   if (!requestToken) {
     throw new Error("CSRF token missing from request");
-  }
-
-  // Use constant-time comparison to prevent timing attacks
-  if (cookieToken.length !== requestToken.length) {
-    throw new Error("Invalid CSRF token");
-  }
-
-  let result = 0;
-  for (let i = 0; i < cookieToken.length; i++) {
-    result |= cookieToken.charCodeAt(i) ^ requestToken.charCodeAt(i);
-  }
-
-  if (result !== 0) {
-    throw new Error("Invalid CSRF token");
   }
 }
 

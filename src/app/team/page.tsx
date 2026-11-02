@@ -24,6 +24,7 @@ import {
   Bell,
   Archive,
   Globe,
+  ScrollText,
 } from "lucide-react";
 import { requireAuthenticatedTeamUser } from "@/lib/auth/team";
 import { supabaseAdmin } from "@/lib/supabase/admin";
@@ -76,7 +77,8 @@ export default async function TeamDashboardPage() {
         supabaseAdmin
           .from("event_activity_logs")
           .select("id, participant_id, action_type, created_at")
-          .eq("team_id", effectiveTeamId),
+          .eq("team_id", effectiveTeamId)
+          .eq("result", "success"),
         supabaseAdmin
           .from("team_submissions")
           .select("*")
@@ -205,7 +207,7 @@ export default async function TeamDashboardPage() {
       />
 
       {/* Primary KPI Row: Team Status & Submission State */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
         {/* Approved Roster Card */}
         <div className="glass-panel p-5 border border-border-color flex flex-col justify-between">
           <div className="flex items-start justify-between">
@@ -226,6 +228,35 @@ export default async function TeamDashboardPage() {
               <CheckCircle2 size={13} /> Active Roster
             </span>
             <span className="text-text-secondary font-mono">{teamInfo?.leader_name || "Leader"}</span>
+          </div>
+        </div>
+
+        {/* Problem Statements Card */}
+        <div className="glass-panel p-5 border border-border-color flex flex-col justify-between">
+          <div className="flex items-start justify-between">
+            <div>
+              <span className="text-[10px] uppercase tracking-wider text-text-secondary font-bold block mb-1">
+                Problem Statement
+              </span>
+              <p className="font-heading text-2xl text-accent-tertiary uppercase m-0 font-bold truncate">
+                Track Deliverable
+              </p>
+            </div>
+            <div className="p-2.5 bg-accent-tertiary/10 border border-accent-tertiary/30 text-accent-tertiary rounded">
+              <ScrollText size={20} />
+            </div>
+          </div>
+          <div className="pt-4 border-t border-border-color/50 mt-3 flex items-center justify-between text-xs">
+            <span className="text-text-secondary">
+              Domain: <span className="text-text-primary font-bold">{teamInfo?.track || "Innovation"}</span>
+            </span>
+            <Link
+              href="/team/problem-statements"
+              className="text-accent-tertiary hover:underline font-bold uppercase text-[11px] flex items-center gap-1"
+            >
+              <span>View Statements</span>
+              <ArrowRight size={12} />
+            </Link>
           </div>
         </div>
 
@@ -269,7 +300,7 @@ export default async function TeamDashboardPage() {
         </div>
 
         {/* Results / Standings Card */}
-        <div className="glass-panel p-5 border border-border-color flex flex-col justify-between sm:col-span-2 lg:col-span-1">
+        <div className="glass-panel p-5 border border-border-color flex flex-col justify-between">
           <div className="flex items-start justify-between">
             <div>
               <span className="text-[10px] uppercase tracking-wider text-text-secondary font-bold block mb-1">

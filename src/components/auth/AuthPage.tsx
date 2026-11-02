@@ -11,16 +11,12 @@ import {
   Lock,
   Mail,
   ArrowRight,
-  ShieldCheck,
   AlertCircle,
   KeyRound,
   ArrowLeft,
   CheckCircle2,
   Eye,
   EyeOff,
-  Gavel,
-  Layers,
-  Users,
 } from "lucide-react";
 
 export default function AuthPage({ isSignUp = false }: { isSignUp?: boolean }) {
@@ -271,34 +267,6 @@ const normalizedEmail = email.includes("@") ? email.trim() : `${email.trim()}@iv
     }
   };
 
-const DEMO_PASSWORD = "Password@123";
-
-  const handleDemoClick = async (demoEmail: string, roleName: string, targetPath?: string) => {
-    // Only allow demo credentials in development environment
-    if (process.env.NODE_ENV === "production") {
-      setErrorMsg("Demo credentials are not available in production.");
-      return;
-    }
-
-    setEmail(demoEmail);
-    setPassword(DEMO_PASSWORD);
-    setErrorMsg(null);
-    setSuccessMsg(`Logging in as ${roleName}...`);
-
-    try {
-      // Demo logins must resolve role from profiles table via getRoleRedirectUrl.
-      // Never pass targetPath here, as that would bypass role-based routing.
-      await executeSignIn(demoEmail, DEMO_PASSWORD);
-    } catch (err: unknown) {
-      setErrorMsg(
-        err instanceof Error
-          ? `Demo login failed: ${err.message}`
-          : `Demo login failed for ${roleName}. Please check credentials.`
-      );
-      setLoading(false);
-    }
-  };
-
   const handleResendOtp = async () => {
     if (resendCooldown > 0 || resendLoading) return;
     setResendLoading(true);
@@ -325,7 +293,7 @@ const DEMO_PASSWORD = "Password@123";
   };
 
   return (
-    <div className="h-screen w-full bg-[#000000] text-white flex flex-col relative overflow-hidden select-none selection:bg-[#ff007f] selection:text-white font-sans">
+    <div className="min-h-screen w-full bg-[#000000] text-white flex flex-col relative overflow-x-hidden overflow-y-auto select-none selection:bg-[#ff007f] selection:text-white font-sans">
       {/* Complete pitch black background with technical grid and contour accents */}
       <div className="absolute inset-0 bg-[#000000] pointer-events-none" />
 
@@ -395,10 +363,10 @@ const DEMO_PASSWORD = "Password@123";
       </header>
 
       {/* MAIN HERO & LOGIN SECTION */}
-      <main className="relative z-10 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex-1 flex flex-col lg:flex-row items-center justify-center gap-6 lg:gap-8 overflow-hidden">
+      <main className="relative z-10 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex-1 flex flex-col lg:flex-row items-center justify-center gap-6 lg:gap-8 py-4 sm:py-6 lg:py-0 my-auto">
         
-        {/* LEFT COLUMN: HERO & BRANDING - Condensed */}
-        <div className="w-full lg:max-w-xl space-y-5 pl-4 lg:pl-8 flex-1 flex flex-col justify-center items-start">
+        {/* LEFT COLUMN: HERO & BRANDING - Visible on desktop, hidden on mobile so login card and button are immediately visible */}
+        <div className="hidden lg:flex w-full lg:max-w-xl space-y-5 pl-4 lg:pl-8 flex-1 flex-col justify-center items-start">
           {/* Eventra Emblem & Typography Logo */}
           <div className="relative w-52 sm:w-64 md:w-72 max-w-full -ml-2">
             <Image
@@ -426,7 +394,7 @@ const DEMO_PASSWORD = "Password@123";
         </div>
 
         {/* RIGHT COLUMN: LOGIN / AUTH FORM */}
-        <div className="w-full lg:max-w-md xl:max-w-[440px] flex-shrink-0">
+        <div className="w-full lg:max-w-md xl:max-w-[440px] flex-shrink-0 my-auto">
           <div className="w-full">
             {/* Unified Background Card */}
             <div className="relative rounded-[24px] border border-white/[0.1] bg-[#08080a]/95 shadow-[0_0_40px_rgba(0,0,0,0.8),0_0_20px_rgba(255,0,127,0.06)] backdrop-blur-xl overflow-hidden">
@@ -678,64 +646,6 @@ const DEMO_PASSWORD = "Password@123";
                   </form>
                 )}
 
-                {/* QUICK DEMO ACCESS SECTION (Development Only) */}
-                {!isSignUp && step === "credentials" && process.env.NODE_ENV !== "production" && (
-                  <div className="mt-4 pt-4 border-t border-white/10">
-                    <div className="flex items-center justify-center gap-2 mb-2.5">
-                      <span className="h-px flex-1 bg-white/10" />
-                      <span className="text-[8px] font-mono uppercase tracking-[1.5px] text-[#71717a] font-semibold">
-                        Quick Demo Access (Dev Only)
-                      </span>
-                      <span className="h-px flex-1 bg-white/10" />
-                    </div>
-
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
-                      {/* ADMIN BUTTON */}
-                      <button
-                        type="button"
-                        onClick={() => handleDemoClick("admin@demo.com", "Admin")}
-                        className="flex items-center justify-center gap-1 py-2 px-1.5 rounded-lg border border-[#ff007f]/40 hover:border-[#ff007f] bg-[#ff007f]/5 hover:bg-[#ff007f]/15 transition-all cursor-pointer group shadow-[0_0_8px_rgba(255,0,127,0.1)] hover:shadow-[0_0_12px_rgba(255,0,127,0.25)]"
-                      >
-                        <ShieldCheck size={12} className="text-[#ff007f] group-hover:scale-110 transition-transform" />
-                        <span className="font-mono font-bold text-[9px] text-white tracking-wider">ADMIN</span>
-                      </button>
-
-                      {/* JUDGE BUTTON */}
-                      <button
-                        type="button"
-                        onClick={() => handleDemoClick("judge@demo.com", "Judge")}
-                        className="flex items-center justify-center gap-1 py-2 px-1.5 rounded-lg border border-[#FBC815]/40 hover:border-[#FBC815] bg-[#FBC815]/5 hover:bg-[#FBC815]/15 transition-all cursor-pointer group shadow-[0_0_8px_rgba(251,200,21,0.1)] hover:shadow-[0_0_12px_rgba(251,200,21,0.25)]"
-                      >
-                        <Gavel size={12} className="text-[#FBC815] group-hover:scale-110 transition-transform" />
-                        <span className="font-mono font-bold text-[9px] text-white tracking-wider">JUDGE</span>
-                      </button>
-
-                      {/* OPS BUTTON */}
-                      <button
-                        type="button"
-                        onClick={() => handleDemoClick("ops@demo.com", "Ops")}
-                        className="flex items-center justify-center gap-1 py-2 px-1.5 rounded-lg border border-[#ff007f]/40 hover:border-[#ff007f] bg-[#ff007f]/5 hover:bg-[#ff007f]/15 transition-all cursor-pointer group shadow-[0_0_8px_rgba(255,0,127,0.1)] hover:shadow-[0_0_12px_rgba(255,0,127,0.25)]"
-                      >
-                        <Layers size={12} className="text-[#ff007f] group-hover:scale-110 transition-transform" />
-                        <span className="font-mono font-bold text-[9px] text-white tracking-wider">OPS</span>
-                      </button>
-
-                      {/* TEAM BUTTON */}
-                      <button
-                        type="button"
-                        onClick={() => handleDemoClick("team@demo.com", "Team Leader")}
-                        className="flex items-center justify-center gap-1 py-2 px-1.5 rounded-lg border border-[#FBC815]/40 hover:border-[#FBC815] bg-[#FBC815]/5 hover:bg-[#FBC815]/15 transition-all cursor-pointer group shadow-[0_0_8px_rgba(251,200,21,0.1)] hover:shadow-[0_0_12px_rgba(251,200,21,0.25)]"
-                      >
-                        <Users size={12} className="text-[#FBC815] group-hover:scale-110 transition-transform" />
-                        <span className="font-mono font-bold text-[9px] text-white tracking-wider">TEAM</span>
-                      </button>
-                    </div>
-
-                    <p className="text-[8px] font-mono text-[#71717a] text-center mt-2">
-                      Use demo credentials to preview each role (Development Only).
-                    </p>
-                  </div>
-                )}
 
               </div>
             </div>
