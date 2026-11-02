@@ -325,7 +325,7 @@ const DEMO_PASSWORD = "Password@123";
   };
 
   return (
-    <div className="h-screen w-full bg-[#000000] text-white flex flex-col relative overflow-hidden select-none selection:bg-[#ff007f] selection:text-white font-sans">
+    <div className="min-h-screen w-full bg-[#000000] text-white flex flex-col relative overflow-x-hidden overflow-y-auto select-none selection:bg-[#ff007f] selection:text-white font-sans">
       {/* Complete pitch black background with technical grid and contour accents */}
       <div className="absolute inset-0 bg-[#000000] pointer-events-none" />
 
@@ -395,10 +395,10 @@ const DEMO_PASSWORD = "Password@123";
       </header>
 
       {/* MAIN HERO & LOGIN SECTION */}
-      <main className="relative z-10 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex-1 flex flex-col lg:flex-row items-center justify-center gap-6 lg:gap-8 overflow-hidden">
+      <main className="relative z-10 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex-1 flex flex-col lg:flex-row items-center justify-center gap-6 lg:gap-8 py-4 sm:py-6 lg:py-0 my-auto">
         
-        {/* LEFT COLUMN: HERO & BRANDING - Condensed */}
-        <div className="w-full lg:max-w-xl space-y-5 pl-4 lg:pl-8 flex-1 flex flex-col justify-center items-start">
+        {/* LEFT COLUMN: HERO & BRANDING - Visible on desktop, hidden on mobile so login card and button are immediately visible */}
+        <div className="hidden lg:flex w-full lg:max-w-xl space-y-5 pl-4 lg:pl-8 flex-1 flex-col justify-center items-start">
           {/* Eventra Emblem & Typography Logo */}
           <div className="relative w-52 sm:w-64 md:w-72 max-w-full -ml-2">
             <Image
@@ -426,7 +426,7 @@ const DEMO_PASSWORD = "Password@123";
         </div>
 
         {/* RIGHT COLUMN: LOGIN / AUTH FORM */}
-        <div className="w-full lg:max-w-md xl:max-w-[440px] flex-shrink-0">
+        <div className="w-full lg:max-w-md xl:max-w-[440px] flex-shrink-0 my-auto">
           <div className="w-full">
             {/* Unified Background Card */}
             <div className="relative rounded-[24px] border border-white/[0.1] bg-[#08080a]/95 shadow-[0_0_40px_rgba(0,0,0,0.8),0_0_20px_rgba(255,0,127,0.06)] backdrop-blur-xl overflow-hidden">
