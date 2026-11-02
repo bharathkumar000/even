@@ -164,6 +164,8 @@ export async function updateProblemStatement(id: string, data: Partial<{
   const { user } = await requireAdmin();
   await validateCsrfToken(data[CSRF_CONSTANTS.HEADER_NAME] || null);
   const payload: any = { ...data, updated_by: user.id, updated_at: new Date().toISOString() };
+  delete payload[CSRF_CONSTANTS.HEADER_NAME];
+  delete payload["x-csrf-token"];
   // Preserve optional fields if explicitly provided
   if (Object.prototype.hasOwnProperty.call(data, "team_limit")) payload.team_limit = (data as any).team_limit;
   if (Object.prototype.hasOwnProperty.call(data, "enable_selection")) payload.enable_selection = (data as any).enable_selection;

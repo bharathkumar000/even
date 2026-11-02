@@ -354,6 +354,7 @@ export default function RoundsClientView({
     }
   };
 
+  const handleStatusChange = async (roundId: string, nextStatus: RoundStatus) => {
     const originalRound = rounds.find((r) => r.id === roundId);
     setRounds((prev) =>
       prev.map((r) => (r.id === roundId ? { ...r, status: nextStatus } : r))
@@ -388,6 +389,7 @@ export default function RoundsClientView({
         message: err instanceof Error ? err.message : "Failed to update round status.",
       });
     }
+  };
 
   // --- Handlers: Criteria CRUD ---
   const handleOpenCreateCriterion = () => {

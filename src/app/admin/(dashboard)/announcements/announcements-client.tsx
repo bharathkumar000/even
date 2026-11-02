@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useTransition, useEffect, useCallback } from "react";
+import React, { useState, useTransition, useEffect, useCallback, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useForm } from "react-hook-form";
@@ -142,6 +142,82 @@ const STATUS_LABELS: Record<string, string> = {
   archived: "Archived",
 };
 
+const AnnouncementRow = React.memo(({ 
+  announcement, 
+  onPreview, 
+  onEdit, 
+  onPublish, 
+  onUnpublish, 
+  onArchive, 
+  onDuplicate, 
+  onDelete,
+  formatDate,
+  getStatusIcon
+}: {
+  announcement: Announcement;
+  onPreview: (a: Announcement) => void;
+  onEdit: (a: Announcement) => void;
+  onPublish: (id: string) => void;
+  onUnpublish: (id: string) => void;
+  onArchive: (id: string) => void;
+  onDuplicate: (id: string) => void;
+  onDelete: (a: Announcement) => void;
+  formatDate: (dateStr: string | null) => string;
+  getStatusIcon: (status: string) => React.ReactNode;
+}) => (
+  <tr key={announcement.id} className="hover:bg-gray-800/50 transition-colors">
+    <td className="px-4 py-3">
+      <div className="flex items-center gap-3">
+        {announcement.pin_to_top && <Star className="w-4 h-4 text-yellow-400" />}
+        <div>
+          <p className="font-medium text-white truncate max-w-xs md:max-w-md">{announcement.title}</p>
+          <p className="text-xs text-gray-400 truncate max-w-xs md:max-w-md line-clamp-1">{announcement.message}</p>
+        </div>
+      </div>
+    </td>
+    <td className="px-4 py-3 hidden md:table-cell">
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-full bg-gray-800 border border-gray-700">
+        {(CATEGORY_ICONS[announcement.category] 
+          ? (() => { const Icon = CATEGORY_ICONS[announcement.category]; return <Icon className="w-3 h-3 text-gray-400" />; })() 
+          : <FileText className="w-3 h-3 text-gray-400" />)}
+        <span className="capitalize text-gray-300">{announcement.category}</span>
+      </span>
+    </td>
+    <td className="px-4 py-3 hidden lg:table-cell">
+      <span className="inline-flex items-center px-2 py-0.5 text-xs rounded-full bg-gray-800 border border-gray-700 text-gray-300">
+        {(Array.isArray(announcement.target_audience) ? announcement.target_audience : [announcement.target_audience || "all"]).map((a) => AUDIENCE_LABELS[a] || a).join(", ")}
+      </span>
+    </td>
+    <td className="px-4 py-3">
+      <span className={`inline-flex items-center gap-1 px-2 py-1 text-xs rounded-full ${STATUS_COLORS[announcement.status] || STATUS_COLORS.draft}`}>
+        {getStatusIcon(announcement.status)}
+        <span className="capitalize">{STATUS_LABELS[announcement.status] || announcement.status}</span>
+      </span>
+      {announcement.pin_to_top && (
+        <span className="ml-2 px-1.5 py-0.5 text-[10px] font-mono bg-yellow-500/20 text-yellow-400 border border-yellow-500/30 rounded">PINNED</span>
+      )}
+    </td>
+    <td className="px-4 py-3 hidden md:table-cell text-gray-400 text-sm">
+      {announcement.published_at ? formatDate(announcement.published_at) : "—"}
+    </td>
+    <td className="px-4 py-3 hidden lg:table-cell text-gray-400 text-sm">
+      {announcement.expires_at ? formatDate(announcement.expires_at) : "—"}
+    </td>
+    <td className="px-4 py-3 text-right">
+      <div className="flex items-center justify-end gap-1">
+        <button onClick={() => onPreview(announcement)} className="p-2 text-gray-400 hover:text-white hover:bg-gray-800 rounded-lg transition-colors" title="Preview"><Eye className="w-4 h-4" /></button>
+        <button onClick={() => onEdit(announcement)} className="p-2 text-gray-400 hover:text-white hover:bg-gray-800 rounded-lg transition-colors" title="Edit"><Edit className="w-4 h-4" /></button>
+        {announcement.status === "draft" && <button onClick={() => onPublish(announcement.id)} className="p-2 text-gray-400 hover:text-green-400 hover:bg-green-500/10 rounded-lg transition-colors" title="Publish Now"><Send className="w-4 h-4" /></button>}
+        {announcement.status === "published" && <button onClick={() => onUnpublish(announcement.id)} className="p-2 text-gray-400 hover:text-orange-400 hover:bg-orange-500/10 rounded-lg transition-colors" title="Unpublish"><RotateCcw className="w-4 h-4" /></button>}
+        {announcement.status !== "archived" && <button onClick={() => onArchive(announcement.id)} className="p-2 text-gray-400 hover:text-purple-400 hover:bg-purple-500/10 rounded-lg transition-colors" title="Archive"><Archive className="w-4 h-4" /></button>}
+        <button onClick={() => onDuplicate(announcement.id)} className="p-2 text-gray-400 hover:text-blue-400 hover:bg-blue-500/10 rounded-lg transition-colors" title="Duplicate"><Copy className="w-4 h-4" /></button>
+        <button onClick={() => onDelete(announcement)} className="p-2 text-gray-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors" title="Delete"><Trash2 className="w-4 h-4" /></button>
+      </div>
+    </td>
+  </tr>
+));
+AnnouncementRow.displayName = "AnnouncementRow";
+
 export default function AnnouncementsClient({
   initialCounts,
   initialAnnouncements,
@@ -227,8 +303,17 @@ export default function AnnouncementsClient({
     }
   };
 
+  const isFirstMount = useRef(true);
+
   useEffect(() => {
-    fetchData();
+    if (isFirstMount.current) {
+      isFirstMount.current = false;
+      return;
+    }
+    const timer = setTimeout(() => {
+      fetchData();
+    }, 0);
+    return () => clearTimeout(timer);
   }, [page, statusFilter, audienceFilter, search]);
 
   const handleSearch = useCallback((e: React.FormEvent) => {
@@ -446,81 +531,6 @@ export default function AnnouncementsClient({
       default: return <AlertCircle className="w-3 h-3" />;
     }
   }, []);
-
-  const AnnouncementRow = React.memo(({ 
-    announcement, 
-    onPreview, 
-    onEdit, 
-    onPublish, 
-    onUnpublish, 
-    onArchive, 
-    onDuplicate, 
-    onDelete,
-    formatDate,
-    getStatusIcon
-  }: {
-    announcement: Announcement;
-    onPreview: (a: Announcement) => void;
-    onEdit: (a: Announcement) => void;
-    onPublish: (id: string) => void;
-    onUnpublish: (id: string) => void;
-    onArchive: (id: string) => void;
-    onDuplicate: (id: string) => void;
-    onDelete: (a: Announcement) => void;
-    formatDate: (dateStr: string | null) => string;
-    getStatusIcon: (status: string) => React.ReactNode;
-  }) => (
-    <tr key={announcement.id} className="hover:bg-gray-800/50 transition-colors">
-      <td className="px-4 py-3">
-        <div className="flex items-center gap-3">
-          {announcement.pin_to_top && <Star className="w-4 h-4 text-yellow-400" />}
-          <div>
-            <p className="font-medium text-white truncate max-w-xs md:max-w-md">{announcement.title}</p>
-            <p className="text-xs text-gray-400 truncate max-w-xs md:max-w-md line-clamp-1">{announcement.message}</p>
-          </div>
-        </div>
-      </td>
-      <td className="px-4 py-3 hidden md:table-cell">
-        <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-full bg-gray-800 border border-gray-700">
-          {(CATEGORY_ICONS[announcement.category] 
-            ? (() => { const Icon = CATEGORY_ICONS[announcement.category]; return <Icon className="w-3 h-3 text-gray-400" />; })() 
-            : <FileText className="w-3 h-3 text-gray-400" />)}
-          <span className="capitalize text-gray-300">{announcement.category}</span>
-        </span>
-      </td>
-      <td className="px-4 py-3 hidden lg:table-cell">
-        <span className="inline-flex items-center px-2 py-0.5 text-xs rounded-full bg-gray-800 border border-gray-700 text-gray-300">
-          {(Array.isArray(announcement.target_audience) ? announcement.target_audience : [announcement.target_audience || "all"]).map((a) => AUDIENCE_LABELS[a] || a).join(", ")}
-        </span>
-      </td>
-      <td className="px-4 py-3">
-        <span className={`inline-flex items-center gap-1 px-2 py-1 text-xs rounded-full ${STATUS_COLORS[announcement.status] || STATUS_COLORS.draft}`}>
-          {getStatusIcon(announcement.status)}
-          <span className="capitalize">{STATUS_LABELS[announcement.status] || announcement.status}</span>
-        </span>
-        {announcement.pin_to_top && (
-          <span className="ml-2 px-1.5 py-0.5 text-[10px] font-mono bg-yellow-500/20 text-yellow-400 border border-yellow-500/30 rounded">PINNED</span>
-        )}
-      </td>
-      <td className="px-4 py-3 hidden md:table-cell text-gray-400 text-sm">
-        {announcement.published_at ? formatDate(announcement.published_at) : "—"}
-      </td>
-      <td className="px-4 py-3 hidden lg:table-cell text-gray-400 text-sm">
-        {announcement.expires_at ? formatDate(announcement.expires_at) : "—"}
-      </td>
-      <td className="px-4 py-3 text-right">
-        <div className="flex items-center justify-end gap-1">
-          <button onClick={() => onPreview(announcement)} className="p-2 text-gray-400 hover:text-white hover:bg-gray-800 rounded-lg transition-colors" title="Preview"><Eye className="w-4 h-4" /></button>
-          <button onClick={() => onEdit(announcement)} className="p-2 text-gray-400 hover:text-white hover:bg-gray-800 rounded-lg transition-colors" title="Edit"><Edit className="w-4 h-4" /></button>
-          {announcement.status === "draft" && <button onClick={() => onPublish(announcement.id)} className="p-2 text-gray-400 hover:text-green-400 hover:bg-green-500/10 rounded-lg transition-colors" title="Publish Now"><Send className="w-4 h-4" /></button>}
-          {announcement.status === "published" && <button onClick={() => onUnpublish(announcement.id)} className="p-2 text-gray-400 hover:text-orange-400 hover:bg-orange-500/10 rounded-lg transition-colors" title="Unpublish"><RotateCcw className="w-4 h-4" /></button>}
-          {announcement.status !== "archived" && <button onClick={() => onArchive(announcement.id)} className="p-2 text-gray-400 hover:text-purple-400 hover:bg-purple-500/10 rounded-lg transition-colors" title="Archive"><Archive className="w-4 h-4" /></button>}
-          <button onClick={() => onDuplicate(announcement.id)} className="p-2 text-gray-400 hover:text-blue-400 hover:bg-blue-500/10 rounded-lg transition-colors" title="Duplicate"><Copy className="w-4 h-4" /></button>
-          <button onClick={() => onDelete(announcement)} className="p-2 text-gray-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors" title="Delete"><Trash2 className="w-4 h-4" /></button>
-        </div>
-      </td>
-    </tr>
-  ));
 
   return (
     <div className="space-y-6">

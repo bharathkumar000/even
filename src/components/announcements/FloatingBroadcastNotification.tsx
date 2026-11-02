@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import React, { useState, useEffect, useCallback, useRef, useSyncExternalStore, startTransition } from "react";
 import { usePathname } from "next/navigation";
 import {
   Radio,
@@ -88,7 +88,7 @@ export default function FloatingBroadcastNotification() {
   const [dismissedIds, setDismissedIds] = useState<string[]>([]);
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [hasNewAlert, setHasNewAlert] = useState(false);
-  const [mounted, setMounted] = useState(false);
+  const mounted = useSyncExternalStore(() => () => {}, () => true, () => false);
   const knownIdsRef = useRef<Set<string>>(new Set());
 
   // Determine current audience target from pathname
@@ -103,11 +103,12 @@ export default function FloatingBroadcastNotification() {
 
   // Load dismissed IDs from sessionStorage
   useEffect(() => {
-    setMounted(true);
     try {
       const stored = sessionStorage.getItem("eventra_dismissed_broadcasts");
       if (stored) {
-        setDismissedIds(JSON.parse(stored));
+        startTransition(() => {
+          setDismissedIds(JSON.parse(stored));
+        });
       }
     } catch {}
   }, []);
@@ -146,13 +147,18 @@ export default function FloatingBroadcastNotification() {
   // Initial load and periodic refresh
   useEffect(() => {
     if (!mounted) return;
-    void fetchAnnouncements(false);
+    const initialTimer = setTimeout(() => {
+      void fetchAnnouncements(false);
+    }, 0);
 
     const interval = setInterval(() => {
       void fetchAnnouncements(false);
     }, 25000);
 
-    return () => clearInterval(interval);
+    return () => {
+      clearTimeout(initialTimer);
+      clearInterval(interval);
+    };
   }, [mounted, fetchAnnouncements]);
 
   // Supabase Realtime subscription for instant pop-up

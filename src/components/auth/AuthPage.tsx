@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, startTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
@@ -47,8 +47,10 @@ export default function AuthPage({ isSignUp = false }: { isSignUp?: boolean }) {
     try {
       const saved = localStorage.getItem("eventra_remember_email");
       if (saved) {
-        setEmail(saved);
-        setRememberMe(true);
+        startTransition(() => {
+          setEmail(saved);
+          setRememberMe(true);
+        });
       }
     } catch {}
   }, []);

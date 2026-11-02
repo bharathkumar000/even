@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
 import type { FormEvent } from "react";
 import type { LucideIcon } from "lucide-react";
 import Link from "next/link";
@@ -572,6 +572,21 @@ export default function ContentHubClientView({
     }
   }, [selectedActivityId]);
 
+  const loadFormsForActivity = useCallback(async (_activityId: string) => {
+    try {
+      const { forms, error } = await getProjectSubmissionForms();
+      if (error) {
+        throw new Error(error);
+      }
+      setSubmissionForms(forms);
+    } catch (err: unknown) {
+      setNotification({
+        type: "error",
+        message: err instanceof Error ? err.message : "Failed to load submission forms.",
+      });
+    }
+  }, []);
+
   // Load submission forms when Project Submissions activity is selected
   useEffect(() => {
     if (!selectedActivity || selectedActivity.type !== "project_submissions") {
@@ -708,20 +723,6 @@ export default function ContentHubClientView({
 
   // Project Submissions workspace handlers
 
-  const loadFormsForActivity = async (_activityId: string) => {
-    try {
-      const { forms, error } = await getProjectSubmissionForms();
-      if (error) {
-        throw new Error(error);
-      }
-      setSubmissionForms(forms);
-    } catch (err: unknown) {
-      setNotification({
-        type: "error",
-        message: err instanceof Error ? err.message : "Failed to load submission forms.",
-      });
-    }
-  };
 
   const openCreateForm = () => {
     setFormTitle("");

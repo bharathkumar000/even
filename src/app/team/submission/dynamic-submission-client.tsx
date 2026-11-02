@@ -1,6 +1,13 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useSyncExternalStore } from "react";
+
+const subscribeTime = (callback: () => void) => {
+  const interval = setInterval(callback, 1000);
+  return () => clearInterval(interval);
+};
+const getClientTime = () => Date.now();
+const getServerTime = () => 0;
 import {
   Lock,
   CheckCircle2,
@@ -115,6 +122,7 @@ export default function TeamDynamicSubmissionClientView({
   isLeader,
   currentSubmission,
 }: TeamDynamicSubmissionClientViewProps) {
+  const now = useSyncExternalStore(subscribeTime, getClientTime, getServerTime);
   const [sections, setSections] = useState<FormSection[]>([]);
   const [form, setForm] = useState<SubmissionForm | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -128,10 +136,6 @@ export default function TeamDynamicSubmissionClientView({
   const [answers, setAnswers] = useState<Record<string, unknown>>({});
   const [fileRefs, setFileRefs] = useState<any[]>([]);
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
-
-  useEffect(() => {
-    loadForm();
-  }, [formId]);
 
   const loadForm = async () => {
     if (!formId) {
@@ -161,12 +165,16 @@ export default function TeamDynamicSubmissionClientView({
         setAnswers(currentSubmission.answers || {});
         setFileRefs(currentSubmission.file_references || []);
       }
-    } catch (err) {
+    } catch {
       setNotification({ type: "error", message: "Failed to load submission form" });
     } finally {
       setIsLoading(false);
     }
   };
+
+  useEffect(() => {
+    loadForm();
+  }, [formId]);
 
   const handleAnswerChange = (questionId: string, value: unknown) => {
     setAnswers((prev) => {
@@ -388,10 +396,10 @@ export default function TeamDynamicSubmissionClientView({
       .padStart(2, "0")}`;
   };
 
+
   const getDeadlineSeconds = (): number => {
-    if (!submissionCloseAt) return 0;
+    if (!submissionCloseAt || !now) return 0;
     const closeTime = new Date(submissionCloseAt).getTime();
-    const now = Date.now();
     return Math.max(0, Math.floor((closeTime - now) / 1000));
   };
 

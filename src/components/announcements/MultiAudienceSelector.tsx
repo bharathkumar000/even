@@ -57,23 +57,16 @@ export default function MultiAudienceSelector({
 }: MultiAudienceSelectorProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [filter, setFilter] = useState("");
-  const [selectedSummary, setSelectedSummary] = useState<string | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
-
   const isAllSelected = value.includes("all");
   const individualSelected = value.filter((v) => v !== "all");
   const hasSelection = value.length > 0;
-
-  useEffect(() => {
-    if (isAllSelected) {
-      setSelectedSummary("All Portals");
-    } else if (hasSelection) {
-      setSelectedSummary(`${individualSelected.length} portal${individualSelected.length !== 1 ? "s" : ""} selected`);
-    } else {
-      setSelectedSummary(null);
-    }
-  }, [value, isAllSelected, hasSelection, individualSelected.length]);
+  const selectedSummary = isAllSelected
+    ? "All Portals"
+    : hasSelection
+    ? `${individualSelected.length} portal${individualSelected.length !== 1 ? "s" : ""} selected`
+    : null;
 
   const toggleAudience = (audience: AudienceValue) => {
     if (disabled) return;

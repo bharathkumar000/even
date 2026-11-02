@@ -1,6 +1,8 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useSyncExternalStore } from "react";
+
+const emptySubscribe = () => () => {};
 import {
   Gift,
   UserCheck,
@@ -30,10 +32,9 @@ export default function LiveActivityStream({
   onRefresh,
   lastSyncTime,
 }: LiveActivityStreamProps) {
+  const mounted = useSyncExternalStore(emptySubscribe, () => true, () => false);
   const [filterAction, setFilterAction] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState("");
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => { setMounted(true); }, []);
 
   const getActionBadge = (action: ActionType) => {
     switch (action) {

@@ -397,7 +397,7 @@ useEffect(() => {
 
     // Optimistic update
     const optimisticLog: EnrichedActivityLog = {
-      id: `temp-${Date.now()}`,
+      id: `temp-${correlationId}`,
       participant_id: participantId,
       action_type: actionType,
       created_at: new Date().toISOString(),

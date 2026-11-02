@@ -11,6 +11,7 @@ export default function ActivityTimer({ activityId }: ActivityTimerProps) {
   const [timerEnd, setTimerEnd] = useState<string | null>(null);
   const [timerAutoPublish, setTimerAutoPublish] = useState(true);
   const [timeRemaining, setTimeRemaining] = useState<number>(0);
+  const [totalDuration, setTotalDuration] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -28,6 +29,7 @@ export default function ActivityTimer({ activityId }: ActivityTimerProps) {
             if (diff > 0) {
               setTimerEnd(data.endTime);
               setTimeRemaining(diff);
+              setTotalDuration(diff);
               setTimerAutoPublish(data.autoPublish);
             }
           }
@@ -85,7 +87,7 @@ export default function ActivityTimer({ activityId }: ActivityTimerProps) {
     ? `${hours.toString().padStart(2, "0")}:${minutes.toString().padStart(2, "0")}:${seconds.toString().padStart(2, "0")}`
     : `${minutes.toString().padStart(2, "0")}:${seconds.toString().padStart(2, "0")}`;
 
-  const progress = timerEnd ? (1 - timeRemaining / (new Date(timerEnd).getTime() - (Date.now() - timeRemaining * 1000))) : 0;
+  const progress = totalDuration && totalDuration > 0 ? ((totalDuration - timeRemaining) / totalDuration) * 100 : 0;
 
   return (
     <div className="flex items-center gap-3 p-3 bg-surface-color/30 border border-accent-secondary/40 rounded relative overflow-hidden">

@@ -138,6 +138,7 @@ export default function UsersClientView({
   // Modals state
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [userToDelete, setUserToDelete] = useState<UserProfileItem | null>(null);
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
 
   React.useEffect(() => {
@@ -171,7 +172,6 @@ export default function UsersClientView({
   const [formLoading, setFormLoading] = useState(false);
 
   // Import / Export State
-  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [importFile, setImportFile] = useState<File | null>(null);
   const [importLoading, setImportLoading] = useState(false);
   const [importPreview, setImportPreview] = useState<BulkImportUserRecord[]>([]);

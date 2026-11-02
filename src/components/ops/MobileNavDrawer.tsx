@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Menu, X, QrCode, Search, Activity, Gavel, ArrowLeft, Shield, Layers } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
@@ -10,6 +10,11 @@ import SignOutButton from "@/components/SignOutButton";
 export default function OpsMobileNav() {
   const [open, setOpen] = useState(false);
   const pathname = usePathname();
+  const [prevPathname, setPrevPathname] = useState(pathname);
+  if (prevPathname !== pathname) {
+    setPrevPathname(pathname);
+    setOpen(false);
+  }
 
   const navItems: { href: string; icon: any; label: string; badge?: string; newTab?: boolean }[] = [
     { href: "/ops/scanner", icon: QrCode, label: "QR Scanner Desk" },
@@ -28,11 +33,6 @@ export default function OpsMobileNav() {
     "/ops/scanner/live-activity": "Live Activity Stream",
   };
   const title = titleMap[pathname] ?? "Operations Desk";
-
-  // Automatically close drawer when navigating to a new route
-  useEffect(() => {
-    setOpen(false);
-  }, [pathname]);
 
   return (
     <>

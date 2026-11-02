@@ -129,11 +129,6 @@ export default function FormBuilderEditor() {
   const [notification, setNotification] = useState<{ type: "success" | "error"; message: string } | null>(null);
   const [rounds, setRounds] = useState<RoundOption[]>([]);
 
-  useEffect(() => {
-    loadForm();
-    loadRounds();
-  }, [formId, mode]);
-
   const loadRounds = async () => {
     try {
       const res = await fetch(`/api/admin/rounds`);
@@ -179,16 +174,21 @@ export default function FormBuilderEditor() {
           questions: (data.questions || []).filter((q: any) => q.section_id === s.id),
         }))
       );
-    } catch (err) {
+    } catch {
       setNotification({ type: "error", message: "Failed to load form" });
     } finally {
       setIsLoading(false);
     }
   };
 
+  useEffect(() => {
+    loadForm();
+    loadRounds();
+  }, [formId, mode]);
+
   const addSection = () => {
     const newSection: FormSection = {
-      id: `new-section-${Date.now()}`,
+      id: `new-section-${crypto.randomUUID()}`,
       form_id: form?.id || "",
       title: `Section ${sections.length + 1}`,
       description: null,
@@ -204,7 +204,7 @@ export default function FormBuilderEditor() {
     if (!section) return;
 
     const newQuestion: FormQuestion = {
-      id: `new-question-${Date.now()}`,
+      id: `new-question-${crypto.randomUUID()}`,
       section_id: sectionId,
       title: `New ${QUESTION_TYPES.find((q) => q.value === questionType)?.label}`,
       description: null,
@@ -230,13 +230,13 @@ export default function FormBuilderEditor() {
         questionType === "checkbox"
           ? [
               {
-                id: `opt-${Date.now()}`,
+                id: `opt-${crypto.randomUUID()}`,
                 option_text: "Option 1",
                 option_value: "option_1",
                 sort_order: 0,
               },
               {
-                id: `opt-${Date.now() + 1}`,
+                id: `opt-${crypto.randomUUID()}`,
                 option_text: "Option 2",
                 option_value: "option_2",
                 sort_order: 1,
@@ -284,7 +284,7 @@ export default function FormBuilderEditor() {
   const duplicateQuestion = (sectionId: string, question: FormQuestion) => {
     const dup: FormQuestion = {
       ...question,
-      id: `new-question-${Date.now()}`,
+      id: `new-question-${crypto.randomUUID()}`,
       title: `${question.title} (Copy)`,
       sort_order: question.sort_order + 1,
     };

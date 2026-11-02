@@ -213,10 +213,6 @@ export default function FormBuilderEditor({
     status: string;
   }>>([]);
 
-  useEffect(() => {
-    loadRounds();
-  }, []);
-
   const loadRounds = async () => {
     try {
       const res = await fetch("/api/admin/rounds");
@@ -235,9 +231,13 @@ export default function FormBuilderEditor({
     }
   };
 
+  useEffect(() => {
+    loadRounds();
+  }, []);
+
   const addSection = () => {
     const newSection: FormSection = {
-      id: `new-section-${Date.now()}`,
+      id: `new-section-${crypto.randomUUID()}`,
       title: `Section ${sections.length + 1}`,
       description: null,
       sort_order: sections.length,
@@ -252,7 +252,7 @@ export default function FormBuilderEditor({
     if (!section) return;
 
     const newQuestion: FormQuestion = {
-      id: `new-question-${Date.now()}`,
+      id: `new-question-${crypto.randomUUID()}`,
       section_id: sectionId,
       title: `New ${
         QUESTION_TYPES.find((q) => q.value === questionType)?.label
@@ -280,13 +280,13 @@ export default function FormBuilderEditor({
         questionType === "checkbox"
           ? [
               {
-                id: `opt-${Date.now()}`,
+                id: `opt-${crypto.randomUUID()}`,
                 option_text: "Option 1",
                 option_value: "option_1",
                 sort_order: 0,
               },
               {
-                id: `opt-${Date.now() + 1}`,
+                id: `opt-${crypto.randomUUID()}`,
                 option_text: "Option 2",
                 option_value: "option_2",
                 sort_order: 1,
@@ -334,7 +334,7 @@ export default function FormBuilderEditor({
   const duplicateQuestion = (sectionId: string, question: FormQuestion) => {
     const dup: FormQuestion = {
       ...question,
-      id: `new-question-${Date.now()}`,
+      id: `new-question-${crypto.randomUUID()}`,
       title: `${question.title} (Copy)`,
       sort_order: question.sort_order + 1,
     };
