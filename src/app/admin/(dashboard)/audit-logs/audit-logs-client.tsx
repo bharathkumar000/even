@@ -21,8 +21,13 @@ import {
   Radio,
   FileText,
   SlidersHorizontal,
+  Undo2,
+  AlertTriangle,
+  Loader2,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { withCsrfToken } from "@/lib/csrf-client";
+import { revertScanActivity } from "@/app/actions/admin-revert-activity";
 import {
   getActivityPage,
   type ActivityPageResult,
@@ -50,10 +55,11 @@ const ACTION_LABELS: Record<string, { label: string; icon: React.ReactNode; colo
 };
 
 const RESULT_BADGES: Record<string, { label: string; className: string }> = {
-  success: { label: "Success", className: "bg-status-success/20 text-status-success border-status-success/40" },
+  success: { label: "Claimed", className: "bg-status-success/20 text-status-success border-status-success/40" },
   failure: { label: "Failure", className: "bg-status-error/20 text-status-error border-status-error/40" },
   rejected: { label: "Rejected", className: "bg-status-error/20 text-status-error border-status-error/40" },
-  already_completed: { label: "Claimed", className: "bg-surface-color text-text-secondary border-border-color" },
+  already_completed: { label: "Duplicate", className: "bg-surface-color text-text-secondary border-border-color" },
+  reverted: { label: "Reverted (Unclaimed)", className: "bg-yellow-500/20 text-yellow-400 border-yellow-500/50" },
 };
 
 function formatLocalTime(iso?: string | null, opts?: { utc?: boolean }) {
@@ -109,11 +115,26 @@ export default function AuditLogsClientView({
   const [page, setPage] = useState(1);
   const [pageSize] = useState(30);
 
+  // Revert claim state
+  const [revertModalLog, setRevertModalLog] = useState<ActivityLogRow | null>(null);
+  const [revertScope, setRevertScope] = useState<"single" | "entire_team">("single");
+  const [revertReason, setRevertReason] = useState("");
+  const [isReverting, setIsReverting] = useState(false);
+  const [toastMessage, setToastMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+
   // System audit logs state
   const [adminLogs] = useState<AuditLogItem[]>(initialAdminLogs);
   const [adminSearch, setAdminSearch] = useState("");
 
   const mountedRef = useRef(false);
+
+  // Auto-dismiss toast
+  useEffect(() => {
+    if (toastMessage) {
+      const timer = setTimeout(() => setToastMessage(null), 4500);
+      return () => clearTimeout(timer);
+    }
+  }, [toastMessage]);
 
   // Fetch operations logs with active filters
   const fetchOperationsLogs = useCallback(
@@ -178,6 +199,56 @@ export default function AuditLogsClientView({
     setPage(1);
     void fetchOperationsLogs(false, 1);
   }, [searchQuery, actionFilter, methodFilter, resultFilter, fetchOperationsLogs]);
+
+  const handleConfirmRevert = async () => {
+    if (!revertModalLog) return;
+    setIsReverting(true);
+    try {
+      const res = await revertScanActivity({
+        logId: revertModalLog.id,
+        revertScope,
+        reason: revertReason.trim() || undefined,
+        ...withCsrfToken(),
+      });
+
+      if (res.success) {
+        setToastMessage({
+          type: "success",
+          text: res.message || "Claim successfully reverted to Not Claimed!",
+        });
+        setRevertModalLog(null);
+        setRevertReason("");
+        // Instantly refresh operations logs
+        void fetchOperationsLogs(true, 1);
+        // Broadcast update to real-time subscribers (scanner desks)
+        try {
+          const supabase = createClient();
+          const channel = supabase.channel("ops-realtime-activity");
+          channel.send({
+            type: "broadcast",
+            event: "scan_action_recorded",
+            payload: {
+              team_id: revertModalLog.team_id,
+              participant_id: revertModalLog.participant_id,
+              action_type: revertModalLog.action_type,
+            },
+          });
+        } catch {}
+      } else {
+        setToastMessage({
+          type: "error",
+          text: res.error || "Failed to revert activity",
+        });
+      }
+    } catch (err: unknown) {
+      setToastMessage({
+        type: "error",
+        text: err instanceof Error ? err.message : "Error reverting activity",
+      });
+    } finally {
+      setIsReverting(false);
+    }
+  };
 
   const summary = activityData.summary || {
     total: 0,
@@ -363,10 +434,11 @@ export default function AuditLogsClientView({
                   className="bg-surface-color border border-border-color text-text-primary text-xs px-2.5 py-2 focus:border-accent-secondary outline-none rounded uppercase"
                 >
                   <option value="all">All Results</option>
-                  <option value="success">Success</option>
+                  <option value="success">Claimed (Success)</option>
+                  <option value="reverted">Reverted (Unclaimed)</option>
                   <option value="failure">Failure</option>
                   <option value="rejected">Rejected</option>
-                  <option value="already_completed">Already Completed</option>
+                  <option value="already_completed">Duplicate Attempts</option>
                 </select>
 
                 <label className="text-text-secondary text-xs flex items-center gap-1.5 cursor-pointer ml-1">
@@ -394,14 +466,15 @@ export default function AuditLogsClientView({
                   <th className="p-3 text-center w-24">Method</th>
                   <th className="p-3">Action</th>
                   <th className="p-3">Item / Target</th>
-                  <th className="p-3 text-center w-24">Result</th>
-                  <th className="p-3 text-center w-16">Details</th>
+                  <th className="p-3 text-center w-28">Result</th>
+                  <th className="p-3 text-center w-28">Revert / Claim</th>
+                  <th className="p-3 text-center w-12">Details</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border-color/30">
                 {logs.length === 0 ? (
                   <tr>
-                    <td colSpan={9} className="p-12 text-center text-text-secondary italic">
+                    <td colSpan={10} className="p-12 text-center text-text-secondary italic">
                       {loading ? (
                         <div className="flex flex-col items-center justify-center gap-2">
                           <RefreshCw size={20} className="animate-spin text-accent-secondary" />
@@ -511,6 +584,31 @@ export default function AuditLogsClientView({
                           >
                             {resultBadge.label}
                           </span>
+                        </td>
+
+                        <td className="p-3 text-center whitespace-nowrap">
+                          {log.result === "success" ? (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setRevertModalLog(log);
+                                setRevertScope("single");
+                                setRevertReason("");
+                              }}
+                              className="px-2.5 py-1 rounded bg-yellow-500/15 hover:bg-yellow-500/30 text-yellow-400 border border-yellow-500/40 text-[10px] uppercase font-bold tracking-wider inline-flex items-center gap-1 cursor-pointer transition-colors"
+                              title="Revert claim back to Not Claimed"
+                            >
+                              <Undo2 size={11} />
+                              <span>Revert</span>
+                            </button>
+                          ) : log.result === "reverted" ? (
+                            <span className="px-2 py-0.5 rounded bg-yellow-500/10 border border-yellow-500/30 text-yellow-400/90 text-[10px] font-mono uppercase">
+                              Unclaimed
+                            </span>
+                          ) : (
+                            <span className="text-[10px] text-text-secondary/50 font-mono">—</span>
+                          )}
                         </td>
 
                         <td className="p-3 text-center">
@@ -766,8 +864,237 @@ export default function AuditLogsClientView({
                   UTC: {formatLocalTime(selectedLog.created_at, { utc: true })}
                 </p>
               </div>
+
+              {/* Action: Revert Activity if claimed */}
+              {selectedLog.result === "success" && (
+                <div className="p-3 bg-yellow-500/10 border border-yellow-500/30 rounded space-y-2">
+                  <div className="flex items-center gap-2">
+                    <Undo2 size={16} className="text-yellow-400" />
+                    <span className="text-xs font-bold text-yellow-400 uppercase tracking-wider">
+                      Revert Activity Action
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-text-secondary m-0 leading-relaxed">
+                    Restore this item back to <strong className="text-text-primary">Not Claimed</strong>. The team or participant will be allowed to claim this distribution or check-in again immediately.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setRevertModalLog(selectedLog);
+                      setRevertScope("single");
+                      setRevertReason("");
+                    }}
+                    className="w-full py-2 px-3 rounded bg-yellow-500/20 hover:bg-yellow-500/30 text-yellow-400 border border-yellow-500/50 text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                  >
+                    <Undo2 size={13} /> Revert Claim to Not Claimed
+                  </button>
+                </div>
+              )}
+
+              {selectedLog.result === "reverted" && (
+                <div className="p-3 bg-yellow-500/10 border border-yellow-500/30 rounded flex items-center gap-2 text-yellow-400 text-xs font-mono">
+                  <AlertTriangle size={15} />
+                  <span>This claim was already reverted back to Not Claimed.</span>
+                </div>
+              )}
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Revert Claim Confirmation Modal */}
+      {revertModalLog && (
+        <div
+          className="fixed inset-0 z-[10000] bg-black/80 backdrop-blur-md flex items-center justify-center p-4 animate-fadeIn"
+          onClick={() => {
+            if (!isReverting) setRevertModalLog(null);
+          }}
+        >
+          <div
+            className="w-full max-w-lg bg-[#0c0d16] border border-yellow-500/40 rounded-xl p-6 shadow-2xl space-y-5"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <div className="flex items-start justify-between border-b border-border-color pb-3">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-lg bg-yellow-500/20 border border-yellow-500/40 flex items-center justify-center text-yellow-400">
+                  <Undo2 size={20} />
+                </div>
+                <div>
+                  <h3 className="font-heading text-lg text-text-primary uppercase m-0 leading-tight">
+                    Revert Scan Activity
+                  </h3>
+                  <p className="text-xs text-text-secondary m-0">
+                    Change activity status from Claimed &rarr; Not Claimed
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                disabled={isReverting}
+                onClick={() => setRevertModalLog(null)}
+                className="text-text-secondary hover:text-text-primary p-1 rounded disabled:opacity-50"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Target Activity Summary */}
+            <div className="glass-panel p-3.5 border border-border-color rounded-lg space-y-2 text-xs font-mono">
+              <div className="flex items-center justify-between">
+                <span className="text-text-secondary uppercase text-[10px]">Activity Type</span>
+                <span className="font-bold uppercase text-accent-tertiary">
+                  {revertModalLog.action_type}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-text-secondary uppercase text-[10px]">Team</span>
+                <span className="font-bold text-text-primary">
+                  {revertModalLog.team_name} {revertModalLog.team_code ? `(${revertModalLog.team_code})` : ""}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-text-secondary uppercase text-[10px]">Participant</span>
+                <span className="text-text-primary">
+                  {revertModalLog.participant_name} ({revertModalLog.participant_role || "member"})
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-text-secondary uppercase text-[10px]">Claimed At</span>
+                <span className="text-text-secondary">
+                  {formatLocalTime(revertModalLog.created_at)}
+                </span>
+              </div>
+            </div>
+
+            {/* Scope Selection */}
+            <div className="space-y-2">
+              <label className="block text-xs uppercase font-heading text-text-secondary">
+                Select Reversion Scope
+              </label>
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={() => setRevertScope("single")}
+                  className={`p-3 rounded-lg border text-left transition-all cursor-pointer ${
+                    revertScope === "single"
+                      ? "bg-accent-primary/15 border-accent-primary text-text-primary ring-1 ring-accent-primary"
+                      : "bg-surface-color border-border-color text-text-secondary hover:border-text-secondary"
+                  }`}
+                >
+                  <p className="font-heading text-xs uppercase m-0 font-bold">
+                    This Participant Only
+                  </p>
+                  <p className="text-[10px] text-text-secondary m-0 mt-1">
+                    Revert claim for {revertModalLog.participant_name || "this member"}
+                  </p>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setRevertScope("entire_team")}
+                  className={`p-3 rounded-lg border text-left transition-all cursor-pointer ${
+                    revertScope === "entire_team"
+                      ? "bg-yellow-500/15 border-yellow-500 text-yellow-400 ring-1 ring-yellow-500"
+                      : "bg-surface-color border-border-color text-text-secondary hover:border-text-secondary"
+                  }`}
+                >
+                  <p className="font-heading text-xs uppercase m-0 font-bold">
+                    Entire Team
+                  </p>
+                  <p className="text-[10px] text-text-secondary m-0 mt-1">
+                    Revert {revertModalLog.action_type} for all members in team
+                  </p>
+                </button>
+              </div>
+            </div>
+
+            {/* Reason Input */}
+            <div className="space-y-1.5">
+              <label
+                htmlFor="revert-reason"
+                className="block text-xs uppercase font-heading text-text-secondary"
+              >
+                Reversion Reason (Optional)
+              </label>
+              <input
+                id="revert-reason"
+                type="text"
+                value={revertReason}
+                onChange={(e) => setRevertReason(e.target.value)}
+                placeholder="e.g. Accidental scan at distribution desk, duplicate tap..."
+                className="w-full px-3 py-2 text-xs rounded bg-surface-color border border-border-color text-text-primary focus:border-yellow-500 focus:outline-none font-mono"
+              />
+            </div>
+
+            {/* Warning Note */}
+            <div className="p-3 bg-yellow-500/10 border border-yellow-500/30 rounded-lg flex items-start gap-2.5 text-xs text-yellow-400">
+              <AlertTriangle size={18} className="shrink-0 mt-0.5" />
+              <div className="space-y-0.5">
+                <p className="font-bold m-0 uppercase tracking-wide text-[11px]">
+                  Immediate Effect
+                </p>
+                <p className="m-0 text-text-secondary text-[11px] leading-relaxed">
+                  The scanner desk and team portal will immediately reflect this item as <strong>Not Claimed</strong>. The team will be permitted to scan and claim this item again.
+                </p>
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <button
+                type="button"
+                disabled={isReverting}
+                onClick={() => setRevertModalLog(null)}
+                className="px-4 py-2 rounded border border-border-color text-xs font-heading uppercase text-text-secondary hover:text-text-primary hover:bg-surface-color transition-colors disabled:opacity-50 cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={isReverting}
+                onClick={handleConfirmRevert}
+                className="px-4 py-2 rounded bg-yellow-500/20 hover:bg-yellow-500/30 border border-yellow-500/60 text-yellow-400 text-xs font-heading font-bold uppercase tracking-wider flex items-center gap-1.5 transition-colors disabled:opacity-50 cursor-pointer shadow-lg shadow-yellow-500/10"
+              >
+                {isReverting ? (
+                  <>
+                    <Loader2 size={13} className="animate-spin" />
+                    Reverting Claim...
+                  </>
+                ) : (
+                  <>
+                    <Undo2 size={13} />
+                    Confirm & Revert to Not Claimed
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Toast Notification */}
+      {toastMessage && (
+        <div
+          className={`fixed bottom-6 right-6 z-[10001] px-4 py-3 rounded-lg border shadow-2xl flex items-center gap-2.5 text-xs font-mono animate-slideUp backdrop-blur-md ${
+            toastMessage.type === "success"
+              ? "bg-status-success/20 border-status-success/50 text-status-success"
+              : "bg-status-error/20 border-status-error/50 text-status-error"
+          }`}
+        >
+          {toastMessage.type === "success" ? (
+            <CheckCircle2 size={16} />
+          ) : (
+            <AlertCircle size={16} />
+          )}
+          <span>{toastMessage.text}</span>
+          <button
+            type="button"
+            onClick={() => setToastMessage(null)}
+            className="ml-2 hover:opacity-75 p-0.5"
+          >
+            <X size={12} />
+          </button>
         </div>
       )}
     </div>

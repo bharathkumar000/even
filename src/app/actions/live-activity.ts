@@ -4,7 +4,7 @@ import { requireOperationsRole } from "@/lib/auth/operations";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import type { ActionType } from "@/lib/validations/operations";
 
-export type ActivityResult = "success" | "failure" | "rejected" | "already_completed" | "all";
+export type ActivityResult = "success" | "failure" | "rejected" | "already_completed" | "reverted" | "all";
 export type ActivityMethod = "qr" | "manual" | "all";
 
 export interface ActivityFilters {
