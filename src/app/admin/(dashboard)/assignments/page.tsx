@@ -1,12 +1,30 @@
 import { Suspense } from "react";
-import { getJudgeAssignmentsData } from "@/app/actions/admin-assignments";
+import { supabaseAdmin } from "@/lib/supabase/admin";
+import { Loader2 } from "lucide-react";
 import AssignmentsClientView from "./assignments-client";
-import { UserCheck, Loader2 } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
+interface RoundOption {
+  id: string;
+  title: string;
+}
+
 export default async function AdminAssignmentsPage() {
-  const data = await getJudgeAssignmentsData();
+  // Default to the first evaluation round so the grid has data immediately.
+  let defaultRoundId = "";
+  let rounds: RoundOption[] = [];
+  try {
+    const roundsRes = await supabaseAdmin
+      .from("evaluation_rounds")
+      .select("id, title, sequence_order")
+      .order("sequence_order", { ascending: true });
+    rounds = (roundsRes.data || []).map((r) => ({ id: r.id, title: r.title }));
+    if (rounds[0]) defaultRoundId = rounds[0].id;
+  } catch {
+    rounds = [];
+    defaultRoundId = "";
+  }
 
   return (
     <div className="space-y-8 animate-fade-in font-tech">
@@ -20,30 +38,26 @@ export default async function AdminAssignmentsPage() {
             </p>
           </div>
           <h1 className="text-3xl md:text-5xl font-heading text-text-primary tracking-wider uppercase m-0 flex items-center gap-3">
-            <UserCheck className="w-8 h-8 md:w-10 md:h-10 text-accent-secondary" />
             Judge Assignments
           </h1>
           <p className="font-tech text-text-secondary text-sm mt-2 max-w-2xl m-0">
-            Allocate participating teams to designated judges. Each judge will only have scorecard access to their assigned cohort during active evaluation rounds.
+            Allocate up to two distinct judges per team per evaluation round. Each judge submits an
+            independent evaluation out of 50; the combined score is out of 100.
           </p>
         </div>
       </div>
 
-      {/* Main Dual-Panel View wrapped with Suspense */}
       <Suspense
         fallback={
           <div className="min-h-[400px] flex flex-col items-center justify-center border border-border-color bg-surface-color/50 rounded p-8">
             <Loader2 className="w-8 h-8 text-accent-primary animate-spin mb-3" />
             <p className="font-tech text-text-secondary text-sm uppercase tracking-wider">
-              Loading assignment matrices...
+              Loading assignment matrix…
             </p>
           </div>
         }
       >
-        <AssignmentsClientView
-          initialJudges={data.judges}
-          initialTeams={data.teams}
-        />
+        <AssignmentsClientView defaultRoundId={defaultRoundId} rounds={rounds} />
       </Suspense>
     </div>
   );

@@ -9,6 +9,9 @@ import {
   ShieldCheck,
   ArrowRight,
   UserCog,
+  Minus,
+  CheckCircle2,
+  AlertCircle,
 } from "lucide-react";
 import Link from "next/link";
 import StatCard from "@/components/admin/StatCard";
@@ -16,6 +19,10 @@ import AdminAnnouncementModal from "@/components/admin/AdminAnnouncementModal";
 import AnnouncementBanner from "@/components/AnnouncementBanner";
 import { getActiveAnnouncements } from "@/app/actions/announcements";
 import type { AnnouncementItem } from "@/app/actions/announcements";
+import {
+  getJudgeAssignmentStats,
+  type JudgeAssignmentStats,
+} from "@/app/actions/admin-judge-assignments";
 
 export const dynamic = "force-dynamic";
 
@@ -32,6 +39,7 @@ export default async function AdminDashboardPage() {
   let pendingEvaluations = 0;
   let isResultsPublished = false;
   let announcements: AnnouncementItem[] = [];
+  let judgeStats: JudgeAssignmentStats | null = null;
 
   try {
     const [
@@ -81,6 +89,21 @@ export default async function AdminDashboardPage() {
     }
     if (announcementsRes.status === "fulfilled" && Array.isArray(announcementsRes.value)) {
       announcements = announcementsRes.value;
+    }
+
+    // Judge assignment coverage for the default (first) evaluation round.
+    try {
+      const roundsRes = await supabaseAdmin
+        .from("evaluation_rounds")
+        .select("id")
+        .order("sequence_order", { ascending: true })
+        .limit(1);
+      const defaultRoundId = roundsRes.data?.[0]?.id;
+      if (defaultRoundId) {
+        judgeStats = await getJudgeAssignmentStats(defaultRoundId);
+      }
+    } catch (err) {
+      console.error("Failed to load judge assignment stats:", err);
     }
 
   } catch (err) {
@@ -272,7 +295,89 @@ export default async function AdminDashboardPage() {
         </div>
       </section>
 
+      {/* SECTION 3: Judge Assignment Coverage (Dual-Judge System) */}
+      {judgeStats && (
+        <section className="space-y-6">
+          <div className="border-b border-border-color/40 pb-3">
+            <h2 className="font-heading text-xl text-text-primary uppercase tracking-wider m-0 flex items-center gap-2.5">
+              <Gavel className="text-accent-secondary" size={20} />
+              <span>Judge Assignment Coverage</span>
+            </h2>
+            <p className="font-tech text-xs text-text-secondary m-0 mt-1">
+              Maximum two distinct judges per team per evaluation round. Combined evaluation
+              score is out of 100 (two independent evaluations out of 50).
+            </p>
+          </div>
 
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            <StatCard
+              label="Total Teams"
+              count={judgeStats.total_teams}
+              role="team"
+              icon={Users}
+              colorScheme="pink"
+              description="Registered teams eligible for evaluation"
+            />
+            <StatCard
+              label="Required Judge Slots"
+              count={judgeStats.required_slots}
+              role="slot"
+              icon={Layers}
+              colorScheme="cyan"
+              description="Total teams × 2 judges"
+            />
+            <StatCard
+              label="Filled Slots"
+              count={judgeStats.filled_slots}
+              role="slot"
+              icon={CheckCircle2}
+              colorScheme="green"
+              description="Judge slots currently assigned"
+            />
+            <StatCard
+              label="Remaining Slots"
+              count={judgeStats.remaining_slots}
+              role="slot"
+              icon={Minus}
+              colorScheme="yellow"
+              description="Slots still to be filled"
+            />
+            <StatCard
+              label="Fully Assigned"
+              count={judgeStats.fully_assigned}
+              role="team"
+              icon={Shield}
+              colorScheme="green"
+              description="Teams with 2/2 judges assigned"
+            />
+            <StatCard
+              label="Partially Assigned"
+              count={judgeStats.partially_assigned}
+              role="team"
+              icon={Users}
+              colorScheme="yellow"
+              description="Teams with 1/2 judges assigned"
+            />
+            <StatCard
+              label="Unassigned"
+              count={judgeStats.unassigned}
+              role="team"
+              icon={AlertCircle}
+              colorScheme="pink"
+              description="Teams with no judges assigned"
+            />
+          </div>
+          <div className="pt-4 mt-6 border-t border-border-color/60 flex justify-end">
+            <Link
+              href="/admin/assignments"
+              className="inline-flex items-center gap-1.5 font-tech text-xs uppercase font-bold text-accent-secondary hover:text-text-primary transition-colors"
+            >
+              <span>Manage Judge Assignments</span>
+              <ArrowRight size={13} />
+            </Link>
+          </div>
+        </section>
+      )}
     </div>
   );
 }

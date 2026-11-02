@@ -43,6 +43,7 @@ export function useRealtimeSync({
   const onChangeRef = useRef(onChange);
   const lastChangeTime = useRef(0);
   const isRefreshing = useRef(false);
+  const lastFocusTime = useRef(0);
 
   // Keep onChange callback fresh
   useEffect(() => {
@@ -101,8 +102,6 @@ export function useRealtimeSync({
     let focusHandler: (() => void) | null = null;
 
     if (focusRefresh) {
-      const lastFocusTime = useRef(0);
-
       visibilityHandler = () => {
         if (document.visibilityState === "visible") {
           const now = Date.now();

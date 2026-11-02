@@ -13,6 +13,16 @@ import {
   type AuditMethod,
 } from "@/lib/audit";
 
+// Matches a full 36-character UUID (8-4-4-4-12 hex segments).
+const UUID_REGEX =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function assertValidUuid(value: string, label: string): void {
+  if (!value || !UUID_REGEX.test(value)) {
+    throw new Error(`Invalid ${label}: "${value}" is not a valid UUID`);
+  }
+}
+
 export interface LiveActivityFeedItem {
   id: string;
   team_id: string;
@@ -72,6 +82,9 @@ export async function manualTeamLookup(teamId: string): Promise<TeamScanData> {
   if (!teamId) {
     throw new Error("A valid team identifier is required");
   }
+
+  // Validate team UUID before querying PostgreSQL UUID columns.
+  assertValidUuid(teamId, "team identifier");
 
   const correlationId = crypto.randomUUID();
 
@@ -363,6 +376,9 @@ export async function recordTeamBulkAction(teamId: string, actionType: ActionTyp
   const { user, profile } = await requireOperationsRole();
   await validateCsrfToken(csrfToken || null);
 
+  // Validate team UUID before querying PostgreSQL UUID columns.
+  assertValidUuid(teamId, "Team ID");
+
   if (!teamId) {
     throw new Error("A valid Team ID is required for bulk claim");
   }
@@ -403,7 +419,7 @@ export async function recordTeamBulkAction(teamId: string, actionType: ActionTyp
   }
 
   const nowIso = new Date().toISOString();
-  const insertPayloads = unclaimedMembers.map((m, index) => ({
+  const insertPayloads = unclaimedMembers.map((m) => ({
     team_id: teamId,
     participant_id: m.user_id,
     action_type: actionType,
@@ -414,7 +430,7 @@ export async function recordTeamBulkAction(teamId: string, actionType: ActionTyp
     operator_id: operatorId,
     operator_name: operatorName,
     operator_role: operatorRole,
-    correlation_id: `${baseCorrelationId}-${index}`,
+    correlation_id: baseCorrelationId,
     created_at: nowIso,
   }));
 
@@ -457,6 +473,9 @@ export async function fetchTeamMembersForScan(teamId: string) {
   if (!teamId) {
     throw new Error("A valid team identifier is required");
   }
+
+  // Validate team UUID before querying PostgreSQL UUID columns.
+  assertValidUuid(teamId, "team identifier");
 
   // 1. Fetch team details
   const { data: team, error: teamError } = await supabaseAdmin

@@ -20,7 +20,8 @@ export type ActivityType =
   | "certificates"
   | "announcements"
   | "resources"
-  | "custom";
+  | "custom"
+  | "project_submissions";
 
 export type ContentStatus = "draft" | "published" | "unpublished";
 
@@ -144,6 +145,7 @@ const ACTIVITY_TYPES: ActivityType[] = [
   "announcements",
   "resources",
   "custom",
+  "project_submissions",
 ];
 
 const BUILT_IN_ACTIVITIES: Array<{
@@ -180,6 +182,12 @@ const BUILT_IN_ACTIVITIES: Array<{
     title: "Custom Activity",
     description:
       "A flexible workspace for any additional event content or release.",
+  },
+  {
+    type: "project_submissions",
+    title: "Project Submissions",
+    description:
+      "Create and publish dynamic project submission forms, collect team project details, manage attachments, and review final submissions.",
   },
 ];
 
@@ -312,6 +320,8 @@ function getItemTypeForActivity(type: ActivityType): string {
       return "announcement";
     case "resources":
       return "resource";
+    case "project_submissions":
+      return "submission_form";
     default:
       return "custom";
   }

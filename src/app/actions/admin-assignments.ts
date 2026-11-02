@@ -10,7 +10,7 @@ export interface JudgeOption {
   id: string;
   full_name: string | null;
   email: string | null;
-  assigned_team_ids: string[];
+  assigned_team_ids: string[]; // team_ids for the active round
 }
 
 export interface TeamOption {
@@ -18,26 +18,51 @@ export interface TeamOption {
   name: string;
   code?: string | null;
   track?: string | null;
-  assigned_judge_ids: string[];
+  assigned_judge_ids: string[]; // judge_ids for the active round
   assigned_judge_names?: string[];
 }
 
 export interface JudgeAssignmentsData {
   judges: JudgeOption[];
   teams: TeamOption[];
+  round_id: string | null;
+  round_title: string | null;
 }
 
-export async function getJudgeAssignmentsData(): Promise<JudgeAssignmentsData> {
+export async function getJudgeAssignmentsData(roundId: string | null = null): Promise<JudgeAssignmentsData> {
   try {
-    // Accessible by admins as well as operational staff / club members
     await requireOperationsRole();
   } catch {
     try {
       await requireAdmin();
     } catch (err) {
       console.warn("getJudgeAssignmentsData auth notice:", err);
-      return { judges: [], teams: [] };
+      return { judges: [], teams: [], round_id: null, round_title: null };
     }
+  }
+
+  // Determine the active round
+  let activeRoundId = roundId;
+  let activeRoundTitle: string | null = null;
+
+  if (!activeRoundId) {
+    const { data: rounds } = await supabaseAdmin
+      .from("evaluation_rounds")
+      .select("id, title")
+      .eq("status", "open")
+      .order("sequence_order", { ascending: true })
+      .limit(1);
+    if (rounds && rounds.length > 0) {
+      activeRoundId = rounds[0].id;
+      activeRoundTitle = rounds[0].title;
+    }
+  } else {
+    const { data: round } = await supabaseAdmin
+      .from("evaluation_rounds")
+      .select("title")
+      .eq("id", activeRoundId)
+      .maybeSingle();
+    activeRoundTitle = round?.title || null;
   }
 
   const fetchData = async (): Promise<JudgeAssignmentsData> => {
@@ -53,14 +78,13 @@ export async function getJudgeAssignmentsData(): Promise<JudgeAssignmentsData> {
         .order("name", { ascending: true }),
       supabaseAdmin
         .from("judge_assignments")
-        .select("judge_id, team_id"),
+        .select("judge_id, team_id, round_id")
+        .eq("round_id", activeRoundId),
     ]);
 
     const assignments = assignmentsRes.data || [];
 
-    // Map judge -> array of team_ids
     const judgeToTeams = new Map<string, string[]>();
-    // Map team -> array of judge_ids
     const teamToJudges = new Map<string, string[]>();
 
     for (const a of assignments) {
@@ -95,11 +119,11 @@ export async function getJudgeAssignmentsData(): Promise<JudgeAssignmentsData> {
       };
     });
 
-    return { judges, teams };
+    return { judges, teams, round_id: activeRoundId, round_title: activeRoundTitle };
   };
 
   const timeoutPromise = new Promise<JudgeAssignmentsData>((resolve) =>
-    setTimeout(() => resolve({ judges: [], teams: [] }), 3000)
+    setTimeout(() => resolve({ judges: [], teams: [], round_id: null, round_title: null }), 3000)
   );
 
   return Promise.race([fetchData(), timeoutPromise]);
@@ -108,16 +132,35 @@ export async function getJudgeAssignmentsData(): Promise<JudgeAssignmentsData> {
 export async function updateJudgeTeams(data: {
   judgeId: string;
   teamIds: string[];
+  roundId?: string | null;
   [CSRF_CONSTANTS.HEADER_NAME]?: string;
 }) {
   const { user } = await requireAdmin();
   await validateCsrfToken(data[CSRF_CONSTANTS.HEADER_NAME] || null);
 
-  // 1. Delete all existing assignments for this judge
+  // Determine the active round
+  let activeRoundId = data.roundId || null;
+  if (!activeRoundId) {
+    const { data: round } = await supabaseAdmin
+      .from("evaluation_rounds")
+      .select("id")
+      .eq("status", "open")
+      .order("sequence_order", { ascending: true })
+      .limit(1)
+      .maybeSingle();
+    activeRoundId = round?.id || null;
+  }
+
+  if (!activeRoundId) {
+    throw new Error("No active evaluation round found. Please create or open a round first.");
+  }
+
+  // 1. Delete all existing assignments for this judge in this round
   const { error: deleteError } = await supabaseAdmin
     .from("judge_assignments")
     .delete()
-    .eq("judge_id", data.judgeId);
+    .eq("judge_id", data.judgeId)
+    .eq("round_id", activeRoundId);
 
   if (deleteError) {
     throw new Error(`Failed to reset existing judge assignments: ${deleteError.message}`);
@@ -128,6 +171,7 @@ export async function updateJudgeTeams(data: {
     const rows = data.teamIds.map((tId) => ({
       judge_id: data.judgeId,
       team_id: tId,
+      round_id: activeRoundId,
       assigned_at: new Date().toISOString(),
     }));
 
@@ -150,6 +194,7 @@ export async function updateJudgeTeams(data: {
       details: {
         judge_id: data.judgeId,
         team_ids: data.teamIds,
+        round_id: activeRoundId,
         assigned_count: data.teamIds.length,
       },
       created_at: new Date().toISOString(),
@@ -166,18 +211,36 @@ export async function updateJudgeTeams(data: {
 export async function toggleSingleAssignment(data: {
   judgeId: string;
   teamId: string;
+  roundId?: string | null;
   assign: boolean;
   [CSRF_CONSTANTS.HEADER_NAME]?: string;
 }) {
   const { user } = await requireAdmin();
   await validateCsrfToken(data[CSRF_CONSTANTS.HEADER_NAME] || null);
 
+  // Determine the active round
+  let activeRoundId = data.roundId || null;
+  if (!activeRoundId) {
+    const { data: round } = await supabaseAdmin
+      .from("evaluation_rounds")
+      .select("id")
+      .eq("status", "open")
+      .order("sequence_order", { ascending: true })
+      .limit(1)
+      .maybeSingle();
+    activeRoundId = round?.id || null;
+  }
+
+  if (!activeRoundId) {
+    throw new Error("No active evaluation round found. Please create or open a round first.");
+  }
+
   if (data.assign) {
     const { error } = await supabaseAdmin
       .from("judge_assignments")
       .upsert(
-        { judge_id: data.judgeId, team_id: data.teamId, assigned_at: new Date().toISOString() },
-        { onConflict: "judge_id,team_id" }
+        { judge_id: data.judgeId, team_id: data.teamId, round_id: activeRoundId, assigned_at: new Date().toISOString() },
+        { onConflict: "judge_id,team_id,round_id" }
       );
     if (error) throw new Error(`Failed to assign team: ${error.message}`);
   } else {
@@ -185,7 +248,8 @@ export async function toggleSingleAssignment(data: {
       .from("judge_assignments")
       .delete()
       .eq("judge_id", data.judgeId)
-      .eq("team_id", data.teamId);
+      .eq("team_id", data.teamId)
+      .eq("round_id", activeRoundId);
     if (error) throw new Error(`Failed to unassign team: ${error.message}`);
   }
 
@@ -199,6 +263,7 @@ export async function toggleSingleAssignment(data: {
       details: {
         judge_id: data.judgeId,
         team_id: data.teamId,
+        round_id: data.roundId,
       },
       created_at: new Date().toISOString(),
     },
@@ -214,15 +279,35 @@ export async function toggleSingleAssignment(data: {
 /**
  * Smart Auto-Allotment Algorithm for Judges
  * Distributes judges evenly across teams ensuring conflict avoidance.
+ * Supports per-round assignment (2 judges per team by default).
  */
 export async function autoBalanceJudgeAssignments(options: {
   judgesPerTeam?: number;
   clearExisting?: boolean;
+  roundId?: string | null;
   [CSRF_CONSTANTS.HEADER_NAME]?: string;
 } = {}) {
   const { user } = await requireAdmin();
   await validateCsrfToken(options[CSRF_CONSTANTS.HEADER_NAME] || null);
   const judgesPerTeam = Math.max(1, options.judgesPerTeam || 2);
+
+  // Determine the active round
+  let activeRoundId = options.roundId || null;
+  if (!activeRoundId) {
+    const { data: rounds } = await supabaseAdmin
+      .from("evaluation_rounds")
+      .select("id")
+      .eq("status", "open")
+      .order("sequence_order", { ascending: true })
+      .limit(1);
+    if (rounds && rounds.length > 0) {
+      activeRoundId = rounds[0].id;
+    }
+  }
+
+  if (!activeRoundId) {
+    throw new Error("No active evaluation round found. Please create or open a round first.");
+  }
 
   // 1. Fetch judges and teams
   const [judgesRes, teamsRes, conflictsRes] = await Promise.all([
@@ -244,19 +329,21 @@ export async function autoBalanceJudgeAssignments(options: {
     throw new Error("No teams found to allocate.");
   }
 
-  // 2. Clear existing assignments if requested
+  // 2. Clear existing assignments if requested (for this round)
   if (options.clearExisting) {
-    await supabaseAdmin.from("judge_assignments").delete().neq("id", "00000000-0000-0000-0000-000000000000");
+    await supabaseAdmin
+      .from("judge_assignments")
+      .delete()
+      .eq("round_id", activeRoundId);
   }
 
-  // 3. Round-robin assignment balancing
+  // 3. Round-robin assignment balancing per round
   const judgeLoads = new Map<string, number>();
   judges.forEach((j) => judgeLoads.set(j.id, 0));
 
-  const newAssignments: Array<{ judge_id: string; team_id: string; assigned_at: string }> = [];
+  const newAssignments: Array<{ judge_id: string; team_id: string; round_id: string; assigned_at: string }> = [];
 
   for (const team of teams) {
-    // Sort judges by lowest current load
     const availableJudges = [...judges]
       .filter((j) => !conflicts.has(`${j.id}_${team.id}`))
       .sort((a, b) => (judgeLoads.get(a.id) || 0) - (judgeLoads.get(b.id) || 0));
@@ -267,6 +354,7 @@ export async function autoBalanceJudgeAssignments(options: {
       newAssignments.push({
         judge_id: judge.id,
         team_id: team.id,
+        round_id: activeRoundId,
         assigned_at: new Date().toISOString(),
       });
       judgeLoads.set(judge.id, (judgeLoads.get(judge.id) || 0) + 1);
@@ -276,7 +364,7 @@ export async function autoBalanceJudgeAssignments(options: {
   if (newAssignments.length > 0) {
     const { error: insertError } = await supabaseAdmin
       .from("judge_assignments")
-      .upsert(newAssignments, { onConflict: "judge_id,team_id" });
+      .upsert(newAssignments, { onConflict: "judge_id,team_id,round_id" });
 
     if (insertError) {
       throw new Error(`Failed to save auto-balanced judge assignments: ${insertError.message}`);
@@ -294,6 +382,7 @@ export async function autoBalanceJudgeAssignments(options: {
         teams_count: teams.length,
         assigned_pairs_count: newAssignments.length,
         judges_per_team: judgesPerTeam,
+        round_id: activeRoundId,
       },
       created_at: new Date().toISOString(),
     },
@@ -308,6 +397,6 @@ export async function autoBalanceJudgeAssignments(options: {
     teamsCount: teams.length,
     judgesCount: judges.length,
     totalAssignments: newAssignments.length,
+    round_id: activeRoundId,
   };
 }
-

@@ -43,28 +43,33 @@ export default async function AdminLayout({
     redirect("/login");
   }
 
-  // Fast-path metadata check first
-  const metaRole =
-    (user.user_metadata?.role as string | undefined) ||
-    (user.app_metadata?.role as string | undefined);
-
+  // Canonical: Fetch profile role from database using the authenticated user's UUID.
+  // Do not trust user_metadata.role or app_metadata.role for authorization;
+  // the database profiles table is the authoritative source.
   let profile: { role?: string } | null = null;
-  if (metaRole !== "admin") {
-    try {
-      const { data } = await supabaseAdmin
-        .from("profiles")
-        .select("role")
-        .eq("id", user.id)
-        .maybeSingle();
-      profile = data;
-    } catch {}
+  try {
+    const { data } = await supabaseAdmin
+      .from("profiles")
+      .select("role")
+      .eq("id", user.id)
+      .maybeSingle();
+    profile = data;
+  } catch (err) {
+    // Profile query error is distinct from authentication failure.
+    // Re-throw as a clear error rather than silently redirecting.
+    throw new Error(
+      "Failed to verify admin privileges. Please contact support."
+    );
+    // Note: Do not use metadata as a fallback; missing profile = authorization failure.
   }
 
-  const isAdmin = profile?.role === "admin" || metaRole === "admin";
+  // Grant access only when the database profile role is "admin".
+  // Metadata must not bypass this check.
+  const isAdmin = profile?.role === "admin";
 
   if (!isAdmin) {
-    // Redirect to the user's authorized portal instead of showing a 403 checkpoint
-    const authorizedUrl = getAuthorizedPortalUrl(metaRole || profile?.role);
+    // Redirect to the user's authorized portal based on their database role.
+    const authorizedUrl = getAuthorizedPortalUrl(profile?.role);
     redirect(`${authorizedUrl}?access_denied=1&portal=admin`);
   }
 

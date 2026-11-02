@@ -19,6 +19,7 @@ import {
   ScanLine,
   Gavel,
   Megaphone,
+  FileText,
 } from "lucide-react";
 import SignOutButton from "@/components/SignOutButton";
 
@@ -27,6 +28,8 @@ export default function AdminSidebar() {
 
   const navItems = [
     { href: "/admin", icon: Users, label: "Overview" },
+    { href: "/admin/content-releases", icon: FileCheck2, label: "Content Release" },
+    { href: "/admin/submission-forms", icon: FileText, label: "Project Submissions" },
     { href: "/admin/users", icon: Users, label: "User Management" },
     { href: "/admin/announcements", icon: Megaphone, label: "Announcements" },
     { href: "/admin/assignments", icon: UserCheck, label: "Judge Assignments" },
@@ -35,7 +38,6 @@ export default function AdminSidebar() {
     { href: "/admin/evaluations", icon: FileCheck2, label: "Evaluations & Overrides" },
     { href: "/admin/results", icon: Award, label: "Results Engine" },
     { href: "/admin/audit-logs", icon: ScrollText, label: "Audit Logs" },
-    { href: "/admin/content-releases", icon: FileCheck2, label: "Content Release" },
   ];
 
   const [pendingHref, setPendingHref] = useState<string | null>(null);

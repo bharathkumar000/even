@@ -29,6 +29,44 @@ import { CSRF_CONSTANTS } from "@/lib/csrf-constants";
 import { createClient } from "@/lib/supabase/client";
 import { playScanSuccess, playScanError } from "@/lib/feedback-sound";
 
+// Matches a full 36-character UUID (8-4-4-4-12 hex segments). Used to extract
+// the team UUID even when the QR payload appends a distribution index such as
+// "UUID-0". We deliberately do NOT split on hyphens, because UUIDs themselves
+// contain hyphens.
+const UUID_REGEX =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const UUID_PATTERN =
+  /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
+
+// Extracts the team UUID from any supported QR payload:
+//   1. Plain UUID: "892e7590-..."
+//   2. JSON object: {"team_id":"892e7590-...","name":"...","v":1}
+//   3. UUID with a separate distribution index: "892e7590-...-0"
+const extractTeamId = (rawCode: string): string => {
+  let candidate = rawCode.trim();
+
+  // JSON payload: read the designated team_id field.
+  if (candidate.startsWith("{")) {
+    try {
+      const parsed = JSON.parse(candidate);
+      if (parsed && typeof parsed === "object") {
+        candidate = parsed.team_id ?? parsed.id ?? candidate;
+      }
+    } catch {
+      // Not valid JSON; fall through to raw candidate handling below.
+    }
+  }
+
+  // UUID possibly followed by a distribution index. Match the UUID pattern
+  // directly instead of split("-") so the hyphens inside the UUID are preserved.
+  const uuidMatch = candidate.match(UUID_PATTERN);
+  if (uuidMatch) {
+    return uuidMatch[0];
+  }
+
+  return candidate;
+};
+
 export interface TeamScanMember {
   id: string;
   user_id?: string;
@@ -237,12 +275,15 @@ useEffect(() => {
   };
 
   const handleDetectedCode = async (rawCode: string) => {
-    let teamId = rawCode.trim();
-    if (teamId.startsWith("{")) {
-      try {
-        const parsed = JSON.parse(teamId);
-        teamId = parsed.team_id || parsed.id || teamId;
-      } catch {}
+    const teamId = extractTeamId(rawCode);
+
+    // Validate the extracted ID before querying Supabase UUID columns.
+    if (!teamId || !UUID_REGEX.test(teamId)) {
+      playScanError();
+      setErrorMsg(
+        "Invalid QR code: could not extract a valid Team ID from the scanned badge."
+      );
+      return;
     }
 
     // If an operation is selected, attempt bulk claim; otherwise just load team data
