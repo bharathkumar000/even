@@ -2,8 +2,8 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { RefreshCw, Globe, Lock, ShieldCheck, CheckCircle2, AlertCircle } from "lucide-react";
-import { triggerResultsEngine } from "@/app/actions/admin-results";
+import { RefreshCw, Globe, Lock, ShieldCheck, CheckCircle2, AlertCircle, Download } from "lucide-react";
+import { triggerResultsEngine, getComprehensiveResultsCsv } from "@/app/actions/admin-results";
 import { withCsrfToken } from "@/lib/csrf-client";
 
 export interface ResultItem {
@@ -34,6 +34,7 @@ export default function ResultsClientView({
   const [isPublished, setIsPublished] = useState(initialIsPublished);
   const [isLocked, setIsLocked] = useState(initialIsLocked);
   const [loadingAction, setLoadingAction] = useState<string | null>(null);
+  const [isExporting, setIsExporting] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
   const [feedbackType, setFeedbackType] = useState<"success" | "error">("success");
 
@@ -55,57 +56,79 @@ export default function ResultsClientView({
       : 1;
   const stdDev = Math.sqrt(variance) || 1;
 
-  const handleExportCSV = () => {
-    if (results.length === 0) {
-      alert("No standings to export.");
-      return;
-    }
+  const handleExportCSV = async () => {
+    setIsExporting(true);
+    setFeedback(null);
 
-    const headers = [
-      "Rank",
-      "Team ID",
-      "Evaluations Count",
-      "Raw Average Score",
-      "Total Score",
-      "Calibrated Z-Score",
-      "Normalized Score (Scale 100)",
-      "Status",
-    ];
-    const rows = results.map((r, idx) => {
-      const avg = typeof r.average_score === "number" ? r.average_score : 0;
-      const zScore = (avg - meanScore) / stdDev;
-      // Map z-score (-2 to +2) onto 50-100 scale for intuitive reading
-      const normalizedScore = Math.max(0, Math.min(100, Math.round((50 + zScore * 15) * 10) / 10));
+    try {
+      const res = await getComprehensiveResultsCsv(eventId);
+      if (res.success && res.csvContent) {
+        const blob = new Blob([res.csvContent], { type: "text/csv;charset=utf-8;" });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.setAttribute("download", res.filename || `IVC_EVENTRA_Final_Standings_${new Date().toISOString().slice(0, 10)}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
 
-      return [
-        r.rank || idx + 1,
-        `"${r.team_id || "Team"}"`,
-        r.evaluations_count || 0,
-        avg.toFixed(2),
-        r.total_score ?? 0,
-        zScore.toFixed(2),
-        normalizedScore.toFixed(1),
-        isLocked ? "LOCKED" : isPublished ? "PUBLISHED" : "DRAFT",
+        setFeedback("Official CSV exported successfully with full judge score breakdown!");
+        setFeedbackType("success");
+      } else {
+        throw new Error(res.error || "Failed to generate comprehensive CSV");
+      }
+    } catch (err: unknown) {
+      console.warn("Server CSV export failed, using client fallback:", err);
+
+      // Client-side fallback if server action has an error
+      if (results.length === 0) {
+        setFeedback("No standings available to export.");
+        setFeedbackType("error");
+        return;
+      }
+
+      const headers = [
+        "Final Rank",
+        "Team ID",
+        "Team Name",
+        "Evaluations Count",
+        "Raw Average Score",
+        "Total Score",
+        "Calibrated Z-Score",
+        "Leaderboard Status",
       ];
-    });
+      const rows = results.map((r, idx) => {
+        const avg = typeof r.average_score === "number" ? r.average_score : 0;
+        const zScore = (avg - meanScore) / stdDev;
+        return [
+          r.rank || idx + 1,
+          `"${r.team_id || "Team"}"`,
+          `"${r.team_name || "Team"}"`,
+          r.evaluations_count || 0,
+          avg.toFixed(2),
+          r.total_score ?? 0,
+          zScore.toFixed(2),
+          isLocked ? "LOCKED" : isPublished ? "PUBLISHED" : "DRAFT",
+        ];
+      });
 
-    const metadataRows = [
-      `# IVC-EVENTRA Leaderboard Deliberation Report`,
-      `# Generated At: ${new Date().toISOString()}`,
-      `# Scoring Mode: ${olympicMode ? "Olympic (Trimmed Outliers)" : "Standard Aggregate"}`,
-      `# Sample Mean: ${meanScore.toFixed(2)} | StdDev: ${stdDev.toFixed(2)}`,
-      "",
-    ];
+      const csvContent = "\uFEFF" + [headers.join(","), ...rows.map((row) => row.join(","))].join("\r\n");
+      const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.setAttribute("download", `IVC_Standings_Fallback_${new Date().toISOString().slice(0, 10)}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
 
-    const csvContent = [...metadataRows, headers.join(","), ...rows.map((row) => row.join(","))].join("\n");
-    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.setAttribute("download", `IVC_Deliberation_Standings_${new Date().toISOString().slice(0, 10)}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+      setFeedback("Exported client standings fallback CSV.");
+      setFeedbackType("success");
+    } finally {
+      setIsExporting(false);
+    }
   };
 
   const handleAction = async (action: "recalculate" | "publish" | "lock") => {
@@ -232,9 +255,16 @@ export default function ResultsClientView({
 
           <button
             onClick={handleExportCSV}
-            className="flex items-center gap-2 px-4 py-2.5 bg-surface-color border border-border-color hover:border-accent-primary text-text-primary font-tech font-bold uppercase text-xs transition-colors"
+            disabled={isExporting}
+            className="flex items-center gap-2 px-4 py-2.5 bg-surface-color border border-border-color hover:border-accent-primary text-text-primary font-tech font-bold uppercase text-xs transition-colors disabled:opacity-50"
+            title="Download complete spreadsheet with Final Rank, College, Problem Statement, Olympic Scores, and Judge Breakdown"
           >
-            Export Comprehensive CSV
+            {isExporting ? (
+              <RefreshCw size={15} className="animate-spin text-accent-primary" />
+            ) : (
+              <Download size={15} className="text-accent-primary" />
+            )}
+            {isExporting ? "Generating CSV..." : "Export to CSV"}
           </button>
 
           <button

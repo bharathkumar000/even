@@ -101,7 +101,7 @@ export default function FloatingBroadcastNotification() {
     return "all";
   }, [pathname]);
 
-  // Load dismissed IDs from sessionStorage
+  // Load dismissed IDs from sessionStorage and sound preferences from localStorage
   useEffect(() => {
     try {
       const stored = sessionStorage.getItem("eventra_dismissed_broadcasts");
@@ -110,7 +110,23 @@ export default function FloatingBroadcastNotification() {
           setDismissedIds(JSON.parse(stored));
         });
       }
+      const soundPref = localStorage.getItem("eventra_broadcast_sound_enabled");
+      if (soundPref !== null) {
+        startTransition(() => {
+          setSoundEnabled(soundPref === "true");
+        });
+      }
     } catch {}
+  }, []);
+
+  const toggleSound = useCallback(() => {
+    setSoundEnabled((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem("eventra_broadcast_sound_enabled", String(next));
+      } catch {}
+      return next;
+    });
   }, []);
 
   const audience = getAudienceForPortal();
@@ -380,7 +396,7 @@ export default function FloatingBroadcastNotification() {
             <div className="flex items-center gap-1.5 shrink-0 ml-2">
               <button
                 type="button"
-                onClick={() => setSoundEnabled((v) => !v)}
+                onClick={toggleSound}
                 className="p-1.5 rounded text-text-secondary hover:text-text-primary hover:bg-surface-color/50 transition-colors"
                 title={soundEnabled ? "Mute alert chimes" : "Unmute alert chimes"}
               >

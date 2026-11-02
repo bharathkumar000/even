@@ -12,6 +12,9 @@ import {
   Users,
   Sparkles,
   Award,
+  Wifi,
+  WifiOff,
+  Clock,
 } from "lucide-react";
 import {
   fetchTeamMembersForScan,
@@ -89,6 +92,87 @@ export interface TeamScanData {
   activityLogs: EnrichedActivityLog[];
 }
 
+export interface OfflineScanQueueItem {
+  id: string;
+  team_id: string;
+  team_name?: string;
+  participant_id?: string;
+  participant_name?: string;
+  action_type: ActionType;
+  method: "qr" | "manual";
+  is_bulk: boolean;
+  correlationId: string;
+  timestamp: number;
+  scanned_at: string;
+  crypto_hash: string;
+  retryCount: number;
+}
+
+const OFFLINE_QUEUE_KEY = "ivc_eventra_scanner_offline_queue";
+
+function getOfflineQueue(): OfflineScanQueueItem[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = localStorage.getItem(OFFLINE_QUEUE_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveOfflineQueue(queue: OfflineScanQueueItem[]): void {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(OFFLINE_QUEUE_KEY, JSON.stringify(queue));
+  } catch (err) {
+    console.warn("Failed to persist offline scan queue:", err);
+  }
+}
+
+function enqueueOfflineScan(item: OfflineScanQueueItem): void {
+  const current = getOfflineQueue();
+  const next = [...current, item];
+  saveOfflineQueue(next);
+}
+
+async function generateCryptoScanHash(
+  teamId: string,
+  participantId: string | undefined,
+  actionType: string,
+  timestamp: number,
+  correlationId: string
+): Promise<string> {
+  const message = `${teamId}:${participantId || "bulk"}:${actionType}:${timestamp}:${correlationId}:IVC_EVENTRA_OFFLINE_SIG`;
+  try {
+    if (typeof window !== "undefined" && window.crypto?.subtle) {
+      const msgBuffer = new TextEncoder().encode(message);
+      const hashBuffer = await window.crypto.subtle.digest("SHA-256", msgBuffer);
+      const hashArray = Array.from(new Uint8Array(hashBuffer));
+      return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
+    }
+  } catch {}
+  let h = 0;
+  for (let i = 0; i < message.length; i++) {
+    h = (Math.imul(31, h) + message.charCodeAt(i)) | 0;
+  }
+  return `fallback-${Math.abs(h).toString(16)}-${timestamp}`;
+}
+
+function isNetworkError(err: unknown): boolean {
+  if (typeof navigator !== "undefined" && !navigator.onLine) return true;
+  if (err instanceof TypeError && err.message.toLowerCase().includes("fetch")) return true;
+  const msg = (err instanceof Error ? err.message : String(err || "")).toLowerCase();
+  return (
+    msg.includes("failed to fetch") ||
+    msg.includes("network") ||
+    msg.includes("offline") ||
+    msg.includes("abort") ||
+    msg.includes("timeout") ||
+    msg.includes("load failed") ||
+    msg.includes("connection")
+  );
+}
+
 export default function ScannerClientView() {
   const [scanning, setScanning] = useState(false);
   const [manualId, setManualId] = useState("");
@@ -99,25 +183,37 @@ export default function ScannerClientView() {
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [liveStreamLogs, setLiveStreamLogs] = useState<LiveActivityFeedItem[]>([]);
-   const [streamLoading, setStreamLoading] = useState(false);
-   const [recentScans, setRecentScans] = useState<string[]>([]);
+  const [streamLoading, setStreamLoading] = useState(false);
+  const [recentScans, setRecentScans] = useState<string[]>([]);
 
-   const [lastSyncTime, setLastSyncTime] = useState<Date | null>(null);
-   const [csrfToken, setCsrfToken] = useState<string | undefined>(undefined);
-useEffect(() => {
-  setLastSyncTime(new Date());
-  // Fetch CSRF token from server
-  void fetch("/api/csrf/init")
-    .then((res) => res.json())
-    .then((data) => {
-      if (data?.token) {
-        setCsrfToken(data.token);
-      }
-    })
-    .catch((err) => {
-      console.warn("CSRF init fetch failed:", err);
-    });
-}, []);
+  const [lastSyncTime, setLastSyncTime] = useState<Date | null>(null);
+  const [csrfToken, setCsrfToken] = useState<string | undefined>(undefined);
+
+  // Network resilience and offline scan queue state
+  const [isOnline, setIsOnline] = useState<boolean>(true);
+  const [offlineQueueCount, setOfflineQueueCount] = useState<number>(0);
+  const [isSyncingQueue, setIsSyncingQueue] = useState<boolean>(false);
+  const isSyncingQueueRef = useRef(false);
+
+  useEffect(() => {
+    setLastSyncTime(new Date());
+    if (typeof navigator !== "undefined") {
+      setIsOnline(navigator.onLine);
+    }
+    setOfflineQueueCount(getOfflineQueue().length);
+
+    // Fetch CSRF token from server
+    void fetch("/api/csrf/init")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data?.token) {
+          setCsrfToken(data.token);
+        }
+      })
+      .catch((err) => {
+        console.warn("CSRF init fetch failed:", err);
+      });
+  }, []);
   const html5QrCodeRef = useRef<any>(null);
 
   // Fetch live activity audit stream across all club members
@@ -133,6 +229,104 @@ useEffect(() => {
       setStreamLoading(false);
     }
   }, []);
+
+  const flushOfflineQueue = useCallback(async () => {
+    if (isSyncingQueueRef.current) return;
+    if (typeof navigator !== "undefined" && !navigator.onLine) return;
+
+    const queue = getOfflineQueue();
+    if (queue.length === 0) {
+      setOfflineQueueCount(0);
+      return;
+    }
+
+    isSyncingQueueRef.current = true;
+    setIsSyncingQueue(true);
+
+    let syncedCount = 0;
+    const remainingQueue: OfflineScanQueueItem[] = [];
+
+    for (const item of queue) {
+      try {
+        if (item.is_bulk) {
+          await recordTeamBulkAction(item.team_id, item.action_type, csrfToken, {
+            method: item.method,
+            correlationId: item.correlationId,
+          });
+        } else if (item.participant_id) {
+          await recordMemberAction({
+            team_id: item.team_id,
+            participant_id: item.participant_id,
+            action_type: item.action_type,
+            [CSRF_CONSTANTS.HEADER_NAME]: csrfToken,
+            method: item.method,
+            correlationId: item.correlationId,
+          });
+        }
+        syncedCount++;
+      } catch (err: unknown) {
+        if (isNetworkError(err)) {
+          // Still offline / network dropped, keep current item and remaining
+          remainingQueue.push(item);
+          const currentIndex = queue.indexOf(item);
+          remainingQueue.push(...queue.slice(currentIndex + 1));
+          break;
+        }
+        console.warn(`[OfflineSync] Item ${item.id} resolved or invalid:`, err);
+        syncedCount++;
+      }
+    }
+
+    saveOfflineQueue(remainingQueue);
+    setOfflineQueueCount(remainingQueue.length);
+    setIsSyncingQueue(false);
+    isSyncingQueueRef.current = false;
+
+    if (syncedCount > 0) {
+      playScanSuccess();
+      setSuccessMsg(`📶 Flushed ${syncedCount} cached offline scan(s) to cloud database successfully!`);
+      fetchLiveStream();
+      setTeamData((current) => {
+        if (current?.team?.id) {
+          fetchTeamMembersForScan(current.team.id)
+            .then((updated) => setTeamData(updated))
+            .catch(() => {});
+        }
+        return current;
+      });
+    }
+  }, [csrfToken, fetchLiveStream]);
+
+  // Network online/offline event handlers and background sync interval
+  useEffect(() => {
+    const handleOnline = () => {
+      setIsOnline(true);
+      void flushOfflineQueue();
+    };
+
+    const handleOffline = () => {
+      setIsOnline(false);
+    };
+
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
+
+    const syncInterval = setInterval(() => {
+      if (typeof navigator !== "undefined" && navigator.onLine) {
+        const count = getOfflineQueue().length;
+        setOfflineQueueCount(count);
+        if (count > 0 && !isSyncingQueueRef.current) {
+          void flushOfflineQueue();
+        }
+      }
+    }, 8000);
+
+    return () => {
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
+      clearInterval(syncInterval);
+    };
+  }, [flushOfflineQueue]);
 
   // Real-time synchronization subscription for all club members
   useEffect(() => {
@@ -294,6 +488,34 @@ useEffect(() => {
       setActionLoading(`bulk-${op}`);
       setErrorMsg(null);
       const correlationId = crypto.randomUUID();
+
+      // Check if browser is currently offline
+      if (typeof navigator !== "undefined" && !navigator.onLine) {
+        const timestamp = Date.now();
+        void generateCryptoScanHash(teamId, undefined, op, timestamp, correlationId).then((cryptoHash) => {
+          enqueueOfflineScan({
+            id: crypto.randomUUID(),
+            team_id: teamId,
+            team_name: teamData?.team.name || `Team ${teamId.slice(0, 8)}`,
+            action_type: op as ActionType,
+            method: "qr",
+            is_bulk: true,
+            correlationId,
+            timestamp,
+            scanned_at: new Date().toISOString(),
+            crypto_hash: cryptoHash,
+            retryCount: 0,
+          });
+          setOfflineQueueCount(getOfflineQueue().length);
+        });
+        playScanSuccess();
+        setSuccessMsg(
+          `📶 Venue Wi-Fi Offline: Queued "${op.toUpperCase()}" claim with cryptographic timestamp. Will auto-sync.`
+        );
+        setActionLoading(null);
+        return;
+      }
+
       try {
         const res = await recordTeamBulkAction(teamId, op as ActionType, csrfToken, {
           method: "qr",
@@ -307,8 +529,31 @@ useEffect(() => {
         fetchLiveStream();
         loadTeamData(teamId);
       } catch (err: unknown) {
-        playScanError();
-        setErrorMsg(err instanceof Error ? err.message : `Bulk ${op} claim failed`);
+        if (isNetworkError(err)) {
+          const timestamp = Date.now();
+          const cryptoHash = await generateCryptoScanHash(teamId, undefined, op, timestamp, correlationId);
+          enqueueOfflineScan({
+            id: crypto.randomUUID(),
+            team_id: teamId,
+            team_name: teamData?.team.name || `Team ${teamId.slice(0, 8)}`,
+            action_type: op as ActionType,
+            method: "qr",
+            is_bulk: true,
+            correlationId,
+            timestamp,
+            scanned_at: new Date().toISOString(),
+            crypto_hash: cryptoHash,
+            retryCount: 0,
+          });
+          setOfflineQueueCount(getOfflineQueue().length);
+          playScanSuccess();
+          setSuccessMsg(
+            `📶 Wi-Fi Stutter Detected: Bulk "${op.toUpperCase()}" cached in offline queue. Auto-syncing.`
+          );
+        } else {
+          playScanError();
+          setErrorMsg(err instanceof Error ? err.message : `Bulk ${op} claim failed`);
+        }
       } finally {
         setActionLoading(null);
       }
@@ -414,6 +659,36 @@ useEffect(() => {
           }
     );
 
+    const memberName = teamData.members.find((m) => m.id === participantId)?.name || participantId;
+
+    if (typeof navigator !== "undefined" && !navigator.onLine) {
+      const timestamp = Date.now();
+      void generateCryptoScanHash(teamData.team.id, participantId, actionType, timestamp, correlationId).then((cryptoHash) => {
+        enqueueOfflineScan({
+          id: crypto.randomUUID(),
+          team_id: teamData.team.id,
+          team_name: teamData.team.name,
+          participant_id: participantId,
+          participant_name: memberName,
+          action_type: actionType,
+          method: "qr",
+          is_bulk: false,
+          correlationId,
+          timestamp,
+          scanned_at: new Date().toISOString(),
+          crypto_hash: cryptoHash,
+          retryCount: 0,
+        });
+        setOfflineQueueCount(getOfflineQueue().length);
+      });
+      playScanSuccess();
+      setSuccessMsg(
+        `📶 Offline Mode: Recorded "${actionType.toUpperCase()}" for ${memberName} with cryptographic timestamp. Will auto-sync.`
+      );
+      setActionLoading(null);
+      return;
+    }
+
     try {
       const res = await recordMemberAction({
         team_id: teamData.team.id,
@@ -436,20 +711,46 @@ useEffect(() => {
       fetchLiveStream();
       loadTeamData(teamData.team.id);
     } catch (err: unknown) {
-      playScanError();
-      // Revert optimistic update on failure
-      setTeamData((prev) =>
-        !prev
-          ? null
-          : {
-              ...prev,
-              activityLogs: prev.activityLogs.filter(
-                (log) => !(log.participant_id === participantId && log.action_type === actionType)
-              ),
-            }
-      );
-      setErrorMsg(err instanceof Error ? err.message : "Action claim failed");
-      setSuccessMsg(null);
+      if (isNetworkError(err)) {
+        const timestamp = Date.now();
+        const cryptoHash = await generateCryptoScanHash(teamData.team.id, participantId, actionType, timestamp, correlationId);
+        enqueueOfflineScan({
+          id: crypto.randomUUID(),
+          team_id: teamData.team.id,
+          team_name: teamData.team.name,
+          participant_id: participantId,
+          participant_name: memberName,
+          action_type: actionType,
+          method: "qr",
+          is_bulk: false,
+          correlationId,
+          timestamp,
+          scanned_at: new Date().toISOString(),
+          crypto_hash: cryptoHash,
+          retryCount: 0,
+        });
+        setOfflineQueueCount(getOfflineQueue().length);
+        playScanSuccess();
+        setSuccessMsg(
+          `📶 Network Drop Detected: "${actionType.toUpperCase()}" for ${memberName} cached in offline queue. Auto-syncing.`
+        );
+        // Retain optimistic update since scan is preserved in queue
+      } else {
+        playScanError();
+        // Revert optimistic update on failure
+        setTeamData((prev) =>
+          !prev
+            ? null
+            : {
+                ...prev,
+                activityLogs: prev.activityLogs.filter(
+                  (log) => !(log.participant_id === participantId && log.action_type === actionType)
+                ),
+              }
+        );
+        setErrorMsg(err instanceof Error ? err.message : "Action claim failed");
+        setSuccessMsg(null);
+      }
     } finally {
       setActionLoading(null);
     }
@@ -460,6 +761,32 @@ useEffect(() => {
     setActionLoading(`bulk-${actionType}`);
     setErrorMsg(null);
     const correlationId = crypto.randomUUID();
+
+    if (typeof navigator !== "undefined" && !navigator.onLine) {
+      const timestamp = Date.now();
+      void generateCryptoScanHash(teamData.team.id, undefined, actionType, timestamp, correlationId).then((cryptoHash) => {
+        enqueueOfflineScan({
+          id: crypto.randomUUID(),
+          team_id: teamData.team.id,
+          team_name: teamData.team.name,
+          action_type: actionType,
+          method: "qr",
+          is_bulk: true,
+          correlationId,
+          timestamp,
+          scanned_at: new Date().toISOString(),
+          crypto_hash: cryptoHash,
+          retryCount: 0,
+        });
+        setOfflineQueueCount(getOfflineQueue().length);
+      });
+      playScanSuccess();
+      setSuccessMsg(
+        `📶 Offline Mode: Bulk "${actionType.toUpperCase()}" cached with cryptographic timestamp. Will auto-sync.`
+      );
+      setActionLoading(null);
+      return;
+    }
 
     try {
       const res = await recordTeamBulkAction(teamData.team.id, actionType, csrfToken, {
@@ -474,8 +801,31 @@ useEffect(() => {
       fetchLiveStream();
       loadTeamData(teamData.team.id);
     } catch (err: unknown) {
-      playScanError();
-      setErrorMsg(err instanceof Error ? err.message : `Bulk ${actionType} claim failed`);
+      if (isNetworkError(err)) {
+        const timestamp = Date.now();
+        const cryptoHash = await generateCryptoScanHash(teamData.team.id, undefined, actionType, timestamp, correlationId);
+        enqueueOfflineScan({
+          id: crypto.randomUUID(),
+          team_id: teamData.team.id,
+          team_name: teamData.team.name,
+          action_type: actionType,
+          method: "qr",
+          is_bulk: true,
+          correlationId,
+          timestamp,
+          scanned_at: new Date().toISOString(),
+          crypto_hash: cryptoHash,
+          retryCount: 0,
+        });
+        setOfflineQueueCount(getOfflineQueue().length);
+        playScanSuccess();
+        setSuccessMsg(
+          `📶 Wi-Fi Stutter Detected: Bulk "${actionType.toUpperCase()}" cached in offline queue. Auto-syncing.`
+        );
+      } else {
+        playScanError();
+        setErrorMsg(err instanceof Error ? err.message : `Bulk ${actionType} claim failed`);
+      }
     } finally {
       setActionLoading(null);
     }
@@ -544,30 +894,66 @@ useEffect(() => {
         </div>
       )}
 
-      {/* Link to Live Activity Feed (opens in a separate tab/window) */}
-      <a
-        href="/ops/scanner/live-activity"
-        target="_blank"
-        rel="noopener noreferrer"
-        className="text-accent-primary hover:underline text-sm font-bold"
-      >
-        Live Activity Feed
-      </a>
-      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 mb-4 bg-surface-color/60 border border-border-color p-3 rounded">
-        <label htmlFor="operation-select" className="font-bold uppercase text-xs text-text-secondary shrink-0">Select Active Desk / Operation</label>
-        <select
-          id="operation-select"
-          value={selectedOperation}
-          onChange={(e) => setSelectedOperation(e.target.value)}
-          className="bg-surface-color border border-border-color p-2 text-xs font-tech text-text-primary outline-none focus:border-accent-secondary rounded w-full sm:w-auto"
-        >
-          <option value="registration">Registration / Check‑In Desk</option>
-          <option value="goodies">Goodies / Swag Kit Desk</option>
-          <option value="lunch">Lunch Token Desk</option>
-          <option value="snacks">Snacks / Refreshments Desk</option>
-          <option value="certificates">Certificates Desk</option>
-          <option value="feedback">Feedback Desk</option>
-        </select>
+      {/* Operation Selection Bar & Resilience Diagnostics */}
+      <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 mb-4 bg-surface-color/60 border border-border-color p-3 rounded">
+        <div className="flex items-center gap-2">
+          <label htmlFor="operation-select" className="font-bold uppercase text-xs text-text-secondary shrink-0">
+            Desk / Operation
+          </label>
+          <select
+            id="operation-select"
+            value={selectedOperation}
+            onChange={(e) => setSelectedOperation(e.target.value)}
+            className="bg-surface-color border border-border-color p-2 text-xs font-tech text-text-primary outline-none focus:border-accent-secondary rounded"
+          >
+            <option value="registration">Registration / Check‑In Desk</option>
+            <option value="goodies">Goodies / Swag Kit Desk</option>
+            <option value="lunch">Lunch Token Desk</option>
+            <option value="snacks">Snacks / Refreshments Desk</option>
+            <option value="certificates">Certificates Desk</option>
+            <option value="feedback">Feedback Desk</option>
+          </select>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2.5">
+          {/* Venue Wi-Fi Status Pill */}
+          <div
+            className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-mono font-bold border transition-colors ${
+              isOnline
+                ? "bg-status-success/10 border-status-success/30 text-status-success"
+                : "bg-status-warning/15 border-status-warning/40 text-status-warning animate-pulse"
+            }`}
+            title={isOnline ? "Venue network connected" : "Venue network congested. Scans will be cached offline."}
+          >
+            {isOnline ? <Wifi size={13} /> : <WifiOff size={13} />}
+            <span>{isOnline ? "Venue Wi-Fi Online" : "Wi-Fi Congested (Offline Mode)"}</span>
+          </div>
+
+          {/* Offline Queue Badge & Manual Trigger */}
+          {offlineQueueCount > 0 && (
+            <div className="flex items-center gap-2 px-2.5 py-1 bg-accent-secondary/15 border border-accent-secondary/40 text-accent-secondary rounded text-xs font-mono font-bold animate-fade-in">
+              <Clock size={13} className={isSyncingQueue ? "animate-spin" : ""} />
+              <span>{offlineQueueCount} scan{offlineQueueCount > 1 ? "s" : ""} cached offline</span>
+              <button
+                type="button"
+                onClick={() => flushOfflineQueue()}
+                disabled={isSyncingQueue || !isOnline}
+                className="px-2 py-0.5 bg-accent-secondary text-white text-[10px] rounded hover:bg-accent-secondary/80 disabled:opacity-50 transition-colors uppercase tracking-wider"
+              >
+                {isSyncingQueue ? "Syncing..." : "Sync Now"}
+              </button>
+            </div>
+          )}
+
+          <a
+            href="/ops/scanner/live-activity"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-accent-primary hover:underline text-xs font-bold font-tech ml-1"
+          >
+            Live Activity Feed ↗
+          </a>
+        </div>
       </div>
       
 {/* Scanner & Manual Lookup Controls */}

@@ -127,6 +127,8 @@ export default function TeamDynamicSubmissionClientView({
   const [form, setForm] = useState<SubmissionForm | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [isAutoSaving, setIsAutoSaving] = useState(false);
+  const [lastSavedAt, setLastSavedAt] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [notification, setNotification] = useState<{ type: "success" | "error"; message: string } | null>(null);
   const [submissionReceipt, setSubmissionReceipt] = useState<{ referenceNumber: string; submittedAt: string } | null>(null);
@@ -136,6 +138,11 @@ export default function TeamDynamicSubmissionClientView({
   const [answers, setAnswers] = useState<Record<string, unknown>>({});
   const [fileRefs, setFileRefs] = useState<any[]>([]);
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
+  const hasLoadedDraftRef = useRef(false);
+  const answersRef = useRef(answers);
+  answersRef.current = answers;
+  const fileRefsRef = useRef(fileRefs);
+  fileRefsRef.current = fileRefs;
 
   const loadForm = async () => {
     if (!formId) {
@@ -157,6 +164,12 @@ export default function TeamDynamicSubmissionClientView({
         if (draftData.draft) {
           setAnswers(draftData.draft.answers || {});
           setFileRefs(draftData.draft.file_references || []);
+          if (draftData.draft.updated_at || draftData.draft.created_at) {
+            const dt = new Date(draftData.draft.updated_at || draftData.draft.created_at);
+            setLastSavedAt(
+              dt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })
+            );
+          }
         }
       }
 
@@ -169,6 +182,9 @@ export default function TeamDynamicSubmissionClientView({
       setNotification({ type: "error", message: "Failed to load submission form" });
     } finally {
       setIsLoading(false);
+      setTimeout(() => {
+        hasLoadedDraftRef.current = true;
+      }, 500);
     }
   };
 
@@ -318,10 +334,15 @@ export default function TeamDynamicSubmissionClientView({
     setFileRefs((prev) => prev.filter((f) => f.id !== attachmentId));
   };
 
-  const saveDraft = async () => {
-    if (!formId || !teamId) return;
+  const saveDraft = async (isAuto = false) => {
+    if (!formId || !teamId || isLocked || (!isLeader && !allowMemberSubmit)) return;
 
-    setIsSaving(true);
+    if (isAuto) {
+      setIsAutoSaving(true);
+    } else {
+      setIsSaving(true);
+    }
+
     try {
       const res = await fetch("/api/team/submission-draft", {
         method: "POST",
@@ -329,20 +350,50 @@ export default function TeamDynamicSubmissionClientView({
         body: JSON.stringify({
           form_id: formId,
           team_id: teamId,
-          answers,
-          file_references: fileRefs,
+          answers: answersRef.current,
+          file_references: fileRefsRef.current,
         }),
       });
 
       if (!res.ok) throw new Error("Failed to save draft");
 
-      setNotification({ type: "success", message: "Draft saved successfully" });
+      const nowTime = new Date().toLocaleTimeString([], {
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+      });
+      setLastSavedAt(nowTime);
+
+      if (!isAuto) {
+        setNotification({ type: "success", message: `Draft saved successfully at ${nowTime}` });
+      }
     } catch (err) {
-      setNotification({ type: "error", message: err instanceof Error ? err.message : "Failed to save draft" });
+      if (!isAuto) {
+        setNotification({
+          type: "error",
+          message: err instanceof Error ? err.message : "Failed to save draft",
+        });
+      }
     } finally {
-      setIsSaving(false);
+      if (isAuto) {
+        setIsAutoSaving(false);
+      } else {
+        setIsSaving(false);
+      }
     }
   };
+
+  // Debounced auto-save when answers or files change
+  useEffect(() => {
+    if (!hasLoadedDraftRef.current) return;
+    if (isLocked || (!isLeader && !allowMemberSubmit) || currentSubmission) return;
+
+    const timer = setTimeout(() => {
+      saveDraft(true);
+    }, 2500);
+
+    return () => clearTimeout(timer);
+  }, [answers, fileRefs, isLocked, isLeader, allowMemberSubmit, currentSubmission]);
 
   const submitFinal = async () => {
     if (!formId || !teamId) return;
@@ -717,9 +768,26 @@ export default function TeamDynamicSubmissionClientView({
               {activeRound ? `Round: ${activeRound.title}` : ""} Submit your project deliverables through the administrator-configured form.
             </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
+          {/* Draft Auto-Saved Indicator */}
+          {isAutoSaving ? (
+            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded bg-accent-tertiary/10 border border-accent-tertiary/30 text-accent-tertiary text-xs font-mono animate-pulse">
+              <Loader2 size={12} className="animate-spin text-accent-tertiary shrink-0" />
+              <span>Auto-saving draft...</span>
+            </div>
+          ) : lastSavedAt ? (
+            <div
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded bg-status-success/10 border border-status-success/30 text-status-success text-xs font-mono"
+              title={`Your draft changes are automatically synced. Last saved at ${lastSavedAt}`}
+            >
+              <CheckCircle2 size={13} className="text-status-success shrink-0" />
+              <span className="hidden sm:inline text-text-secondary text-[11px]">Draft auto-saved at</span>
+              <span className="font-bold text-status-success text-[11px]">{lastSavedAt}</span>
+            </div>
+          ) : null}
+
           {submissionCloseAt && (
-            <div className="px-3 py-1.5 rounded bg-surface-color border border-border-color text-xs">
+            <div className="px-3 py-1.5 rounded bg-surface-color border border-border-color text-xs flex items-center">
               <Timer size={12} className="mr-1.5 text-accent-secondary animate-pulse" />
               <span className="font-mono font-bold text-text-primary">
                 {formatCountdown(getDeadlineSeconds())}
@@ -817,13 +885,19 @@ export default function TeamDynamicSubmissionClientView({
         <div className="pt-6 border-t border-border-color flex items-center justify-between">
           <div className="flex items-center gap-4">
             <button
-              onClick={saveDraft}
-              disabled={isSaving || isLocked || (!isLeader && !allowMemberSubmit)}
-              className="px-5 py-2.5 border border-accent-tertiary/40 text-accent-tertiary rounded text-[10px] font-bold uppercase tracking-wider transition-all disabled:opacity-50 hover:bg-accent-tertiary/10"
+              onClick={() => saveDraft(false)}
+              disabled={isSaving || isAutoSaving || isLocked || (!isLeader && !allowMemberSubmit)}
+              className="px-5 py-2.5 border border-accent-tertiary/40 text-accent-tertiary rounded text-[10px] font-bold uppercase tracking-wider transition-all disabled:opacity-50 hover:bg-accent-tertiary/10 flex items-center gap-2"
             >
-              <Loader2 size={14} className={isSaving ? "animate-spin" : ""} mr-2 />
-              Save Draft
+              {isSaving && <Loader2 size={14} className="animate-spin" />}
+              <span>{isSaving ? "Saving..." : "Save Draft"}</span>
             </button>
+            {lastSavedAt && (
+              <span className="text-[11px] font-mono text-status-success flex items-center gap-1.5">
+                <CheckCircle2 size={12} className="text-status-success shrink-0" />
+                <span>Auto-saved at {lastSavedAt}</span>
+              </span>
+            )}
             {currentSubmission && (
               <button
                 onClick={() => setShowReview(true)}
