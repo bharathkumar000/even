@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Menu, X, QrCode, Search, Activity, Gavel, ArrowLeft } from "lucide-react";
+import { Menu, X, QrCode, Search, Activity, Gavel, ArrowLeft, Shield, Layers } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
@@ -11,8 +11,10 @@ export default function OpsMobileNav() {
   const [open, setOpen] = useState(false);
   const pathname = usePathname();
 
-  const navItems: { href: string; icon: any; label: string; newTab?: boolean }[] = [
+  const navItems: { href: string; icon: any; label: string; badge?: string; newTab?: boolean }[] = [
     { href: "/ops/scanner", icon: QrCode, label: "QR Scanner Desk" },
+    { href: "/ops/assigned-teams", icon: Shield, label: "My Assigned Teams", badge: "SPOC" },
+    { href: "/ops/rounds", icon: Layers, label: "Rounds & Rubrics" },
     { href: "/ops/judges-roster", icon: Gavel, label: "Judges Roster" },
     { href: "/ops/scanner#manual-lookup", icon: Search, label: "Team Lookup" },
     { href: "/ops/scanner/live-activity", icon: Activity, label: "Live Activity", newTab: true },
@@ -20,7 +22,10 @@ export default function OpsMobileNav() {
 
   const titleMap: Record<string, string> = {
     "/ops/scanner": "QR Scanner Desk",
+    "/ops/assigned-teams": "My Assigned Teams",
+    "/ops/rounds": "Rounds & Rubrics",
     "/ops/judges-roster": "Judges Roster",
+    "/ops/scanner/live-activity": "Live Activity Stream",
   };
   const title = titleMap[pathname] ?? "Operations Desk";
 
@@ -107,7 +112,12 @@ export default function OpsMobileNav() {
                     }`}
                   >
                     <item.icon size={18} className={isActive ? "text-white" : "text-[#94A3B8]"} />
-                    <span>{item.label}</span>
+                    <span className="flex-1">{item.label}</span>
+                    {item.badge && (
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-accent-secondary/20 text-accent-secondary border border-accent-secondary/40">
+                        {item.badge}
+                      </span>
+                    )}
                   </Link>
                 );
               })}

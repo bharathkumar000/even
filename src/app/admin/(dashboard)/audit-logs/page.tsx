@@ -1,45 +1,62 @@
-import { supabaseAdmin } from "@/lib/supabase/admin";
-import AuditLogsClientView, { AuditLogItem } from "./audit-logs-client";
+import { getActivityPage, type ActivityPageResult } from "@/app/actions/live-activity";
+import { getAuditLogsData, type AuditLogItem } from "@/app/actions/admin-audit-logs";
+import AuditLogsClientView from "./audit-logs-client";
 
 export const dynamic = "force-dynamic";
 
 export default async function AdminAuditLogsPage() {
-  let logs: AuditLogItem[] = [];
+  let initialActivity: ActivityPageResult = {
+    logs: [],
+    summary: { total: 0, success: 0, failed: 0, checkIns: 0, distributions: 0 },
+    total: 0,
+    page: 1,
+    pageSize: 25,
+    hasMore: false,
+  };
+
+  let initialAdminLogs: AuditLogItem[] = [];
 
   try {
-    const fetchLogsData = async () => {
-      const { data } = await supabaseAdmin
-        .from("audit_logs")
-        .select("*")
-        .order("created_at", { ascending: false })
-        .limit(100);
-      return (data || []) as AuditLogItem[];
-    };
+    const [activityResult, adminLogsResult] = await Promise.allSettled([
+      getActivityPage({
+        filters: { actionType: "all", method: "all", result: "all" },
+        page: 1,
+        pageSize: 25,
+      }),
+      getAuditLogsData(),
+    ]);
 
-    const timeoutPromise = new Promise<AuditLogItem[]>((resolve) =>
-      setTimeout(() => resolve([]), 2500)
-    );
-
-    logs = await Promise.race([fetchLogsData(), timeoutPromise]);
+    if (activityResult.status === "fulfilled") {
+      initialActivity = activityResult.value;
+    }
+    if (adminLogsResult.status === "fulfilled") {
+      initialAdminLogs = adminLogsResult.value;
+    }
   } catch (err) {
-    console.error("Failed to load audit logs:", err);
+    console.error("Failed to load admin audit logs initial data:", err);
   }
 
   return (
-    <div className="space-y-8 animate-fade-in">
-      <div className="border-b border-border-color pb-6">
-        <p className="font-tech text-xs uppercase tracking-[3px] text-accent-secondary font-bold mb-1">
-          Administration // Security & Compliance
-        </p>
-        <h1 className="text-3xl md:text-5xl font-heading text-text-primary tracking-wider uppercase m-0">
-          Audit Logs
+    <div className="space-y-6 animate-fade-in">
+      <div className="border-b border-border-color pb-5">
+        <div className="flex items-center gap-2">
+          <span className="h-2 w-2 rounded-full bg-status-success animate-pulse" />
+          <p className="font-tech text-xs uppercase tracking-[3px] text-accent-secondary font-bold m-0">
+            Administration // Security, Operations & Scanner Audit
+          </p>
+        </div>
+        <h1 className="text-2xl md:text-4xl font-heading text-text-primary tracking-wider uppercase m-0 mt-1">
+          Live Audit Logs & Operations Stream
         </h1>
-        <p className="font-tech text-text-secondary text-sm mt-2 max-w-2xl">
-          Complete chronological record of administrative actions, evaluations overrides, and result updates.
+        <p className="font-tech text-text-secondary text-xs sm:text-sm mt-1 max-w-3xl m-0">
+          Real-time chronological record of scanner activities, badge check-ins, food & goodies distributions, verifications, and administrative system overrides.
         </p>
       </div>
 
-      <AuditLogsClientView initialLogs={logs} />
+      <AuditLogsClientView
+        initialActivity={initialActivity}
+        initialAdminLogs={initialAdminLogs}
+      />
     </div>
   );
 }

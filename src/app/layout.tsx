@@ -4,6 +4,7 @@ import './globals.css'
 import { DataProvider } from '@/components/DataContext'
 import { SITE_CONFIG } from '@/lib/seo-config'
 import GoogleAnalytics from '@/components/analytics/GoogleAnalytics'
+import FloatingBroadcastNotification from '@/components/announcements/FloatingBroadcastNotification'
 
 const fredoka = Fredoka({
   subsets: ['latin'],
@@ -96,6 +97,7 @@ export default function RootLayout({
       <body className={`${fredoka.className} antialiased`}>
         <GoogleAnalytics />
         <DataProvider>
+          <FloatingBroadcastNotification />
           {children}
         </DataProvider>
       </body>

@@ -473,8 +473,8 @@ export default function AssignedTeamsClientView({
 
       {/* Team Detail Modal */}
       {isDetailOpen && selectedTeam && (
-        <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/85 backdrop-blur-sm p-4 overflow-y-auto">
-          <div className="bg-surface-color border border-border-color rounded-xl w-full max-w-4xl my-6 shadow-2xl max-h-[90vh] flex flex-col">
+        <div className="fixed inset-0 z-50 flex items-center sm:items-start justify-center bg-black/85 backdrop-blur-sm p-2 sm:p-4 overflow-y-auto">
+          <div className="bg-surface-color border border-border-color rounded-xl w-full max-w-4xl my-auto sm:my-6 shadow-2xl max-h-[94vh] flex flex-col">
             <div className="flex items-start justify-between gap-4 border-b border-border-color p-5">
               <div>
                 <p className="text-[10px] uppercase tracking-[2px] text-accent-tertiary font-bold m-0">
