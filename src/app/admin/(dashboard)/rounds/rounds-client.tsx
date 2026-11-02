@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import {
   Layers,
   Plus,
@@ -26,6 +26,7 @@ import {
   createCriterion,
   updateCriterion,
   deleteCriterion,
+  getEventsForDropdown,
   type RoundStatus,
 } from "@/app/actions/admin-rounds";
 import { withCsrfToken, CSRF_HEADER_NAME } from "@/lib/csrf-client";
@@ -35,7 +36,7 @@ export interface AdminRoundItem {
   title: string;
   sequence_order: number;
   status: RoundStatus;
-  event_id?: string;
+  event_id: string;
 }
 
 export interface AdminCriterionItem {
@@ -112,6 +113,25 @@ export default function RoundsClientView({
   const [roundTitle, setRoundTitle] = useState("");
   const [roundOrder, setRoundOrder] = useState<number>(rounds.length + 1);
   const [roundStatus, setRoundStatus] = useState<RoundStatus>("draft");
+  const [roundEventId, setRoundEventId] = useState("");
+  const [events, setEvents] = useState<{ id: string; title: string }[]>([]);
+
+  // Fetch events for dropdown
+  useEffect(() => {
+    const fetchEvents = async () => {
+      try {
+        const eventsData = await getEventsForDropdown();
+        setEvents(eventsData);
+        if (eventsData.length > 0 && !roundEventId) {
+          setRoundEventId(eventsData[0].id);
+        }
+      } catch (err) {
+        console.error("Failed to load events:", err);
+      }
+    };
+    fetchEvents();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const [isCriterionModalOpen, setIsCriterionModalOpen] = useState(false);
   const [editingCriterion, setEditingCriterion] = useState<AdminCriterionItem | null>(null);
@@ -154,6 +174,9 @@ export default function RoundsClientView({
     setRoundTitle("");
     setRoundOrder(rounds.length + 1);
     setRoundStatus("draft");
+    if (events.length > 0 && !roundEventId) {
+      setRoundEventId(events[0].id);
+    }
     setIsRoundModalOpen(true);
   };
 
@@ -163,6 +186,7 @@ export default function RoundsClientView({
     setRoundTitle(round.title);
     setRoundOrder(round.sequence_order);
     setRoundStatus(round.status);
+    setRoundEventId(round.event_id);
     setIsRoundModalOpen(true);
   };
 
@@ -214,6 +238,7 @@ export default function RoundsClientView({
         title: titleToSave,
         sequence_order: orderToSave,
         status: statusToSave,
+        event_id: roundEventId,
       };
 
       // Optimistic update
@@ -231,6 +256,7 @@ export default function RoundsClientView({
           title: titleToSave,
           sequence_order: orderToSave,
           status: statusToSave,
+          event_id: roundEventId,
           ...withCsrfToken(),
         });
         if (created?.id) {
@@ -790,6 +816,33 @@ export default function RoundsClientView({
                     <option value="reopened">REOPENED</option>
                   </select>
                 </div>
+              </div>
+
+              <div>
+                <label className="block text-xs uppercase tracking-wider text-text-secondary mb-1">
+                  Event *
+                </label>
+                <select
+                  value={roundEventId}
+                  onChange={(e) => setRoundEventId(e.target.value)}
+                  className="w-full px-3 py-2 bg-surface-color-light border border-border-color rounded text-xs text-text-primary focus:border-accent-secondary outline-none font-mono"
+                >
+                  {events.map((event) => (
+                    <option key={event.id} value={event.id}>
+                      {event.title}
+                    </option>
+                  ))}
+                  {events.length === 0 && (
+                    <option value="" disabled>
+                      No events available. Create an event first.
+                    </option>
+                  )}
+                </select>
+                {events.length === 0 && (
+                  <p className="text-xs text-status-error mt-1">
+                    No events found. Please create an event before creating a round.
+                  </p>
+                )}
               </div>
 
               <div className="flex justify-end gap-2 pt-2">

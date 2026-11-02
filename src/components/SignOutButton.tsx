@@ -28,6 +28,7 @@ export default function SignOutButton({
       console.warn("Sign out notice:", err);
     } finally {
       // Force hard navigation to login page to wipe memory and reset all router boundaries
+      setLoading(false);
       window.location.href = "/login";
     }
   };

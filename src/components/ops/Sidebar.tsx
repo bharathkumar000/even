@@ -3,6 +3,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
+import { useEffect, useState } from "react";
 import {
   QrCode,
   Search,
@@ -14,19 +15,77 @@ import {
   ArrowLeft,
   Home,
   Users,
+  Shield,
 } from "lucide-react";
+import { createClient } from "@/lib/supabase/client";
 import SignOutButton from "@/components/SignOutButton";
+
+interface UserProfile {
+  full_name: string | null;
+  role: string | null;
+}
 
 export default function OpsSidebar() {
   const pathname = usePathname();
+  const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [loading, setLoading] = useState(true);
 
-  const navItems = [
+  useEffect(() => {
+    const fetchProfile = async () => {
+      try {
+        const supabase = createClient();
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+
+        if (!user) {
+          setLoading(false);
+          return;
+        }
+
+        const { data: profileData } = await supabase
+          .from("profiles")
+          .select("full_name, role")
+          .eq("id", user.id)
+          .maybeSingle();
+
+        setProfile(profileData);
+      } catch (err) {
+        console.warn("Failed to fetch user profile:", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchProfile();
+  }, []);
+
+  const displayName = loading
+    ? "Loading..."
+    : profile?.full_name || "Staff / Volunteer";
+  const displayRole = loading
+    ? ""
+    : profile?.role === "spoc"
+    ? "SPOC"
+    : profile?.role === "organizer"
+    ? "Organizer"
+    : "Staff";
+
+  const navItems: { href: string; icon: any; label: string; badge: string; desc: string; newTab?: boolean }[] = [
+    // ... nav items unchanged
     {
       href: "/ops/scanner",
       icon: QrCode,
       label: "QR Scanner Desk",
       badge: "Primary",
       desc: "Live badge scanning",
+    },
+    {
+      href: "/ops/assigned-teams",
+      icon: Shield,
+      label: "My Assigned Teams",
+      badge: "SPOC",
+      desc: "Teams assigned to me",
     },
     {
       href: "/ops/rounds",
@@ -115,6 +174,8 @@ export default function OpsSidebar() {
               <Link
                 key={item.href}
                 href={item.href}
+                target={item.newTab ? "_blank" : undefined}
+                rel={item.newTab ? "noopener noreferrer" : undefined}
                 className={`group relative flex items-center justify-between py-3 px-4 rounded-2xl transition-all duration-300 ease-out active:scale-[0.98] ${
                   isActive
                     ? "bg-[linear-gradient(90deg,#E0026E_0%,#B8005A_26%,#5B0832_60%,#240A1B_85%,#140E17_100%)] text-white shadow-[0_4px_22px_rgba(224,2,110,0.38),inset_0_1px_1px_rgba(255,255,255,0.22)] border border-pink-500/25 animate-active-pill"
@@ -152,7 +213,12 @@ export default function OpsSidebar() {
             Check-in & Token Dist.
           </p>
           <div className="flex items-center justify-between text-[10px] text-text-secondary mt-1 font-mono">
-            <span>Staff / Volunteer</span>
+            <div className="flex items-center gap-1">
+              <span className="font-heading text-xs text-text-primary truncate">{displayName}</span>
+              {displayRole && (
+                <span className="text-accent-tertiary text-[10px] uppercase font-mono font-bold">/ {displayRole}</span>
+              )}
+            </div>
             <span className="text-status-success">ACTIVE</span>
           </div>
         </div>

@@ -5,6 +5,7 @@ export const RoundSchema = z.object({
   title: requiredLimitedString(FIELD_LIMITS.title, "Title").transform(sanitizeText),
   sequence_order: z.number().int().positive(),
   status: z.enum(["draft", "open", "closed", "locked", "reopened"]).default("draft"),
+  event_id: z.string().uuid("Event is required"),
 });
 
 export const CriterionSchema = z.object({

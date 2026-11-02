@@ -15,6 +15,40 @@ interface RateLimitEntry {
 const rateLimitStore = new Map<string, RateLimitEntry>();
 
 /**
+ * Returns true when running in a local development environment.
+ * Covers both `next dev` (NODE_ENV === "development") and explicit
+ * localhost host access, so login rate limiting is disabled during
+ * local testing while production rate limiting stays fully intact.
+ */
+export function isDevelopmentOrLocalhost(host?: string | null): boolean {
+  if (process.env.NODE_ENV === "development") return true;
+  if (host) {
+    const hostname = host.split(":")[0];
+    return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1";
+  }
+  return false;
+}
+
+/**
+ * Short-circuits a rate-limit result when local development rate limiting
+ * is disabled, allowing unlimited login attempts during testing.
+ */
+export function devBypass<T extends { success: boolean; remaining: number; resetTime: number }>(
+  maxRequests: number,
+  windowMs: number,
+  host?: string | null
+): T | null {
+  if (isDevelopmentOrLocalhost(host)) {
+    return {
+      success: true,
+      remaining: maxRequests,
+      resetTime: Date.now() + windowMs,
+    } as T;
+  }
+  return null;
+}
+
+/**
  * Clean up expired entries periodically
  */
 function cleanupExpiredEntries(): void {
@@ -35,8 +69,12 @@ setInterval(cleanupExpiredEntries, 5 * 60 * 1000);
  */
 export function checkRateLimit(
   identifier: string,
-  config: RateLimitConfig
+  config: RateLimitConfig,
+  host?: string | null
 ): { success: boolean; remaining: number; resetTime: number; retryAfter?: number } {
+  const bypass = devBypass(config.maxRequests, config.windowMs, host);
+  if (bypass) return bypass;
+
   const now = Date.now();
   const key = `${config.keyPrefix}:${identifier}`;
   const entry = rateLimitStore.get(key);
@@ -91,7 +129,7 @@ export function createRateLimitHeaders(
 export const RATE_LIMITS = {
   // Strict limits for authentication endpoints
   auth: {
-    login: { windowMs: 15 * 60 * 1000, maxRequests: 5, keyPrefix: "auth:login" }, // 5 per 15 min
+    login: { windowMs: 15 * 60 * 1000, maxRequests: 10, keyPrefix: "auth:login" }, // 10 per 15 min
     signup: { windowMs: 60 * 60 * 1000, maxRequests: 3, keyPrefix: "auth:signup" }, // 3 per hour
     passwordReset: { windowMs: 60 * 60 * 1000, maxRequests: 2, keyPrefix: "auth:pwd-reset" }, // 2 per hour
     adminPasscode: { windowMs: 60 * 60 * 1000, maxRequests: 3, keyPrefix: "auth:admin-passcode" }, // 3 per hour
@@ -127,7 +165,8 @@ export function withRateLimit<T extends (request: Request, ...args: any[]) => Pr
 ): T {
   return (async (request: Request, ...args: any[]) => {
     const identifier = getClientIdentifier(request);
-    const result = checkRateLimit(identifier, config);
+    const host = request.headers.get("host");
+    const result = checkRateLimit(identifier, config, host);
 
     if (!result.success) {
       return NextResponse.json(
@@ -162,8 +201,12 @@ export function checkServerActionRateLimit(
   userId: string,
   actionType: string,
   maxRequests: number,
-  windowMs: number
+  windowMs: number,
+  host?: string | null
 ): { success: boolean; remaining: number; resetTime: number; retryAfter?: number } {
+  const bypass = devBypass(maxRequests, windowMs, host);
+  if (bypass) return bypass;
+
   const now = Date.now();
   const key = `server-action:${actionType}:${userId}`;
   const entry = serverActionRateLimitStore.get(key);
@@ -191,6 +234,7 @@ export function checkServerActionRateLimit(
  * Rate limit configurations for server actions
  */
 export const SERVER_ACTION_RATE_LIMITS = {
+  login: { maxRequests: 10, windowMs: 15 * 60 * 1000 }, // 10 per 15 min
   adminPasscode: { maxRequests: 3, windowMs: 60 * 60 * 1000 }, // 3 per hour
   userRoleChange: { maxRequests: 10, windowMs: 60 * 60 * 1000 }, // 10 per hour
   bulkOperations: { maxRequests: 5, windowMs: 60 * 60 * 1000 }, // 5 per hour

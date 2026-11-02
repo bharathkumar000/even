@@ -11,6 +11,7 @@ interface ScannerDeskProps {
   onStopScanner: () => void;
   onManualIdChange: (v: string) => void;
   onLookup: (id: string) => void;
+  onManualLookup: (id: string) => void;
   recentScans?: string[];
 }
 
@@ -22,6 +23,7 @@ export default function ScannerDesk({
   onStopScanner,
   onManualIdChange,
   onLookup,
+  onManualLookup,
   recentScans,
 }: ScannerDeskProps) {
   return (
@@ -66,29 +68,45 @@ export default function ScannerDesk({
             Manual ID Lookup
           </h2>
           <p className="font-tech text-xs text-text-secondary mt-1">
-            If camera scanning is unavailable, enter the Team UUID directly.
+            Fallback for QR scanning: enter the Team UUID directly to verify team and record distributions.
           </p>
           <div className="pt-4 space-y-3 font-tech">
-            <input
-              type="text"
-              placeholder="Paste Team ID UUID (e.g. 00000000-0000-...)"
-              value={manualId}
-              onChange={e => onManualIdChange(e.target.value)}
-              className="w-full bg-surface-color border border-border-color p-3 text-text-primary text-xs focus:border-accent-secondary outline-none font-sans tracking-normal"
-            />
-            <button
-              type="button"
-              onClick={() => onLookup(manualId)}
-              disabled={loading || !manualId}
-              className="w-full py-2.5 bg-surface-color-light border border-border-color hover:border-accent-secondary text-text-primary font-bold uppercase text-xs transition-colors flex items-center justify-center gap-2"
-            >
-              <RefreshCw size={14} className={loading ? "animate-spin" : ""} />
-              <span>{loading ? "Searching..." : "Lookup Team Roster"}</span>
-            </button>
+            <div className="space-y-2">
+              <input
+                type="text"
+                id="manual-team-id"
+                placeholder="Paste Team ID UUID (e.g. 00000000-0000-...)"
+                value={manualId}
+                onChange={e => onManualIdChange(e.target.value)}
+                onKeyDown={e => e.key === "Enter" && !loading && manualId && onManualLookup(manualId)}
+                className="w-full bg-surface-color border border-border-color p-3 text-text-primary text-xs focus:border-accent-secondary outline-none font-sans tracking-normal font-mono"
+                autoComplete="off"
+              />
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => !loading && manualId && onManualLookup(manualId)}
+                  disabled={loading || !manualId}
+                  className="flex-1 py-2.5 bg-accent-secondary hover:bg-accent-secondary/80 text-black font-bold uppercase text-xs transition-colors flex items-center justify-center gap-2"
+                >
+                  <Search size={14} className={loading ? "animate-spin" : ""} />
+                  <span>{loading ? "Verifying Team..." : "Verify Team"}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { onManualIdChange(""); }}
+                  disabled={loading || !manualId}
+                  className="px-4 py-2.5 bg-surface-color border border-border-color hover:border-accent-secondary text-text-primary font-bold uppercase text-xs transition-colors flex items-center justify-center gap-2"
+                >
+                  <RefreshCw size={14} />
+                  <span>Clear</span>
+                </button>
+              </div>
+            </div>
           </div>
         </div>
         <div className="p-3 bg-surface-color-light/30 border border-border-color text-text-secondary font-tech text-[11px]">
-          Action Desks: Registration, Kit/Goodies, Lunch Token, Snacks Token.
+          Action Desks: Registration, Kit/Goodies, Lunch Token, Snacks Token, Certificates.
         </div>
       </div>
 

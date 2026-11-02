@@ -19,13 +19,20 @@ import {
   Mail,
   MessageCircle,
   ExternalLink,
+  Users as UsersIcon,
+  FileText,
+  Bell,
+  Archive,
+  Globe,
 } from "lucide-react";
 import { requireAuthenticatedTeamUser } from "@/lib/auth/team";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { getActiveAnnouncements } from "@/app/actions/announcements";
+import { getContentForPortal } from "@/app/actions/content-hub";
 import AnnouncementBanner from "@/components/AnnouncementBanner";
 import PitchAlertListener from "@/components/team/PitchAlertListener";
 import { getTeamRegistrationByEmail } from "@/lib/googleSheet";
+import { ContentActivityHub } from "@/components/content-hub";
 
 import Image from "next/image";
 
@@ -45,6 +52,15 @@ export default async function TeamDashboardPage() {
   let announcements: any[] = [];
   let assignedSpoc: any = null;
 
+  // Fetch content for team portal
+  let contentItems: any[] = [];
+  try {
+    const contentData = await getContentForPortal("team_leader", undefined, undefined, "published", 20);
+    contentItems = contentData.items || [];
+  } catch (err) {
+    console.error("Failed to load content for team portal:", err);
+  }
+
   try {
     const [teamRes, membersRes, logsRes, subRes, roundRes, resultRes, annRes, spocAssignRes] =
       await Promise.all([
@@ -55,7 +71,7 @@ export default async function TeamDashboardPage() {
           .maybeSingle(),
         supabaseAdmin
           .from("team_members")
-          .select("id, user_id, role, profiles (id, name, email)")
+          .select("id, user_id, role, profiles (id, name, email, phone)")
           .eq("team_id", effectiveTeamId),
         supabaseAdmin
           .from("event_activity_logs")
@@ -280,6 +296,85 @@ export default async function TeamDashboardPage() {
             </Link>
           </div>
         </div>
+      </div>
+
+      {/* Team Contact Roster */}
+      <div className="space-y-3">
+        <p className="text-xs uppercase tracking-[2px] text-text-secondary font-bold m-0 flex items-center gap-2">
+          <Users size={15} className="text-accent-secondary" />
+          Team Contact Roster
+        </p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          {members.length === 0 ? (
+            <p className="text-xs text-text-secondary italic col-span-full">
+              No team members registered yet.
+            </p>
+          ) : (
+            members.map((member) => {
+              const profile = (member as any).profiles;
+              const phone = profile?.phone || null;
+              const name = profile?.full_name || member.name || "Member";
+              const email = profile?.email || member.email || null;
+              return (
+                <div
+                  key={member.id}
+                  className="glass-panel p-3 border border-border-color rounded flex items-center gap-3 hover:border-accent-secondary/40 transition-colors"
+                >
+                  <div className="w-8 h-8 rounded bg-surface-color border border-border-color flex items-center justify-center font-heading text-xs text-text-secondary shrink-0 uppercase">
+                    {name.charAt(0).toUpperCase()}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="font-medium text-xs text-text-primary truncate m-0">
+                      {name}
+                    </p>
+                    <p className="text-[10px] text-text-secondary truncate m-0">
+                      {member.role === "leader" ? "Team Leader" : "Member"}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    {phone ? (
+                      <>
+                        <a
+                          href={`tel:${phone}`}
+                          className="p-1.5 bg-surface-color border border-border-color hover:border-accent-primary text-accent-primary rounded hover:bg-accent-primary/5 transition-colors"
+                          title="Call"
+                        >
+                          <Phone size={13} />
+                        </a>
+                        <span className="text-[10px] font-mono text-text-primary truncate max-w-[120px]">
+                          {phone}
+                        </span>
+                      </>
+                    ) : (
+                      <span className="text-[10px] opacity-50 italic">No phone</span>
+                    )}
+</div>
+
+
+      {/* Content & Activity Hub */}
+      <ContentActivityHub
+        portalAudience="team_leader"
+        showFilters={true}
+        showSearch={true}
+        showCreateButton={false}
+        initialItems={[]}
+        emptyMessage="No content published for your team yet."
+        loadingMessage="Loading team content..."
+        errorMessage="Failed to load team content."
+      />
+    </div>
+  );
+            })
+          )}
+        </div>
+        {members.length > 0 && members.every((m) => {
+          const profile = (m as any).profiles;
+          return !profile?.phone;
+        }) && (
+          <p className="text-[10px] text-text-secondary/70 italic mt-2">
+            No phone numbers added yet. Ask an administrator to add them in User Management.
+          </p>
+        )}
       </div>
 
       {/* Dedicated SPOC Coordinator Card */}

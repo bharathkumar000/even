@@ -11,11 +11,13 @@ import {
   ShieldAlert,
   Users,
   Sparkles,
+  Award,
 } from "lucide-react";
 import {
   fetchTeamMembersForScan,
   recordMemberAction,
   recordTeamBulkAction,
+  manualTeamLookup,
   getLiveScanActivityStream,
   type LiveActivityFeedItem,
   type EnrichedActivityLog,
@@ -26,6 +28,44 @@ import ScannerDesk from "@/components/ops/ScannerDesk";
 import { CSRF_CONSTANTS } from "@/lib/csrf-constants";
 import { createClient } from "@/lib/supabase/client";
 import { playScanSuccess, playScanError } from "@/lib/feedback-sound";
+
+// Matches a full 36-character UUID (8-4-4-4-12 hex segments). Used to extract
+// the team UUID even when the QR payload appends a distribution index such as
+// "UUID-0". We deliberately do NOT split on hyphens, because UUIDs themselves
+// contain hyphens.
+const UUID_REGEX =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const UUID_PATTERN =
+  /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
+
+// Extracts the team UUID from any supported QR payload:
+//   1. Plain UUID: "892e7590-..."
+//   2. JSON object: {"team_id":"892e7590-...","name":"...","v":1}
+//   3. UUID with a separate distribution index: "892e7590-...-0"
+const extractTeamId = (rawCode: string): string => {
+  let candidate = rawCode.trim();
+
+  // JSON payload: read the designated team_id field.
+  if (candidate.startsWith("{")) {
+    try {
+      const parsed = JSON.parse(candidate);
+      if (parsed && typeof parsed === "object") {
+        candidate = parsed.team_id ?? parsed.id ?? candidate;
+      }
+    } catch {
+      // Not valid JSON; fall through to raw candidate handling below.
+    }
+  }
+
+  // UUID possibly followed by a distribution index. Match the UUID pattern
+  // directly instead of split("-") so the hyphens inside the UUID are preserved.
+  const uuidMatch = candidate.match(UUID_PATTERN);
+  if (uuidMatch) {
+    return uuidMatch[0];
+  }
+
+  return candidate;
+};
 
 export interface TeamScanMember {
   id: string;
@@ -235,23 +275,30 @@ useEffect(() => {
   };
 
   const handleDetectedCode = async (rawCode: string) => {
-    let teamId = rawCode.trim();
-    if (teamId.startsWith("{")) {
-      try {
-        const parsed = JSON.parse(teamId);
-        teamId = parsed.team_id || parsed.id || teamId;
-      } catch {}
+    const teamId = extractTeamId(rawCode);
+
+    // Validate the extracted ID before querying Supabase UUID columns.
+    if (!teamId || !UUID_REGEX.test(teamId)) {
+      playScanError();
+      setErrorMsg(
+        "Invalid QR code: could not extract a valid Team ID from the scanned badge."
+      );
+      return;
     }
 
     // If an operation is selected, attempt bulk claim; otherwise just load team data
     const op = selectedOperation;
-    const supportedOps = ["registration", "goodies", "lunch", "snacks"];
+    const supportedOps = ["registration", "goodies", "lunch", "snacks", "certificates"];
     if (supportedOps.includes(op)) {
       // Bulk claim for the selected operation
       setActionLoading(`bulk-${op}`);
       setErrorMsg(null);
+      const correlationId = crypto.randomUUID();
       try {
-        const res = await recordTeamBulkAction(teamId, op as ActionType, csrfToken);
+        const res = await recordTeamBulkAction(teamId, op as ActionType, csrfToken, {
+          method: "qr",
+          correlationId,
+        });
         playScanSuccess();
         setSuccessMsg(
           `Bulk Claim Complete: Distributed "${op.toUpperCase()}" to ${res.claimedCount} members.`
@@ -299,6 +346,32 @@ useEffect(() => {
     }
   };
 
+  // Manual team lookup (read-only, no bulk actions, no CSRF needed)
+  const handleManualLookup = async (teamId: string) => {
+    if (!teamId) return;
+    setLoading(true);
+    setErrorMsg(null);
+    setSuccessMsg(null);
+    try {
+      const res = await manualTeamLookup(teamId);
+      playScanSuccess();
+      setTeamData(res);
+      setSuccessMsg(`Loaded roster for team "${res.team.name}"`);
+      // Update recent scans (keep up to 3 items: current + two previous)
+      setRecentScans(prev => {
+        const filtered = prev.filter(id => id !== res.team.id);
+        const newList = [res.team.id, ...filtered];
+        return newList.slice(0, 3);
+      });
+    } catch (err: unknown) {
+      playScanError();
+      setErrorMsg(err instanceof Error ? err.message : "Failed to fetch team details");
+      setTeamData(null);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const broadcastScanEvent = (teamId: string, participantId?: string, actionType?: ActionType) => {
     try {
       const supabase = createClient();
@@ -320,6 +393,7 @@ useEffect(() => {
     const actionKey = `${participantId}-${actionType}`;
     setErrorMsg(null);
     setActionLoading(actionKey);
+    const correlationId = crypto.randomUUID();
 
     // Optimistic update
     const optimisticLog: EnrichedActivityLog = {
@@ -341,12 +415,14 @@ useEffect(() => {
     );
 
     try {
-const res = await recordMemberAction({
-  team_id: teamData.team.id,
-  participant_id: participantId,
-  action_type: actionType,
-  [CSRF_CONSTANTS.HEADER_NAME]: csrfToken,
-});
+      const res = await recordMemberAction({
+        team_id: teamData.team.id,
+        participant_id: participantId,
+        action_type: actionType,
+        [CSRF_CONSTANTS.HEADER_NAME]: csrfToken,
+        method: "qr",
+        correlationId,
+      });
 
       playScanSuccess();
       setSuccessMsg(
@@ -383,9 +459,13 @@ const res = await recordMemberAction({
     if (!teamData?.team?.id) return;
     setActionLoading(`bulk-${actionType}`);
     setErrorMsg(null);
+    const correlationId = crypto.randomUUID();
 
     try {
-      const res = await recordTeamBulkAction(teamData.team.id, actionType, csrfToken);
+      const res = await recordTeamBulkAction(teamData.team.id, actionType, csrfToken, {
+        method: "qr",
+        correlationId,
+      });
       playScanSuccess();
       setSuccessMsg(
         `Bulk Claim Complete: Distributed "${actionType.toUpperCase()}" to ${res.claimedCount} members.`
@@ -464,8 +544,15 @@ useEffect(() => {
         </div>
       )}
 
-      {/* Link to Live Activity Feed */}
-      <a href="/ops/scanner/live-activity" className="text-accent-primary hover:underline text-sm font-bold" target="_self">Live Activity Feed</a>
+      {/* Link to Live Activity Feed (opens in a separate tab/window) */}
+      <a
+        href="/ops/scanner/live-activity"
+        target="_blank"
+        rel="noopener noreferrer"
+        className="text-accent-primary hover:underline text-sm font-bold"
+      >
+        Live Activity Feed
+      </a>
       <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 mb-4 bg-surface-color/60 border border-border-color p-3 rounded">
         <label htmlFor="operation-select" className="font-bold uppercase text-xs text-text-secondary shrink-0">Select Active Desk / Operation</label>
         <select
@@ -478,23 +565,25 @@ useEffect(() => {
           <option value="goodies">Goodies / Swag Kit Desk</option>
           <option value="lunch">Lunch Token Desk</option>
           <option value="snacks">Snacks / Refreshments Desk</option>
+          <option value="certificates">Certificates Desk</option>
           <option value="feedback">Feedback Desk</option>
         </select>
       </div>
       
-       {/* Scanner & Manual Lookup Controls */}
-        <div>
-          <ScannerDesk
-            scanning={scanning}
-            manualId={manualId}
-            loading={loading}
-            onStartScanner={startScanner}
-            onStopScanner={stopScanner}
-            onManualIdChange={setManualId}
-            onLookup={(id) => handleDetectedCode(id)}
-            recentScans={recentScans}
-          />
-       </div>
+{/* Scanner & Manual Lookup Controls */}
+         <div>
+           <ScannerDesk
+             scanning={scanning}
+             manualId={manualId}
+             loading={loading}
+             onStartScanner={startScanner}
+             onStopScanner={stopScanner}
+             onManualIdChange={setManualId}
+             onLookup={(id) => handleDetectedCode(id)}
+             onManualLookup={(id) => handleManualLookup(id)}
+             recentScans={recentScans}
+           />
+        </div>
 
       {/* Scanned Team Roster Panel */}
       {teamData && (
@@ -568,6 +657,16 @@ useEffect(() => {
                 <UserCheck size={13} />
                 <span>Check-In All</span>
               </button>
+
+              <button
+                onClick={() => handleBulkActionClick("certificates")}
+                disabled={actionLoading === "bulk-certificates" || teamData.members.every((m) => isClaimed(m.id, "certificates"))}
+                className="px-3 py-1.5 bg-purple-500/20 hover:bg-purple-500 hover:text-white border border-purple-500 text-purple-400 font-bold text-xs uppercase flex items-center gap-1.5 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                title="Issue certificates for all members in one click"
+              >
+                <Award size={13} />
+                <span>Issue All Certificates</span>
+              </button>
             </div>
           </div>
 
@@ -582,12 +681,13 @@ useEffect(() => {
                   <th className="p-3 text-center">Goodies / Kit</th>
                   <th className="p-3 text-center">Lunch</th>
                   <th className="p-3 text-center">Snacks</th>
+                  <th className="p-3 text-center">Certificates</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border-color/30">
                 {teamData.members.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="p-4 text-center text-text-secondary italic">
+                    <td colSpan={7} className="p-4 text-center text-text-secondary italic">
                       No registered members mapped in roster.
                     </td>
                   </tr>
@@ -597,6 +697,7 @@ useEffect(() => {
                     const goodiesLog = getLogForAction(m.id, "goodies");
                     const lunchLog = getLogForAction(m.id, "lunch");
                     const snacksLog = getLogForAction(m.id, "snacks");
+                    const certLog = getLogForAction(m.id, "certificates");
 
                     return (
                       <tr key={m.id} className="hover:bg-surface-color-light/20 transition-colors">
@@ -714,6 +815,31 @@ useEffect(() => {
                             <p className="text-[9px] text-text-secondary font-mono m-0 mt-1">
                               By {snacksLog.scanner_name?.split(" ")[0]} •{" "}
                               {new Date(snacksLog.created_at).toLocaleTimeString([], {
+                                hour: "2-digit",
+                                minute: "2-digit",
+                              })}
+                            </p>
+                          )}
+                        </td>
+
+                        {/* Certificates Button & Audit info */}
+                        <td className="p-3 text-center">
+                          <button
+                            onClick={() => handleActionClick(m.id, "certificates")}
+                            disabled={Boolean(certLog) || actionLoading === `${m.id}-certificates`}
+                            className={`px-3 py-1 text-[11px] font-bold uppercase transition-all flex items-center justify-center gap-1 mx-auto ${
+                              certLog
+                                ? "bg-status-success/15 text-status-success border border-status-success cursor-default"
+                                : "bg-surface-color hover:bg-purple-500 hover:text-white border border-border-color"
+                            }`}
+                          >
+                            <Award size={13} />
+                            {certLog ? "Issued" : "Issue"}
+                          </button>
+                          {certLog && (
+                            <p className="text-[9px] text-text-secondary font-mono m-0 mt-1">
+                              By {certLog.scanner_name?.split(" ")[0]} •{" "}
+                              {new Date(certLog.created_at).toLocaleTimeString([], {
                                 hour: "2-digit",
                                 minute: "2-digit",
                               })}

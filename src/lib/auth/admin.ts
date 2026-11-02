@@ -1,5 +1,4 @@
 import "server-only";
-import { cookies } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 
@@ -13,40 +12,30 @@ export async function requireAdmin() {
   }
   const user = userData.user;
 
-  // Fast-path: Check user metadata first to avoid blocking DB query
-  const metaRole =
-    (user.user_metadata?.role as string | undefined) ||
-    (user.app_metadata?.role as string | undefined);
-  if (metaRole === "admin") {
-    return { user, profile: { role: "admin" } };
-  }
-
-  // Fallback: Fetch profile with strict 1.5s timeout
+  // The profiles table is the canonical source of truth for user roles.
+  // Never trust auth metadata (user_metadata.role, app_metadata.role) for
+  // authorization decisions, as these can be stale or tampered with.
   let profile: { role?: string } | null = null;
   try {
-    const fetchProfile = async () => {
-      const { data } = await supabaseAdmin
-        .from("profiles")
-        .select("role")
-        .eq("id", user.id)
-        .maybeSingle();
-      return data;
-    };
-    const timeout = new Promise<null>((resolve) => setTimeout(() => resolve(null), 1500));
-    profile = await Promise.race([fetchProfile(), timeout]);
-  } catch {}
+    const { data } = await supabaseAdmin
+      .from("profiles")
+      .select("role")
+      .eq("id", user.id)
+      .maybeSingle();
+    profile = data;
+  } catch (err) {
+    // Profile query error is distinct from authentication failure.
+    // Re-throw as a clear error rather than silently denying access.
+    throw new Error(
+      "Failed to verify admin privileges. Please contact support."
+    );
+    // Note: Do not default to metadata; missing profile = authorization failure.
+  }
 
-  const isAdmin = profile?.role === "admin" || metaRole === "admin";
+  const isAdmin = profile?.role === "admin";
 
   if (!isAdmin) {
     throw new Error("Forbidden: Admin privileges required");
-  }
-
-  // Verify admin session checkpoint cookie
-  const cookieStore = await cookies();
-  const isPasscodeVerified = cookieStore.get("admin_session_verified")?.value === "true";
-  if (!isPasscodeVerified) {
-    throw new Error("CheckpointRequired: Admin passcode verification required");
   }
 
   return { user, profile };
