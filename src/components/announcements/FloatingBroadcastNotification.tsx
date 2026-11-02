@@ -176,6 +176,14 @@ export default function FloatingBroadcastNotification() {
           void fetchAnnouncements(true);
         }
       )
+      .on(
+        "broadcast",
+        { event: "clear_all_broadcasts" },
+        () => {
+          setAnnouncements([]);
+          setIsDismissedAll(true);
+        }
+      )
       .subscribe();
 
     return () => {
