@@ -11,16 +11,12 @@ import {
   Lock,
   Mail,
   ArrowRight,
-  ShieldCheck,
   AlertCircle,
   KeyRound,
   ArrowLeft,
   CheckCircle2,
   Eye,
   EyeOff,
-  Gavel,
-  Layers,
-  Users,
 } from "lucide-react";
 
 export default function AuthPage({ isSignUp = false }: { isSignUp?: boolean }) {
@@ -266,34 +262,6 @@ const normalizedEmail = email.includes("@") ? email.trim() : `${email.trim()}@iv
         err instanceof Error
           ? err.message
           : "Invalid or expired verification code. Please try again."
-      );
-      setLoading(false);
-    }
-  };
-
-const DEMO_PASSWORD = "Password@123";
-
-  const handleDemoClick = async (demoEmail: string, roleName: string, targetPath?: string) => {
-    // Only allow demo credentials in development environment
-    if (process.env.NODE_ENV === "production") {
-      setErrorMsg("Demo credentials are not available in production.");
-      return;
-    }
-
-    setEmail(demoEmail);
-    setPassword(DEMO_PASSWORD);
-    setErrorMsg(null);
-    setSuccessMsg(`Logging in as ${roleName}...`);
-
-    try {
-      // Demo logins must resolve role from profiles table via getRoleRedirectUrl.
-      // Never pass targetPath here, as that would bypass role-based routing.
-      await executeSignIn(demoEmail, DEMO_PASSWORD);
-    } catch (err: unknown) {
-      setErrorMsg(
-        err instanceof Error
-          ? `Demo login failed: ${err.message}`
-          : `Demo login failed for ${roleName}. Please check credentials.`
       );
       setLoading(false);
     }
@@ -678,64 +646,6 @@ const DEMO_PASSWORD = "Password@123";
                   </form>
                 )}
 
-                {/* QUICK DEMO ACCESS SECTION (Development Only) */}
-                {!isSignUp && step === "credentials" && process.env.NODE_ENV !== "production" && (
-                  <div className="mt-4 pt-4 border-t border-white/10">
-                    <div className="flex items-center justify-center gap-2 mb-2.5">
-                      <span className="h-px flex-1 bg-white/10" />
-                      <span className="text-[8px] font-mono uppercase tracking-[1.5px] text-[#71717a] font-semibold">
-                        Quick Demo Access (Dev Only)
-                      </span>
-                      <span className="h-px flex-1 bg-white/10" />
-                    </div>
-
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
-                      {/* ADMIN BUTTON */}
-                      <button
-                        type="button"
-                        onClick={() => handleDemoClick("admin@demo.com", "Admin")}
-                        className="flex items-center justify-center gap-1 py-2 px-1.5 rounded-lg border border-[#ff007f]/40 hover:border-[#ff007f] bg-[#ff007f]/5 hover:bg-[#ff007f]/15 transition-all cursor-pointer group shadow-[0_0_8px_rgba(255,0,127,0.1)] hover:shadow-[0_0_12px_rgba(255,0,127,0.25)]"
-                      >
-                        <ShieldCheck size={12} className="text-[#ff007f] group-hover:scale-110 transition-transform" />
-                        <span className="font-mono font-bold text-[9px] text-white tracking-wider">ADMIN</span>
-                      </button>
-
-                      {/* JUDGE BUTTON */}
-                      <button
-                        type="button"
-                        onClick={() => handleDemoClick("judge@demo.com", "Judge")}
-                        className="flex items-center justify-center gap-1 py-2 px-1.5 rounded-lg border border-[#FBC815]/40 hover:border-[#FBC815] bg-[#FBC815]/5 hover:bg-[#FBC815]/15 transition-all cursor-pointer group shadow-[0_0_8px_rgba(251,200,21,0.1)] hover:shadow-[0_0_12px_rgba(251,200,21,0.25)]"
-                      >
-                        <Gavel size={12} className="text-[#FBC815] group-hover:scale-110 transition-transform" />
-                        <span className="font-mono font-bold text-[9px] text-white tracking-wider">JUDGE</span>
-                      </button>
-
-                      {/* OPS BUTTON */}
-                      <button
-                        type="button"
-                        onClick={() => handleDemoClick("ops@demo.com", "Ops")}
-                        className="flex items-center justify-center gap-1 py-2 px-1.5 rounded-lg border border-[#ff007f]/40 hover:border-[#ff007f] bg-[#ff007f]/5 hover:bg-[#ff007f]/15 transition-all cursor-pointer group shadow-[0_0_8px_rgba(255,0,127,0.1)] hover:shadow-[0_0_12px_rgba(255,0,127,0.25)]"
-                      >
-                        <Layers size={12} className="text-[#ff007f] group-hover:scale-110 transition-transform" />
-                        <span className="font-mono font-bold text-[9px] text-white tracking-wider">OPS</span>
-                      </button>
-
-                      {/* TEAM BUTTON */}
-                      <button
-                        type="button"
-                        onClick={() => handleDemoClick("team@demo.com", "Team Leader")}
-                        className="flex items-center justify-center gap-1 py-2 px-1.5 rounded-lg border border-[#FBC815]/40 hover:border-[#FBC815] bg-[#FBC815]/5 hover:bg-[#FBC815]/15 transition-all cursor-pointer group shadow-[0_0_8px_rgba(251,200,21,0.1)] hover:shadow-[0_0_12px_rgba(251,200,21,0.25)]"
-                      >
-                        <Users size={12} className="text-[#FBC815] group-hover:scale-110 transition-transform" />
-                        <span className="font-mono font-bold text-[9px] text-white tracking-wider">TEAM</span>
-                      </button>
-                    </div>
-
-                    <p className="text-[8px] font-mono text-[#71717a] text-center mt-2">
-                      Use demo credentials to preview each role (Development Only).
-                    </p>
-                  </div>
-                )}
 
               </div>
             </div>
