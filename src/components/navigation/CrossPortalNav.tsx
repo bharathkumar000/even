@@ -149,7 +149,7 @@ export default function CrossPortalNav({
           </Link>
 
           {/* Central Portal Switcher Navigation */}
-          <nav className="flex items-center gap-1 sm:gap-1.5 overflow-x-auto custom-scrollbar py-1">
+          <nav className="flex items-center gap-1 sm:gap-1.5 overflow-x-auto custom-scrollbar py-1 min-w-0 flex-1">
             {portals.map((p) => {
               const isActive = p.exact
                 ? pathname === p.href
@@ -218,9 +218,9 @@ export default function CrossPortalNav({
             ) : (
               <Link
                 href="/login"
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-tech font-bold uppercase tracking-wider bg-gradient-to-r from-accent-secondary to-accent-primary text-black hover:opacity-90 transition-opacity"
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-tech font-bold uppercase tracking-wider bg-gradient-to-r from-accent-secondary to-accent-primary text-black hover:opacity-90 transition-opacity shrink-0"
               >
-                <span>Sign In</span>
+                <span>Login</span>
                 <ChevronRight size={13} />
               </Link>
             )}
