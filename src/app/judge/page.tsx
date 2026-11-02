@@ -69,7 +69,12 @@ export default async function JudgeDashboardPage() {
         .from("evaluation_rounds")
         .select("id, title, status, sequence_order")
         .order("sequence_order", { ascending: true }),
-      supabaseAdmin.from("evaluations").select("round_id, team_id, status, total_score"),
+      user
+        ? supabaseAdmin
+            .from("evaluations")
+            .select("round_id, team_id, status, total_score")
+            .eq("judge_id", user.id)
+        : Promise.resolve({ data: [] }),
       user
         ? supabaseAdmin
             .from("judge_assignments")
