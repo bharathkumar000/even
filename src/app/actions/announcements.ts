@@ -709,3 +709,35 @@ export async function toggleAnnouncementActive(id: string, isActive: boolean, cs
 
   return { success: true };
 }
+
+/**
+ * Clear and archive all currently active broadcast announcements
+ */
+export async function clearAllActiveAnnouncements(csrfToken?: string) {
+  await requireOperationsRole();
+  if (csrfToken) {
+    try {
+      await validateCsrfToken(csrfToken);
+    } catch {}
+  }
+
+  const { data, error } = await supabaseAdmin
+    .from("announcements")
+    .update({ is_active: false, status: "archived" })
+    .or("is_active.eq.true,status.eq.published")
+    .select("id");
+
+  if (error) {
+    throw new Error(`Failed to clear announcements: ${error.message}`);
+  }
+
+  revalidatePath("/admin");
+  revalidatePath("/admin/announcements");
+  revalidatePath("/team");
+  revalidatePath("/judge");
+  revalidatePath("/ops");
+  revalidatePath("/ops/scanner");
+
+  return { success: true, count: data?.length || 0 };
+}
+

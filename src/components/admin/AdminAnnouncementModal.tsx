@@ -2,9 +2,10 @@
 
 import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
-import { Radio, Send, X } from "lucide-react";
-import { createAnnouncement } from "@/app/actions/announcements";
+import { Radio, Send, X, Trash2 } from "lucide-react";
+import { createAnnouncement, clearAllActiveAnnouncements } from "@/app/actions/announcements";
 import { withCsrfToken } from "@/lib/csrf-client";
+import { createClient } from "@/lib/supabase/client";
 
 export default function AdminAnnouncementModal() {
   const [mounted, setMounted] = useState(false);
@@ -14,6 +15,7 @@ export default function AdminAnnouncementModal() {
   const [priority, setPriority] = useState<"normal" | "important" | "urgent">("normal");
   const [targetAudience, setTargetAudience] = useState<"all" | "teams" | "judges" | "ops">("all");
   const [loading, setLoading] = useState(false);
+  const [clearing, setClearing] = useState(false);
   const [statusMsg, setStatusMsg] = useState<string | null>(null);
 
   useEffect(() => {
@@ -53,6 +55,34 @@ export default function AdminAnnouncementModal() {
       setStatusMsg(err instanceof Error ? err.message : "Broadcast failed");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleClearAll = async () => {
+    if (!window.confirm("Are you sure you want to clear all active broadcast alerts across all portals?")) {
+      return;
+    }
+    setClearing(true);
+    setStatusMsg(null);
+    try {
+      const res = await clearAllActiveAnnouncements(withCsrfToken().csrf_token);
+      try {
+        const supabase = createClient();
+        const channel = supabase.channel("global_floating_broadcasts");
+        channel.send({
+          type: "broadcast",
+          event: "clear_all_broadcasts",
+        });
+      } catch {}
+      setStatusMsg(`Successfully cleared ${res.count} broadcast alert(s) from all portals!`);
+      setTimeout(() => {
+        setIsOpen(false);
+        setStatusMsg(null);
+      }, 1500);
+    } catch (err: unknown) {
+      setStatusMsg(err instanceof Error ? err.message : "Failed to clear alerts");
+    } finally {
+      setClearing(false);
     }
   };
 
@@ -168,22 +198,35 @@ export default function AdminAnnouncementModal() {
                 </div>
               </div>
 
-              <div className="pt-3 border-t border-border-color flex justify-end gap-3">
+              <div className="pt-3 border-t border-border-color flex items-center justify-between gap-3">
                 <button
                   type="button"
-                  onClick={() => setIsOpen(false)}
-                  className="px-4 py-2 bg-surface-color border border-border-color text-text-secondary hover:text-text-primary text-xs uppercase font-bold cursor-pointer transition-colors"
+                  disabled={clearing || loading}
+                  onClick={handleClearAll}
+                  className="px-3 py-2 bg-red-500/15 hover:bg-red-500/25 border border-red-500/40 text-red-400 text-xs uppercase font-bold flex items-center gap-1.5 cursor-pointer transition-colors disabled:opacity-50"
+                  title="Clear and archive all active broadcast announcements across all portals"
                 >
-                  Cancel
+                  <Trash2 size={13} />
+                  <span>{clearing ? "Clearing..." : "Clear Active Alerts"}</span>
                 </button>
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="px-5 py-2 bg-accent-secondary hover:bg-accent-secondary/80 text-white text-xs uppercase font-bold flex items-center gap-2 cursor-pointer transition-colors disabled:opacity-50"
-                >
-                  <Send size={13} />
-                  <span>{loading ? "Broadcasting..." : "Publish Broadcast"}</span>
-                </button>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsOpen(false)}
+                    className="px-4 py-2 bg-surface-color border border-border-color text-text-secondary hover:text-text-primary text-xs uppercase font-bold cursor-pointer transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={loading || clearing}
+                    className="px-5 py-2 bg-accent-secondary hover:bg-accent-secondary/80 text-white text-xs uppercase font-bold flex items-center gap-2 cursor-pointer transition-colors disabled:opacity-50"
+                  >
+                    <Send size={13} />
+                    <span>{loading ? "Broadcasting..." : "Publish Broadcast"}</span>
+                  </button>
+                </div>
               </div>
             </form>
           </div>
