@@ -1,11 +1,14 @@
 'use client';
 
 import { useEffect, useState } from "react";
+import { ScrollText, Clock, Users, CheckCircle2, AlertCircle, ChevronDown, ChevronUp } from "lucide-react";
 import SelectStatementButton from "./select-statement-button";
 
 interface Statement {
   id: string;
+  reference_number?: string | null;
   title: string;
+  domain?: string | null;
   summary?: string | null;
   description?: string | null;
   team_limit?: number | null;
@@ -25,13 +28,15 @@ function formatMs(ms: number): string {
   const h = Math.floor(totalSec / 3600);
   const m = Math.floor((totalSec % 3600) / 60);
   const s = totalSec % 60;
-  const hh = h > 0 ? `${h}:` : "";
-  const mm = h > 0 ? String(m).padStart(2, "0") : String(m);
-  return `${hh}${mm}:${String(s).padStart(2, "0")}`;
+  const hh = h > 0 ? `${h}h ` : "";
+  const mm = `${m}m `;
+  const ss = `${s}s`;
+  return `${hh}${mm}${ss}`;
 }
 
 export default function StatementCard({ stmt, assignedCount }: Props) {
   const [now, setNow] = useState(Date.now());
+  const [expanded, setExpanded] = useState(false);
 
   useEffect(() => {
     const interval = setInterval(() => setNow(Date.now()), 1000);
@@ -48,38 +53,103 @@ export default function StatementCard({ stmt, assignedCount }: Props) {
     (closing === null || now <= closing);
 
   const isClosed = closing !== null && now > closing;
-
   const remainingMs = opening && now < opening ? opening - now : 0;
-
-  const capacityInfo =
-    stmt.team_limit != null ? `${assignedCount} / ${stmt.team_limit} TEAMS SELECTED` : null;
   const full = stmt.team_limit != null && assignedCount >= stmt.team_limit;
-
-  let statusLabel = "READING PHASE";
-  if (isOpen) statusLabel = "SELECTION IS LIVE";
-  else if (isClosed) statusLabel = "SELECTION CLOSED";
-  else if (opening && now < opening) statusLabel = `SELECTION OPENS IN ${formatMs(remainingMs)}`;
 
   const disableSelect = !isOpen || full || stmt.manual_lock;
 
   return (
-    <div className="p-4 bg-surface-color/30 border border-border-color rounded">
-      <h2 className="font-heading text-xl text-text-primary">{stmt.title}</h2>
-      <p className="text-sm text-text-secondary">
-        {stmt.summary ?? stmt.description?.slice(0, 200) + "..."}
-      </p>
-      {capacityInfo && (
-        <p className="text-xs text-text-secondary mt-1">{capacityInfo}</p>
-      )}
-      {full && (
-        <p className="text-xs text-status-error mt-1">SELECTION FULL</p>
-      )}
-      <p className="mt-1 text-xs text-text-secondary font-medium">{statusLabel}</p>
-      <SelectStatementButton
-        statementId={stmt.id}
-        statementTitle={stmt.title}
-        disabled={disableSelect}
-      />
-    </div>
+    <article className="glass-panel p-4 sm:p-6 border border-border-color hover:border-accent-secondary/40 transition-all rounded-xl flex flex-col justify-between gap-4">
+      <div>
+        {/* Top Badges */}
+        <div className="flex flex-wrap items-center justify-between gap-2 mb-2.5">
+          <div className="flex items-center gap-2 flex-wrap">
+            {stmt.reference_number && (
+              <span className="px-2 py-0.5 bg-accent-secondary/10 border border-accent-secondary/30 text-accent-secondary font-mono text-[11px] font-bold rounded">
+                {stmt.reference_number}
+              </span>
+            )}
+            {stmt.domain && (
+              <span className="px-2 py-0.5 bg-accent-tertiary/10 border border-accent-tertiary/30 text-accent-tertiary font-tech text-[11px] uppercase tracking-wider font-bold rounded">
+                {stmt.domain}
+              </span>
+            )}
+          </div>
+
+          {/* Status Badge */}
+          <div>
+            {isOpen ? (
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 bg-status-success/15 border border-status-success/50 text-status-success text-[11px] font-tech font-bold uppercase rounded-full">
+                <span className="w-1.5 h-1.5 rounded-full bg-status-success animate-pulse" />
+                Selection Live
+              </span>
+            ) : isClosed ? (
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 bg-text-secondary/15 border border-text-secondary/40 text-text-secondary text-[11px] font-tech font-bold uppercase rounded-full">
+                Selection Closed
+              </span>
+            ) : opening && now < opening ? (
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 bg-status-warning/15 border border-status-warning/50 text-status-warning text-[11px] font-tech font-bold uppercase rounded-full">
+                <Clock size={11} />
+                Opens in {formatMs(remainingMs)}
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 bg-surface-color border border-border-color text-text-secondary text-[11px] font-tech uppercase rounded-full">
+                Reading Phase
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* Title */}
+        <h2 className="font-heading text-lg sm:text-xl text-text-primary uppercase tracking-wide m-0">
+          {stmt.title}
+        </h2>
+
+        {/* Summary / Description */}
+        <div className="mt-2 text-xs sm:text-sm text-text-secondary leading-relaxed">
+          <p className="m-0">
+            {expanded
+              ? stmt.description || stmt.summary
+              : stmt.summary ?? (stmt.description ? stmt.description.slice(0, 180) + "…" : "No description provided.")}
+          </p>
+          {(stmt.description && stmt.description.length > 180) && (
+            <button
+              type="button"
+              onClick={() => setExpanded(!expanded)}
+              className="mt-1.5 text-accent-secondary hover:underline inline-flex items-center gap-1 font-tech font-bold text-xs cursor-pointer"
+            >
+              <span>{expanded ? "Show less" : "Read full description"}</span>
+              {expanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Footer Details & Action Button */}
+      <div className="pt-3 border-t border-border-color/60 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-3 text-xs text-text-secondary">
+          {stmt.team_limit != null && (
+            <span className={`inline-flex items-center gap-1.5 font-tech ${full ? "text-status-error font-bold" : ""}`}>
+              <Users size={13} className={full ? "text-status-error" : "text-accent-secondary"} />
+              <span>{assignedCount} / {stmt.team_limit} Teams Allotted</span>
+              {full && <span className="text-[10px] uppercase font-mono px-1 bg-status-error/20 border border-status-error/40 rounded">Full</span>}
+            </span>
+          )}
+          {stmt.manual_lock && (
+            <span className="text-[11px] text-status-warning font-tech uppercase flex items-center gap-1">
+              <AlertCircle size={12} /> Locked by Admin
+            </span>
+          )}
+        </div>
+
+        <div className="shrink-0">
+          <SelectStatementButton
+            statementId={stmt.id}
+            statementTitle={stmt.title}
+            disabled={disableSelect}
+          />
+        </div>
+      </div>
+    </article>
   );
 }

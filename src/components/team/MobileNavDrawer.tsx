@@ -13,6 +13,7 @@ export default function TeamMobileNav() {
 
   const navItems = [
     { href: "/team", icon: LayoutDashboard, label: "Dashboard" },
+    { href: "/team/problem-statements", icon: ScrollText, label: "Problem Statements" },
     { href: "/team/submission", icon: FileUp, label: "Project Deliverables" },
     { href: "/team/qr", icon: QrCode, label: "Event QR Pass" },
     { href: "/team/results", icon: Trophy, label: "Results & Standings" },
@@ -20,6 +21,7 @@ export default function TeamMobileNav() {
 
   const titleMap: Record<string, string> = {
     "/team": "Team Dashboard",
+    "/team/problem-statements": "Problem Statements",
     "/team/submission": "Project Deliverables",
     "/team/qr": "Event QR Pass",
     "/team/results": "Results & Standings",
