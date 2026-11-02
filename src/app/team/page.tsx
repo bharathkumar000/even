@@ -77,7 +77,8 @@ export default async function TeamDashboardPage() {
         supabaseAdmin
           .from("event_activity_logs")
           .select("id, participant_id, action_type, created_at")
-          .eq("team_id", effectiveTeamId),
+          .eq("team_id", effectiveTeamId)
+          .eq("result", "success"),
         supabaseAdmin
           .from("team_submissions")
           .select("*")

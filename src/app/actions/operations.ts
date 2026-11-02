@@ -163,11 +163,12 @@ export async function manualTeamLookup(teamId: string): Promise<TeamScanData> {
     email: m.profiles?.email || m.email || "",
   }));
 
-  // 3. Fetch activity logs for this team with scanner identity
+  // 3. Fetch active success activity logs for this team with scanner identity
   const { data: rawLogs, error: logsError } = await supabaseAdmin
     .from("event_activity_logs")
     .select("id, participant_id, action_type, created_at, scanned_by")
-    .eq("team_id", teamId);
+    .eq("team_id", teamId)
+    .eq("result", "success");
 
   if (logsError) {
     console.warn("Activity logs query notice:", logsError.message);
@@ -524,11 +525,12 @@ export async function fetchTeamMembersForScan(teamId: string) {
     email: m.profiles?.email || m.email || "",
   }));
 
-  // 3. Fetch activity logs for this team with scanner identity
+  // 3. Fetch active success activity logs for this team with scanner identity
   const { data: rawLogs, error: logsError } = await supabaseAdmin
     .from("event_activity_logs")
     .select("id, participant_id, action_type, created_at, scanned_by")
-    .eq("team_id", teamId);
+    .eq("team_id", teamId)
+    .eq("result", "success");
 
   if (logsError) {
     console.warn("Activity logs query notice:", logsError.message);
@@ -688,7 +690,8 @@ export async function getTeamScanStatus(teamId: string) {
   const { data: logs } = await supabaseAdmin
     .from("event_activity_logs")
     .select("id, action_type, created_at, scanned_by, participant_id")
-    .eq("team_id", teamId);
+    .eq("team_id", teamId)
+    .eq("result", "success");
 
   const scannerIds = Array.from(new Set((logs || []).map((l) => l.scanned_by).filter(Boolean)));
   let scannerMap: Record<string, string> = {};
