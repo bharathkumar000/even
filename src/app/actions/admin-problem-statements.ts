@@ -7,6 +7,31 @@ import { supabaseAdmin } from "@/lib/supabase/admin";
 import { revalidatePath } from "next/cache";
 import { validateCsrfToken, CSRF_CONSTANTS } from "@/lib/csrf-server";
 
+const HUB_ITEM_KEY = "__hub_item";
+
+interface HubItemMarker {
+  activity_id: string;
+  item_type: string;
+  metadata: Record<string, unknown>;
+}
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  return value as Record<string, unknown>;
+}
+
+function getItemMarker(resourceLinks: unknown): HubItemMarker | null {
+  const root = asRecord(resourceLinks);
+  const marker = root ? asRecord(root[HUB_ITEM_KEY]) : null;
+  if (!marker || typeof marker.activity_id !== "string") return null;
+
+  return {
+    activity_id: marker.activity_id,
+    item_type: typeof marker.item_type === "string" ? marker.item_type : "content",
+    metadata: asRecord(marker.metadata) || {},
+  };
+}
+
 export interface ProblemStatement {
   id: string;
   reference_number: string;
@@ -121,6 +146,7 @@ export async function getPublishedProblemStatements(
     .from("problem_statements")
     .select("*")
     .eq("status", "published")
+    .eq("is_visible_to_teams", true)
     .order("display_order", { ascending: true });
 
   // Department filtering based on department field (not domain)
@@ -160,22 +186,22 @@ export async function createProblemStatement(data: {
 }) {
   const { user } = await requireAdmin();
   await validateCsrfToken(data[CSRF_CONSTANTS.HEADER_NAME] || null);
-    const payload = {
-      reference_number: data.reference_number.trim(),
-      title: data.title.trim(),
-      domain: data.domain?.trim() || null,
-      summary: data.summary?.trim() || null,
-      description: data.description.trim(),
-      status: "draft" as const,
-      // Optional team limit – defaults to NULL (unlimited) if omitted.
-      team_limit: data.team_limit ?? null,
-      enable_selection: data.enable_selection ?? true,
-      manual_lock: data.manual_lock ?? false,
-      created_by: user.id,
-      updated_by: user.id,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    };
+  const payload = {
+    reference_number: data.reference_number.trim(),
+    title: data.title.trim(),
+    domain: data.domain?.trim() || null,
+    summary: data.summary?.trim() || null,
+    description: data.description.trim(),
+    status: "draft" as const,
+    // Optional team limit – defaults to NULL (unlimited) if omitted.
+    team_limit: data.team_limit ?? null,
+    enable_selection: data.enable_selection ?? true,
+    manual_lock: data.manual_lock ?? false,
+    created_by: user.id,
+    updated_by: user.id,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  };
   const { data: inserted, error } = await supabaseAdmin
     .from("problem_statements")
     .insert([payload])
@@ -259,6 +285,7 @@ export async function publishProblemStatement(id: string, csrfToken?: string) {
     published_at: new Date().toISOString(),
     updated_by: user.id,
     updated_at: new Date().toISOString(),
+    is_visible_to_teams: true,
   };
   const { data: updated, error } = await supabaseAdmin
     .from("problem_statements")
@@ -349,32 +376,28 @@ export async function bulkPublishProblemStatements(activityId: string, csrfToken
   const { user } = await requireAdmin();
   await validateCsrfToken(csrfToken || null);
 
-  const { data: forms, error: formsError } = await supabaseAdmin
+  const { data: rows, error: rowsError } = await supabaseAdmin
     .from("problem_statements")
-    .select("id, title, status, resource_links")
-    .eq("domain", "content_hub_activity")
-    .eq("resource_links->__hub_activity->>type", "problem_statements");
+    .select("id, title, status, summary, description, resource_links");
 
-  if (formsError) {
-    throw new Error(`Failed to load problem statements: ${formsError.message}`);
+  if (rowsError) {
+    throw new Error(`Failed to load problem statements: ${rowsError.message}`);
   }
 
-  // Filter to only items in this activity
-  const activityItems = (forms || []).filter((row: any) => {
-    const links = row.resource_links as Record<string, unknown>;
-    const marker = links && links.__hub_item;
-    return marker && typeof marker === "object" && (marker as Record<string, unknown>).activity_id === activityId;
+  const activityItems = ((rows || []) as any[]).filter((row) => {
+    const marker = getItemMarker(row.resource_links);
+    return marker && marker.activity_id === activityId && marker.item_type === "problem_statement";
   });
 
-  const draftItems = activityItems.filter((f: any) => f.status === "draft");
+  const draftItems = activityItems.filter((f) => f.status === "draft");
 
   const publishedIds: string[] = [];
   const skippedItems: { id: string; title: string; reason: string }[] = [];
   const publishErrors: string[] = [];
 
   for (const item of draftItems) {
-    const hasTitle = Boolean((item as any).title?.trim());
-    const hasBodyOrSummary = Boolean((item as any).summary?.trim()) || Boolean((item as any).description?.trim());
+    const hasTitle = Boolean(item.title?.trim());
+    const hasBodyOrSummary = Boolean(item.summary?.trim()) || Boolean(item.description?.trim());
 
     if (hasTitle && hasBodyOrSummary) {
       try {
@@ -386,6 +409,7 @@ export async function bulkPublishProblemStatements(activityId: string, csrfToken
             published_at: new Date().toISOString(),
             updated_by: user.id,
             updated_at: new Date().toISOString(),
+            is_visible_to_teams: true,
           })
           .eq("id", item.id);
 
@@ -396,7 +420,7 @@ export async function bulkPublishProblemStatements(activityId: string, csrfToken
     } else {
       skippedItems.push({
         id: item.id,
-        title: (item as any).title || "Untitled",
+        title: item.title || "Untitled",
         reason: !hasTitle ? "missing required title" : "missing required content",
       });
     }
@@ -421,6 +445,7 @@ export async function bulkPublishProblemStatements(activityId: string, csrfToken
   });
 
   revalidatePath("/admin/content-releases");
+  revalidatePath("/team/problem-statements");
 
   return {
     publishedCount: publishedIds.length,
@@ -439,23 +464,20 @@ export async function bulkUnpublishProblemStatements(activityId: string, csrfTok
   const { user } = await requireAdmin();
   await validateCsrfToken(csrfToken || null);
 
-  const { data: forms, error: formsError } = await supabaseAdmin
+  const { data: rows, error: rowsError } = await supabaseAdmin
     .from("problem_statements")
-    .select("id, title, status, resource_links")
-    .eq("domain", "content_hub_activity")
-    .eq("resource_links->__hub_activity->>type", "problem_statements");
+    .select("id, title, status, resource_links");
 
-  if (formsError) {
-    throw new Error(`Failed to load problem statements: ${formsError.message}`);
+  if (rowsError) {
+    throw new Error(`Failed to load problem statements: ${rowsError.message}`);
   }
 
-  const activityItems = (forms || []).filter((row: any) => {
-    const links = row.resource_links as Record<string, unknown>;
-    const marker = links && links.__hub_item;
-    return marker && typeof marker === "object" && (marker as Record<string, unknown>).activity_id === activityId;
+  const activityItems = ((rows || []) as any[]).filter((row) => {
+    const marker = getItemMarker(row.resource_links);
+    return marker && marker.activity_id === activityId && marker.item_type === "problem_statement";
   });
 
-  const publishedItems = activityItems.filter((f: any) => f.status === "published");
+  const publishedItems = activityItems.filter((f) => f.status === "published");
 
   const unpublishedIds: string[] = [];
   const unpublishErrors: string[] = [];
@@ -470,6 +492,7 @@ export async function bulkUnpublishProblemStatements(activityId: string, csrfTok
           published_at: null,
           updated_by: user.id,
           updated_at: new Date().toISOString(),
+          is_visible_to_teams: false,
         })
         .eq("id", item.id);
 
@@ -496,6 +519,7 @@ export async function bulkUnpublishProblemStatements(activityId: string, csrfTok
   });
 
   revalidatePath("/admin/content-releases");
+  revalidatePath("/team/problem-statements");
 
   return {
     unpublishedCount: unpublishedIds.length,
@@ -510,40 +534,85 @@ export async function bulkAllowSelection(activityId: string, csrfToken?: string)
   const { user } = await requireAdmin();
   await validateCsrfToken(csrfToken || null);
 
-  const { data: forms, error: formsError } = await supabaseAdmin
-    .from("problem_statements")
-    .select("id, title, status, enable_selection, resource_links")
-    .eq("domain", "content_hub_activity")
-    .eq("resource_links->__hub_activity->>type", "problem_statements");
+  const now = new Date().toISOString();
 
-  if (formsError) {
-    throw new Error(`Failed to load problem statements: ${formsError.message}`);
+  const { data: rows, error: rowsError } = await supabaseAdmin
+    .from("problem_statements")
+    .select("id, title, status, reading_started_at, enable_selection, selection_activated_at, resource_links");
+
+  if (rowsError) {
+    throw new Error(`Failed to load problem statements: ${rowsError.message}`);
   }
 
-  const activityItems = (forms || []).filter((row: any) => {
-    const links = row.resource_links as Record<string, unknown>;
-    const marker = links && links.__hub_item;
-    return marker && typeof marker === "object" && (marker as Record<string, unknown>).activity_id === activityId;
+  const activityItems = ((rows || []) as any[]).filter((row) => {
+    const marker = getItemMarker(row.resource_links);
+    return marker && marker.activity_id === activityId;
   });
+
+  if (activityItems.length === 0) {
+    return {
+      success: false,
+      enabledCount: 0,
+      alreadyEnabledCount: 0,
+      errorCount: 0,
+      enabledIds: [],
+      errorDetails: [],
+      message: "No problem statements found in this activity.",
+    };
+  }
+
+  // Filter to only published items; drafts remain excluded
+  const publishedItems = activityItems.filter((item) => item.status === "published");
+  const draftItems = activityItems.filter((item) => item.status !== "published");
 
   const enabledIds: string[] = [];
   const alreadyEnabledIds: string[] = [];
   const enableErrors: string[] = [];
 
-  for (const item of activityItems) {
-    if ((item as any).enable_selection) {
+  for (const item of publishedItems) {
+    // Only skip if already both enabled AND has selection_activated_at populated
+    if (item.enable_selection && item.selection_activated_at) {
       alreadyEnabledIds.push(item.id);
       continue;
     }
     try {
       await supabaseAdmin
         .from("problem_statements")
-        .update({ enable_selection: true, updated_by: user.id, updated_at: new Date().toISOString() })
+        .update({
+          enable_selection: true,
+          selection_opening: now,
+          selection_activated_at: now,
+          selection_activated_by: user.id,
+          reading_started_at: item.reading_started_at || now,
+          manual_lock: false,
+          is_visible_to_teams: true,
+          updated_by: user.id,
+          updated_at: now,
+        })
         .eq("id", item.id);
       enabledIds.push(item.id);
     } catch (err: unknown) {
       enableErrors.push(`${item.id}: ${err instanceof Error ? err.message : "Unknown error"}`);
     }
+  }
+
+  // Also update container activity row
+  try {
+    await supabaseAdmin
+      .from("problem_statements")
+      .update({
+        enable_selection: true,
+        selection_opening: now,
+        selection_activated_at: now,
+        selection_activated_by: user.id,
+        reading_started_at: now,
+        manual_lock: false,
+        updated_by: user.id,
+        updated_at: now,
+      })
+      .eq("id", activityId);
+  } catch (containerErr) {
+    console.error("Failed to update container activity selection state:", containerErr);
   }
 
   await writeAudit({
@@ -557,19 +626,25 @@ export async function bulkAllowSelection(activityId: string, csrfToken?: string)
       activity_type: "problem_statements",
       enabled_count: enabledIds.length,
       already_enabled_count: alreadyEnabledIds.length,
+      draft_count: draftItems.length,
       error_count: enableErrors.length,
     },
   });
 
   revalidatePath("/admin/content-releases");
+  revalidatePath("/team/problem-statements");
+  revalidatePath("/team");
 
   return {
+    success: true,
     enabledCount: enabledIds.length,
     alreadyEnabledCount: alreadyEnabledIds.length,
     errorCount: enableErrors.length,
     enabledIds,
     errorDetails: enableErrors,
-    message: enabledIds.length > 0 ? `Enabled selection for ${enabledIds.length} item${enabledIds.length === 1 ? "" : "s"}.` : "No items needed enabling.",
+    message: enabledIds.length > 0
+      ? `Enabled selection for ${enabledIds.length} published item${enabledIds.length === 1 ? "" : "s"}${draftItems.length > 0 ? `; ${draftItems.length} draft(s) excluded` : ""}.`
+      : "All published items are already active for selection.",
   };
 }
 
@@ -577,20 +652,17 @@ export async function bulkDisableSelection(activityId: string, csrfToken?: strin
   const { user } = await requireAdmin();
   await validateCsrfToken(csrfToken || null);
 
-  const { data: forms, error: formsError } = await supabaseAdmin
+  const { data: rows, error: rowsError } = await supabaseAdmin
     .from("problem_statements")
-    .select("id, title, status, enable_selection, resource_links")
-    .eq("domain", "content_hub_activity")
-    .eq("resource_links->__hub_activity->>type", "problem_statements");
+    .select("id, title, status, enable_selection, resource_links");
 
-  if (formsError) {
-    throw new Error(`Failed to load problem statements: ${formsError.message}`);
+  if (rowsError) {
+    throw new Error(`Failed to load problem statements: ${rowsError.message}`);
   }
 
-  const activityItems = (forms || []).filter((row: any) => {
-    const links = row.resource_links as Record<string, unknown>;
-    const marker = links && links.__hub_item;
-    return marker && typeof marker === "object" && (marker as Record<string, unknown>).activity_id === activityId;
+  const activityItems = ((rows || []) as any[]).filter((row) => {
+    const marker = getItemMarker(row.resource_links);
+    return marker && marker.activity_id === activityId && marker.item_type === "problem_statement";
   });
 
   const disabledIds: string[] = [];
@@ -598,7 +670,7 @@ export async function bulkDisableSelection(activityId: string, csrfToken?: strin
   const disableErrors: string[] = [];
 
   for (const item of activityItems) {
-    if (!(item as any).enable_selection) {
+    if (!item.enable_selection) {
       alreadyDisabledIds.push(item.id);
       continue;
     }
@@ -646,20 +718,17 @@ export async function bulkCloseSelection(activityId: string, csrfToken?: string)
 
   const now = new Date().toISOString();
 
-  const { data: forms, error: formsError } = await supabaseAdmin
+  const { data: rows, error: rowsError } = await supabaseAdmin
     .from("problem_statements")
-    .select("id, title, status, enable_selection, selection_closing, resource_links")
-    .eq("domain", "content_hub_activity")
-    .eq("resource_links->__hub_activity->>type", "problem_statements");
+    .select("id, title, status, enable_selection, selection_closing, resource_links");
 
-  if (formsError) {
-    throw new Error(`Failed to load problem statements: ${formsError.message}`);
+  if (rowsError) {
+    throw new Error(`Failed to load problem statements: ${rowsError.message}`);
   }
 
-  const activityItems = (forms || []).filter((row: any) => {
-    const links = row.resource_links as Record<string, unknown>;
-    const marker = links && links.__hub_item;
-    return marker && typeof marker === "object" && (marker as Record<string, unknown>).activity_id === activityId;
+  const activityItems = ((rows || []) as any[]).filter((row) => {
+    const marker = getItemMarker(row.resource_links);
+    return marker && marker.activity_id === activityId && marker.item_type === "problem_statement";
   });
 
   const closedIds: string[] = [];
@@ -668,7 +737,7 @@ export async function bulkCloseSelection(activityId: string, csrfToken?: string)
 
   for (const item of activityItems) {
     // Check if already closed (has closing date in the past)
-    if ((item as any).selection_closing && new Date((item as any).selection_closing) <= new Date()) {
+    if (item.selection_closing && new Date(item.selection_closing) <= new Date()) {
       alreadyClosedIds.push(item.id);
       continue;
     }
@@ -736,20 +805,20 @@ export async function setReadingTimer(
     throw new Error("Scheduled publication must be in the future.");
   }
 
-  // Cancel any existing pending schedules for items in this activity
-  const { data: activityRows } = await supabaseAdmin
+  const { data: rows, error: rowsError } = await supabaseAdmin
     .from("problem_statements")
-    .select("id")
-    .eq("domain", "content_hub_activity")
-    .eq("resource_links->__hub_activity->>type", "problem_statements");
+    .select("id, status, resource_links");
 
-  const activityItemIds = (activityRows || []).filter(
-    (row: any) => {
-      const links = row.resource_links as Record<string, unknown>;
-      const marker = links && links.__hub_item;
-      return marker && typeof marker === "object" && (marker as Record<string, unknown>).activity_id === activityId;
-    }
-  ).map((row: any) => row.id);
+  if (rowsError) {
+    throw new Error(`Failed to load activity items: ${rowsError.message}`);
+  }
+
+  const activityItems = ((rows || []) as any[]).filter((row) => {
+    const marker = getItemMarker(row.resource_links);
+    return marker && marker.activity_id === activityId && marker.item_type === "problem_statement";
+  });
+
+  const activityItemIds = activityItems.map((row) => row.id);
 
   if (activityItemIds.length > 0) {
     await supabaseAdmin
@@ -759,10 +828,7 @@ export async function setReadingTimer(
       .eq("status", "pending");
   }
 
-  // Create schedule records for all draft items
-  const draftItems = (activityRows || []).filter(
-    (row: any) => row.status === "draft"
-  );
+  const draftItems = activityItems.filter((row) => row.status === "draft");
 
   for (const item of draftItems) {
     await supabaseAdmin
@@ -823,20 +889,17 @@ export async function setSelectionTimer(
     throw new Error("Selection closing must be after opening.");
   }
 
-  const { data: forms, error: formsError } = await supabaseAdmin
+  const { data: rows, error: rowsError } = await supabaseAdmin
     .from("problem_statements")
-    .select("id, title, status, enable_selection, resource_links")
-    .eq("domain", "content_hub_activity")
-    .eq("resource_links->__hub_activity->>type", "problem_statements");
+    .select("id, title, status, enable_selection, resource_links");
 
-  if (formsError) {
-    throw new Error(`Failed to load problem statements: ${formsError.message}`);
+  if (rowsError) {
+    throw new Error(`Failed to load problem statements: ${rowsError.message}`);
   }
 
-  const activityItems = (forms || []).filter((row: any) => {
-    const links = row.resource_links as Record<string, unknown>;
-    const marker = links && links.__hub_item;
-    return marker && typeof marker === "object" && (marker as Record<string, unknown>).activity_id === activityId;
+  const activityItems = ((rows || []) as any[]).filter((row) => {
+    const marker = getItemMarker(row.resource_links);
+    return marker && marker.activity_id === activityId && marker.item_type === "problem_statement";
   });
 
   const updatedIds: string[] = [];
@@ -850,7 +913,7 @@ export async function setSelectionTimer(
           selection_opening: selectionOpening,
           selection_closing: selectionClosing,
           // Auto-enable selection if an opening date is set
-          enable_selection: selectionOpening ? true : (item as any).enable_selection,
+          enable_selection: selectionOpening ? true : item.enable_selection,
           updated_by: user.id,
           updated_at: new Date().toISOString(),
         })
@@ -896,29 +959,26 @@ export async function expireSelections(activityId: string, csrfToken?: string) {
 
   const now = new Date().toISOString();
 
-  const { data: forms, error: formsError } = await supabaseAdmin
+  const { data: rows, error: rowsError } = await supabaseAdmin
     .from("problem_statements")
-    .select("id, title, enable_selection, selection_closing, resource_links")
-    .eq("domain", "content_hub_activity")
-    .eq("resource_links->__hub_activity->>type", "problem_statements");
+    .select("id, title, enable_selection, selection_closing, resource_links");
 
-  if (formsError) {
-    throw new Error(`Failed to load problem statements: ${formsError.message}`);
+  if (rowsError) {
+    throw new Error(`Failed to load problem statements: ${rowsError.message}`);
   }
 
-  const activityItems = (forms || []).filter((row: any) => {
-    const links = row.resource_links as Record<string, unknown>;
-    const marker = links && links.__hub_item;
-    return marker && typeof marker === "object" && (marker as Record<string, unknown>).activity_id === activityId;
+  const activityItems = ((rows || []) as any[]).filter((row) => {
+    const marker = getItemMarker(row.resource_links);
+    return marker && marker.activity_id === activityId && marker.item_type === "problem_statement";
   });
 
   const expiredIds: string[] = [];
   const expireErrors: string[] = [];
 
   for (const item of activityItems) {
-    if (!(item as any).enable_selection) continue;
-    if (!(item as any).selection_closing) continue;
-    if (new Date((item as any).selection_closing) > new Date()) continue;
+    if (!item.enable_selection) continue;
+    if (!item.selection_closing) continue;
+    if (new Date(item.selection_closing) > new Date()) continue;
 
     try {
       await supabaseAdmin
@@ -981,24 +1041,20 @@ export async function processExpiredSchedules(
 
   const now = new Date().toISOString();
 
-  // Get all items in this activity
-  const { data: activityRows, error: rowsError } = await supabaseAdmin
+  const { data: rows, error: rowsError } = await supabaseAdmin
     .from("problem_statements")
-    .select("id, resource_links")
-    .eq("domain", "content_hub_activity")
-    .eq("resource_links->__hub_activity->>type", "problem_statements");
+    .select("id, resource_links");
 
   if (rowsError) {
     return { success: false, processed: 0, message: "Failed to load activity items.", error: rowsError.message };
   }
 
-  const activityItemIds = (activityRows || []).filter(
-    (row: any) => {
-      const links = row.resource_links as Record<string, unknown>;
-      const marker = links && links.__hub_item;
-      return marker && typeof marker === "object" && (marker as Record<string, unknown>).activity_id === activityId;
-    }
-  ).map((row: any) => row.id);
+  const activityItemIds = ((rows || []) as any[])
+    .filter((row) => {
+      const marker = getItemMarker(row.resource_links);
+      return marker && marker.activity_id === activityId && marker.item_type === "problem_statement";
+    })
+    .map((row) => row.id);
 
   if (activityItemIds.length === 0) {
     return { success: false, processed: 0, message: "No problem statements found in this activity." };
@@ -1114,18 +1170,20 @@ export async function startReadingPhase(
 
   const now = new Date().toISOString();
 
-  // Get all items in this activity
-  const { data: activityRows, error: rowsError } = await supabaseAdmin
+  const { data: rows, error: rowsError } = await supabaseAdmin
     .from("problem_statements")
-    .select("id, status, enable_selection")
-    .eq("domain", "content_hub_activity")
-    .eq("resource_links->__hub_activity->>type", "problem_statements");
+    .select("id, status, enable_selection, resource_links");
 
   if (rowsError) {
     return { success: false, startedCount: 0, message: "Failed to load activity items.", error: rowsError.message };
   }
 
-  const itemIds = (activityRows || []).map((row: any) => row.id);
+  const activityItems = ((rows || []) as any[]).filter((row) => {
+    const marker = getItemMarker(row.resource_links);
+    return marker && marker.activity_id === activityId && marker.item_type === "problem_statement";
+  });
+
+  const itemIds = activityItems.map((row) => row.id);
 
   if (itemIds.length === 0) {
     return { success: false, startedCount: 0, message: "No problem statements found in this activity." };
@@ -1142,6 +1200,7 @@ export async function startReadingPhase(
       selection_activated_at: null,
       selection_activated_by: null,
       manual_lock: false,
+      is_visible_to_teams: true,
     })
     .in("id", itemIds);
 
@@ -1159,6 +1218,7 @@ export async function startReadingPhase(
   });
 
   revalidatePath("/admin/content-releases");
+  revalidatePath("/team/problem-statements");
 
   return {
     success: true,
@@ -1183,72 +1243,12 @@ export async function publishForSelection(
   message: string;
   error?: string;
 }> {
-  const { user } = await requireAdmin();
-  await validateCsrfToken(csrfToken || null);
-
-  const now = new Date().toISOString();
-
-  // Get all items in this activity
-  const { data: activityRows, error: rowsError } = await supabaseAdmin
-    .from("problem_statements")
-    .select("id, reading_started_at, enable_selection")
-    .eq("domain", "content_hub_activity")
-    .eq("resource_links->__hub_activity->>type", "problem_statements");
-
-  if (rowsError) {
-    return { success: false, activatedCount: 0, message: "Failed to load activity items.", error: rowsError.message };
-  }
-
-  const itemIds = (activityRows || []).map((row: any) => row.id);
-
-  if (itemIds.length === 0) {
-    return { success: false, activatedCount: 0, message: "No problem statements found in this activity." };
-  }
-
-  // Validate reading phase has started
-  const notStarted = (activityRows || []).some(
-    (row: any) => !row.reading_started_at
-  );
-
-  if (notStarted) {
-    return {
-      success: false,
-      activatedCount: 0,
-      message: "Reading phase has not started yet. Please start reading phase first before publishing for selection.",
-    };
-  }
-
-  // Enable selection
-  const { error: updateError } = await supabaseAdmin
-    .from("problem_statements")
-    .update({
-      enable_selection: true,
-      selection_opening: now,
-      selection_activated_at: now,
-      selection_activated_by: user.id,
-      manual_lock: false,
-    })
-    .in("id", itemIds);
-
-  if (updateError) {
-    return { success: false, activatedCount: 0, message: "Failed to publish for selection.", error: updateError.message };
-  }
-
-  await writeAudit({
-    statementId: activityId,
-    action: "selection_phase_activated",
-    previousStatus: "reading",
-    newStatus: "selection",
-    userId: user.id,
-    details: { activity_id: activityId, item_count: itemIds.length, activated_at: now },
-  });
-
-  revalidatePath("/admin/content-releases");
-
+  const res = await bulkAllowSelection(activityId, csrfToken);
   return {
-    success: true,
-    activatedCount: itemIds.length,
-    message: `Selection phase activated for ${itemIds.length} problem statement${itemIds.length === 1 ? "" : "s"}.`,
+    success: (res.enabledCount > 0 || res.alreadyEnabledCount > 0) && res.errorCount === 0,
+    activatedCount: res.enabledCount,
+    message: res.message,
+    error: res.errorDetails.length > 0 ? res.errorDetails.join("; ") : undefined,
   };
 }
 
@@ -1272,18 +1272,20 @@ export async function closeSelection(
 
   const now = new Date().toISOString();
 
-  // Get all items in this activity
-  const { data: activityRows, error: rowsError } = await supabaseAdmin
+  const { data: rows, error: rowsError } = await supabaseAdmin
     .from("problem_statements")
-    .select("id, enable_selection")
-    .eq("domain", "content_hub_activity")
-    .eq("resource_links->__hub_activity->>type", "problem_statements");
+    .select("id, enable_selection, resource_links");
 
   if (rowsError) {
     return { success: false, closedCount: 0, message: "Failed to load activity items.", error: rowsError.message };
   }
 
-  const itemIds = (activityRows || []).map((row: any) => row.id);
+  const activityItems = ((rows || []) as any[]).filter((row) => {
+    const marker = getItemMarker(row.resource_links);
+    return marker && marker.activity_id === activityId && marker.item_type === "problem_statement";
+  });
+
+  const itemIds = activityItems.map((row) => row.id);
 
   if (itemIds.length === 0) {
     return { success: false, closedCount: 0, message: "No problem statements found in this activity." };
@@ -1342,6 +1344,7 @@ export async function getPhaseStatus(
     manual_lock: boolean;
     team_limit: number | null;
     assigned_count: number;
+    selection_activated_at?: string | null;
   }>;
   error?: string;
 }> {
@@ -1351,23 +1354,26 @@ export async function getPhaseStatus(
     return { success: false, phase: "not_started", readingStartedAt: null, readingEndedAt: null, selectionActivatedAt: null, selectionActivatedBy: null, items: [], error: "Authentication required." };
   }
 
-  const { data: activityRows, error: rowsError } = await supabaseAdmin
+  const { data: rows, error: rowsError } = await supabaseAdmin
     .from("problem_statements")
-    .select("id, title, domain, status, enable_selection, manual_lock, team_limit, reading_started_at, reading_ended_at, selection_activated_at, selection_activated_by")
-    .eq("domain", "content_hub_activity")
-    .eq("resource_links->__hub_activity->>type", "problem_statements")
+    .select("id, title, domain, status, enable_selection, manual_lock, team_limit, reading_started_at, reading_ended_at, selection_activated_at, selection_activated_by, resource_links")
     .order("display_order", { ascending: true });
 
   if (rowsError) {
     return { success: false, phase: "not_started", readingStartedAt: null, readingEndedAt: null, selectionActivatedAt: null, selectionActivatedBy: null, items: [], error: rowsError.message };
   }
 
-  if ((activityRows || []).length === 0) {
+  const activityRows = ((rows || []) as any[]).filter((row) => {
+    const marker = getItemMarker(row.resource_links);
+    return marker && marker.activity_id === activityId;
+  });
+
+  if (activityRows.length === 0) {
     return { success: true, phase: "not_started", readingStartedAt: null, readingEndedAt: null, selectionActivatedAt: null, selectionActivatedBy: null, items: [] };
   }
 
   // Get assignment counts for each item
-  const itemIds = activityRows.map((row: any) => row.id);
+  const itemIds = activityRows.map((row) => row.id);
   const { data: assignments, error: assignError } = await supabaseAdmin
     .from("team_problem_statement_assignments")
     .select("problem_statement_id, team_id")
@@ -1379,9 +1385,9 @@ export async function getPhaseStatus(
   });
 
   // Determine overall phase
-  const anyReadingStarted = (activityRows || []).some((row: any) => row.reading_started_at);
-  const anySelectionActivated = (activityRows || []).some((row: any) => row.selection_activated_at);
-  const anySelectionEnabled = (activityRows || []).some((row: any) => row.enable_selection);
+  const anyReadingStarted = activityRows.some((row) => row.reading_started_at);
+  const anySelectionActivated = activityRows.some((row) => row.selection_activated_at);
+  const anySelectionEnabled = activityRows.some((row) => row.enable_selection);
 
   let phase: "not_started" | "reading" | "selection" | "closed" = "not_started";
   if (anySelectionActivated && anySelectionEnabled) {
@@ -1395,7 +1401,7 @@ export async function getPhaseStatus(
   // Use the first item's timestamps as representative
   const firstRow = activityRows[0];
 
-  const items = activityRows.map((row: any) => ({
+  const items = activityRows.map((row) => ({
     id: row.id,
     title: row.title,
     domain: row.domain,
@@ -1404,6 +1410,7 @@ export async function getPhaseStatus(
     manual_lock: row.manual_lock,
     team_limit: row.team_limit,
     assigned_count: assignmentCounts[row.id] || 0,
+    selection_activated_at: row.selection_activated_at,
   }));
 
   return {
@@ -1469,6 +1476,7 @@ async function writeAudit(params: {
     console.warn("Audit log write failed:", error.message);
   }
 }
+
 
 // Get all team problem statement selections with full details for admin view
 export interface TeamSelectionRecord {

@@ -83,3 +83,4 @@ export interface JudgeEvaluationMatrixResponse {
   kpis?: JudgeEvaluationMatrixKPIs;
   uniqueJudges?: string[];
 }
+

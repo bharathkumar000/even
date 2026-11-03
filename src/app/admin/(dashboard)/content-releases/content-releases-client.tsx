@@ -32,6 +32,7 @@ import {
   Plus,
   Search,
   Send,
+  Table,
   Timer,
   Trash2,
   Upload,
@@ -68,6 +69,8 @@ import {
 } from "@/app/actions/project-submission-forms";
 import { PublishConfirmationModal } from "@/components/admin/PublishConfirmationModal";
 import {
+  getTeamProblemStatementSelections,
+  exportTeamProblemStatementSelections,
   unpublishProblemStatement,
   bulkPublishProblemStatements,
   bulkUnpublishProblemStatements,
@@ -443,6 +446,32 @@ export default function ContentHubClientView({
   } | null>(null);
   const [bulkActionConfirmLoading, setBulkActionConfirmLoading] = useState(false);
 
+  // Publish For Selection confirmation state
+  const [selectionActivationConfirm, setSelectionActivationConfirm] = useState<{
+    open: boolean;
+    eligibleCount: number;
+    alreadySelectedCount: number;
+    excludedCount: number;
+    totalCount: number;
+    selectionDuration: string | null;
+    timezone: string;
+  } | null>(null);
+  const [selectionActivationLoading, setSelectionActivationLoading] = useState(false);
+
+  // View Submissions (team PS assignments) modal state
+  const [viewSubmissionsOpen, setViewSubmissionsOpen] = useState(false);
+  const [submissions, setSubmissions] = useState<Array<{
+    assigned_at: string;
+    team_id: string;
+    team_name: string;
+    team_code: string | null;
+    ps_reference_number: string | null;
+    ps_title: string;
+  }>>([]);
+  const [submissionsLoading, setSubmissionsLoading] = useState(false);
+  const [submissionsError, setSubmissionsError] = useState<string | null>(null);
+  const [submissionsExporting, setSubmissionsExporting] = useState(false);
+
   // Selection timer state
   const [selectionTimerOpening, setSelectionTimerOpening] = useState<string>("");
   const [selectionTimerClosing, setSelectionTimerClosing] = useState<string>("");
@@ -760,7 +789,7 @@ export default function ContentHubClientView({
       }
 
       const iso = targetDate.toISOString();
-       await scheduleContentActivity(selectedActivity.id, iso, activityTimerTimezone || "UTC", mode);
+      await scheduleContentActivity(selectedActivity.id, iso, activityTimerTimezone || "UTC", mode);
 
       const diff = Math.max(0, Math.floor((targetDate.getTime() - Date.now()) / 1000));
       setActivityTimerEnd(iso);
@@ -1242,6 +1271,7 @@ export default function ContentHubClientView({
       // Refresh data
       setSubmissionForms([]);
       await fetchTimerState(activityId);
+      await fetchPhaseStatus();
     } catch (err: unknown) {
       setNotification({
         type: "error",
@@ -1251,6 +1281,149 @@ export default function ContentHubClientView({
       setBulkActionConfirmLoading(false);
       setBulkActionConfirmOpen(false);
       setBulkActionConfirmItem(null);
+    }
+  };
+
+  const fetchSelectionActivationData = useCallback(async () => {
+    if (!selectedActivityId) return;
+    try {
+      const res = await getPhaseStatus(selectedActivityId);
+      if (res.success) {
+        const items = res.items || [];
+        const eligible = items.filter((i: any) => i.status === "published" && (!i.enable_selection || !i.selection_activated_at));
+        const alreadySelected = items.filter((i: any) => i.status === "published" && i.enable_selection && i.selection_activated_at);
+        const excluded = items.filter((i: any) => i.status !== "published");
+
+        let selectionDuration: string | null = null;
+        let timezone = "Asia/Kolkata";
+        try {
+          const timerRes = await fetch(`/api/admin/timer/${selectedActivityId}`);
+          if (timerRes.ok) {
+            const timerData = await timerRes.json();
+            timezone = timerData.publication_timezone || "Asia/Kolkata";
+            if (timerData.selectionOpening && timerData.selectionClosing) {
+              const opening = new Date(timerData.selectionOpening).getTime();
+              const closing = new Date(timerData.selectionClosing).getTime();
+              const diffMin = Math.floor((closing - opening) / 60000);
+              selectionDuration = `${diffMin} minutes`;
+            }
+          }
+        } catch {
+          // Timer data optional
+        }
+
+        setSelectionActivationConfirm({
+          open: true,
+          eligibleCount: eligible.length,
+          alreadySelectedCount: alreadySelected.length,
+          excludedCount: excluded.length,
+          totalCount: items.length,
+          selectionDuration,
+          timezone,
+        });
+      }
+    } catch {
+      // Silent fail - still allow activation with empty data
+      setSelectionActivationConfirm({
+        open: true,
+        eligibleCount: 0,
+        alreadySelectedCount: 0,
+        excludedCount: 0,
+        totalCount: 0,
+        selectionDuration: null,
+        timezone: "Asia/Kolkata",
+      });
+    }
+  }, [selectedActivityId, getPhaseStatus]);
+
+  const confirmSelectionActivation = async () => {
+    if (!selectedActivityId) return;
+    setSelectionActivationLoading(true);
+    try {
+      const res = await fetch(`/api/admin/problem-statements/bulk/allow-selection`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ activityId: selectedActivityId, [CSRF_CONSTANTS.HEADER_NAME]: "" }),
+      });
+      if (!res.ok) throw new Error("Failed to activate selection");
+      const result = await res.json();
+      setNotification({
+        type: "success",
+        message: result.message || "Selection activated successfully.",
+      });
+      setSelectionActivationConfirm(null);
+      await fetchPhaseStatus();
+      window.location.reload();
+    } catch (err: unknown) {
+      setNotification({
+        type: "error",
+        message: err instanceof Error ? err.message : "Failed to activate selection.",
+      });
+    } finally {
+      setSelectionActivationLoading(false);
+    }
+  };
+
+  const fetchSubmissions = useCallback(async () => {
+    setSubmissionsLoading(true);
+    setSubmissionsError(null);
+    try {
+      const res = await getTeamProblemStatementSelections();
+      if (res.error) {
+        setSubmissionsError(res.error);
+        setSubmissions([]);
+      } else {
+        setSubmissions(
+          (res.selections || []).map((s) => ({
+            assigned_at: s.assigned_at,
+            team_id: s.team_id,
+            team_name: s.team_name,
+            team_code: s.team_code,
+            ps_reference_number: s.ps_reference_number,
+            ps_title: s.ps_title,
+          }))
+        );
+      }
+    } catch (err: unknown) {
+      setSubmissionsError(err instanceof Error ? err.message : "Failed to load submissions.");
+      setSubmissions([]);
+    } finally {
+      setSubmissionsLoading(false);
+    }
+  }, []);
+
+  const exportSubmissionsCsv = async () => {
+    setSubmissionsExporting(true);
+    try {
+      const res = await exportTeamProblemStatementSelections();
+      if (res.error) {
+        setNotification({
+          type: "error",
+          message: res.error || "CSV export failed.",
+        });
+        return;
+      }
+      const csv = res.csv || "";
+      const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = "EVENTRA_PS_Selections.csv";
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      setNotification({
+        type: "success",
+        message: "Selections exported to EVENTRA_PS_Selections.csv",
+      });
+    } catch (err: unknown) {
+      setNotification({
+        type: "error",
+        message: err instanceof Error ? err.message : "CSV export failed.",
+      });
+    } finally {
+      setSubmissionsExporting(false);
     }
   };
 
@@ -1313,8 +1486,8 @@ export default function ContentHubClientView({
       enableSelection: item.enable_selection !== false,
       manualLock: item.manual_lock === true,
       // New fields for selection window
-      selectionOpening: item.selection_opening ? new Date(item.selection_opening).toISOString().slice(0,16) : "",
-      selectionClosing: item.selection_closing ? new Date(item.selection_closing).toISOString().slice(0,16) : "",
+      selectionOpening: item.selection_opening ? new Date(item.selection_opening).toISOString().slice(0, 16) : "",
+      selectionClosing: item.selection_closing ? new Date(item.selection_closing).toISOString().slice(0, 16) : "",
     });
     setEditorOpen(true);
   };
@@ -1342,29 +1515,29 @@ export default function ContentHubClientView({
         (itemForm.enableSelection !== (editingItem?.enable_selection ?? true) ||
           itemForm.manualLock !== (editingItem?.manual_lock ?? false));
 
-        const payload = {
-          activityId: selectedActivity.id,
-          title: itemForm.title,
-          referenceNumber: itemForm.referenceNumber,
-          summary: itemForm.summary,
-          body: itemForm.body,
-          domain: itemForm.domain,
-          metadata: metadataFor(selectedActivity.type, itemForm),
-          ...(teamLimit !== undefined ? { teamLimit } : {}),
-          ...(allocationChanged
-            ? {
-                enableSelection: itemForm.enableSelection,
-                manualLock: itemForm.manualLock,
-              }
-            : {}),
-          // Include selection window dates if provided (only for problem statements)
-          ...(selectedActivity.type === "problem_statements" && itemForm.selectionOpening
-            ? { selectionOpening: new Date(itemForm.selectionOpening).toISOString() }
-            : {}),
-          ...(selectedActivity.type === "problem_statements" && itemForm.selectionClosing
-            ? { selectionClosing: new Date(itemForm.selectionClosing).toISOString() }
-            : {}),
-        };
+      const payload = {
+        activityId: selectedActivity.id,
+        title: itemForm.title,
+        referenceNumber: itemForm.referenceNumber,
+        summary: itemForm.summary,
+        body: itemForm.body,
+        domain: itemForm.domain,
+        metadata: metadataFor(selectedActivity.type, itemForm),
+        ...(teamLimit !== undefined ? { teamLimit } : {}),
+        ...(allocationChanged
+          ? {
+            enableSelection: itemForm.enableSelection,
+            manualLock: itemForm.manualLock,
+          }
+          : {}),
+        // Include selection window dates if provided (only for problem statements)
+        ...(selectedActivity.type === "problem_statements" && itemForm.selectionOpening
+          ? { selectionOpening: new Date(itemForm.selectionOpening).toISOString() }
+          : {}),
+        ...(selectedActivity.type === "problem_statements" && itemForm.selectionClosing
+          ? { selectionClosing: new Date(itemForm.selectionClosing).toISOString() }
+          : {}),
+      };
 
 
       let saved: ContentItem;
@@ -1408,12 +1581,12 @@ export default function ContentHubClientView({
         prev.map((i) =>
           i.id === item.id
             ? {
-                ...i,
-                status: "draft",
-                published_by: null,
-                published_at: null,
-                updated_at: new Date().toISOString(),
-              }
+              ...i,
+              status: "draft",
+              published_by: null,
+              published_at: null,
+              updated_at: new Date().toISOString(),
+            }
             : i
         )
       );
@@ -1894,10 +2067,10 @@ export default function ContentHubClientView({
                   </span>
                 </div>
 
-              <div className="space-y-1.5 flex-1">
-                <p className="text-[10px] uppercase tracking-[2px] text-accent-tertiary font-bold m-0">
-                  {activity.type === "project_submissions" ? "Team Submissions" : ACTIVITY_LABELS[activity.type]}
-                </p>
+                <div className="space-y-1.5 flex-1">
+                  <p className="text-[10px] uppercase tracking-[2px] text-accent-tertiary font-bold m-0">
+                    {activity.type === "project_submissions" ? "Team Submissions" : ACTIVITY_LABELS[activity.type]}
+                  </p>
                   <h2 className="font-heading text-lg text-text-primary uppercase tracking-wide m-0">
                     {activity.title}
                   </h2>
@@ -1911,11 +2084,10 @@ export default function ContentHubClientView({
                     {activity.item_count} item{activity.item_count === 1 ? "" : "s"}
                   </span>
                   <span
-                    className={`px-2 py-1 rounded border ${
-                      activity.published_count > 0
+                    className={`px-2 py-1 rounded border ${activity.published_count > 0
                         ? "bg-status-success/10 text-status-success border-status-success/40"
                         : "bg-surface-color-light text-text-secondary border-border-color"
-                    }`}
+                      }`}
                   >
                     {publishedLabel}
                   </span>
@@ -1981,11 +2153,10 @@ export default function ContentHubClientView({
             <button
               type="button"
               onClick={() => setActivityTimerModalOpen(true)}
-              className={`inline-flex items-center justify-center gap-2 px-4 py-2.5 border rounded font-tech font-bold uppercase tracking-wider text-xs transition-all ${
-                activityTimerEnd
+              className={`inline-flex items-center justify-center gap-2 px-4 py-2.5 border rounded font-tech font-bold uppercase tracking-wider text-xs transition-all ${activityTimerEnd
                   ? "border-accent-secondary bg-accent-secondary/15 text-accent-secondary shadow-[0_0_15px_rgba(255,0,127,0.3)] hover:bg-accent-secondary/25"
                   : "border-border-color bg-surface-color text-text-primary hover:border-accent-secondary hover:text-accent-secondary"
-              }`}
+                }`}
               title="Activity Release Timer"
             >
               <Timer size={15} className={activityTimerEnd ? "animate-pulse" : ""} />
@@ -2005,7 +2176,7 @@ export default function ContentHubClientView({
             </button>
 
             {/* Bulk publish button – publishes all draft items in the current activity */}
-              <button
+            <button
               onClick={async () => {
                 startTransition(async () => {
                   try {
@@ -2024,6 +2195,18 @@ export default function ContentHubClientView({
             >
               <Send size={15} />
               <span>Publish All Drafts</span>
+            </button>
+
+            {/* PUBLISH FOR SELECTION button */}
+            <button
+              type="button"
+              onClick={fetchSelectionActivationData}
+              disabled={selectionActivationLoading}
+              className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-accent-secondary to-[#d0006f] text-white font-tech font-bold uppercase tracking-wider text-xs rounded transition-all hover:opacity-90 shadow-[0_0_18px_rgba(255,0,127,0.35)] disabled:opacity-50 disabled:cursor-not-allowed"
+              title="Activate Problem Statement Selection for Teams"
+            >
+              <CheckCircle2 size={15} />
+              <span>PUBLISH FOR SELECTION</span>
             </button>
             {/* UNPUBLISH ALL button */}
             <button
@@ -2238,11 +2421,10 @@ export default function ContentHubClientView({
                         </span>
                       )}
                       {(item.metadata?.category as string) && (
-                        <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
-                          (item.metadata?.category as string) === "Software"
+                        <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${(item.metadata?.category as string) === "Software"
                             ? "bg-status-success/10 text-status-success border-status-success/30"
                             : "bg-accent-primary/10 text-accent-primary border-accent-primary/30"
-                        }`}>
+                          }`}>
                           {item.metadata?.category as string}
                         </span>
                       )}
@@ -2288,29 +2470,28 @@ export default function ContentHubClientView({
                     >
                       <FileJson size={14} />
                     </button>
-                     {item.activity_type === "problem_statements" && published ? (
-                       <button
-                         onClick={() => handleUnpublishProblemStatement(item)}
-                         disabled={isPending || unpublishing.has(item.id)}
-                         className="inline-flex items-center gap-1.5 px-3 py-2 rounded border text-[10px] font-bold uppercase tracking-wider transition-colors disabled:opacity-50 border-status-warning/40 text-status-warning hover:bg-status-warning/10"
-                       >
-                         <X size={13} />
-                         Unpublish
-                       </button>
-                     ) : (
-                       <button
-                         onClick={() => togglePublish(item)}
-                         disabled={isPending}
-                         className={`inline-flex items-center gap-1.5 px-3 py-2 rounded border text-[10px] font-bold uppercase tracking-wider transition-colors disabled:opacity-50 ${
-                           published
-                             ? "border-status-warning/40 text-status-warning hover:bg-status-warning/10"
-                             : "border-status-success/40 text-status-success hover:bg-status-success/10"
-                         }`}
-                       >
-                         {published ? <X size={13} /> : <Send size={13} />}
-                         {published ? "Unpublish" : "Publish"}
-                       </button>
-                     )}
+                    {item.activity_type === "problem_statements" && published ? (
+                      <button
+                        onClick={() => handleUnpublishProblemStatement(item)}
+                        disabled={isPending || unpublishing.has(item.id)}
+                        className="inline-flex items-center gap-1.5 px-3 py-2 rounded border text-[10px] font-bold uppercase tracking-wider transition-colors disabled:opacity-50 border-status-warning/40 text-status-warning hover:bg-status-warning/10"
+                      >
+                        <X size={13} />
+                        Unpublish
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => togglePublish(item)}
+                        disabled={isPending}
+                        className={`inline-flex items-center gap-1.5 px-3 py-2 rounded border text-[10px] font-bold uppercase tracking-wider transition-colors disabled:opacity-50 ${published
+                            ? "border-status-warning/40 text-status-warning hover:bg-status-warning/10"
+                            : "border-status-success/40 text-status-success hover:bg-status-success/10"
+                          }`}
+                      >
+                        {published ? <X size={13} /> : <Send size={13} />}
+                        {published ? "Unpublish" : "Publish"}
+                      </button>
+                    )}
                     <button
                       onClick={() => setDeleteTarget(item)}
                       className="p-2 border border-border-color rounded text-text-secondary hover:text-status-error hover:border-status-error/50 transition-colors"
@@ -2383,11 +2564,10 @@ export default function ContentHubClientView({
               <>
                 <button
                   onClick={() => setActivityTimerModalOpen(true)}
-                  className={`inline-flex items-center justify-center gap-2 px-4 py-2.5 border rounded font-tech font-bold uppercase tracking-wider text-xs transition-all ${
-                    readingTimerEnd
+                  className={`inline-flex items-center justify-center gap-2 px-4 py-2.5 border rounded font-tech font-bold uppercase tracking-wider text-xs transition-all ${readingTimerEnd
                       ? "border-accent-secondary bg-accent-secondary/15 text-accent-secondary shadow-[0_0_15px_rgba(255,0,127,0.3)]"
                       : "border-border-color bg-surface-color text-text-primary hover:border-accent-secondary hover:text-accent-secondary"
-                  }`}
+                    }`}
                 >
                   <Timer size={15} className={readingTimerEnd ? "animate-pulse" : ""} />
                   <span>
@@ -2398,11 +2578,10 @@ export default function ContentHubClientView({
                 </button>
                 <button
                   onClick={() => setActivityTimerModalOpen(true)}
-                  className={`inline-flex items-center justify-center gap-2 px-4 py-2.5 border rounded font-tech font-bold uppercase tracking-wider text-xs transition-all ${
-                    selectionTimerEnd
+                  className={`inline-flex items-center justify-center gap-2 px-4 py-2.5 border rounded font-tech font-bold uppercase tracking-wider text-xs transition-all ${selectionTimerEnd
                       ? "border-accent-primary bg-accent-primary/15 text-accent-primary shadow-[0_0_15px_rgba(0,240,255,0.3)]"
                       : "border-border-color bg-surface-color text-text-primary hover:border-accent-primary hover:text-accent-primary"
-                  }`}
+                    }`}
                 >
                   <CalendarClock size={15} />
                   <span>
@@ -2481,12 +2660,23 @@ export default function ContentHubClientView({
                   <span>Unpublish All</span>
                 </button>
                 <button
-                  onClick={() => handleBulkAction("allow-selection")}
+                  onClick={fetchSelectionActivationData}
+                  disabled={schedulingActivity}
+                  className="px-3 py-2 border border-status-error/40 text-status-error rounded text-[10px] font-bold uppercase tracking-wider hover:bg-status-error/10 disabled:opacity-50"
+                >
+                  <Check size={12} />
+                  <span>Publish For Selection</span>
+                </button>
+                <button
+                  onClick={() => {
+                    setViewSubmissionsOpen(true);
+                    void fetchSubmissions();
+                  }}
                   disabled={schedulingActivity}
                   className="px-3 py-2 border border-accent-secondary/40 text-accent-secondary rounded text-[10px] font-bold uppercase tracking-wider hover:bg-accent-secondary/10 disabled:opacity-50"
                 >
-                  <Check size={12} />
-                  <span>Allow Selection</span>
+                  <Table size={12} />
+                  <span>View Submissions</span>
                 </button>
                 <button
                   onClick={() => handleBulkAction("disable-selection")}
@@ -2542,11 +2732,10 @@ export default function ContentHubClientView({
                         {form.title}
                       </h3>
                       <span
-                        className={`px-2 py-0.5 border rounded text-[9px] uppercase tracking-wider font-bold ${
-                          isPublished
+                        className={`px-2 py-0.5 border rounded text-[9px] uppercase tracking-wider font-bold ${isPublished
                             ? "bg-status-success/10 text-status-success border-status-success/40"
                             : "bg-surface-color-light text-text-secondary border-border-color"
-                        }`}
+                          }`}
                       >
                         {form.form_status}
                       </span>
@@ -2660,10 +2849,10 @@ export default function ContentHubClientView({
                             });
                             setBulkActionConfirmOpen(true);
                           }}
-                          className="px-2.5 py-1 border border-accent-secondary/40 text-accent-secondary rounded text-[10px] font-bold uppercase tracking-wider hover:bg-accent-secondary/10"
+                          className="px-2.5 py-1 border border-status-error/40 text-status-error rounded text-[10px] font-bold uppercase tracking-wider hover:bg-status-error/10"
                         >
                           <Check size={12} />
-                          <span>Allow Selection</span>
+                          <span>Publish For Selection</span>
                         </button>
                       </div>
                     )}
@@ -2753,11 +2942,10 @@ export default function ContentHubClientView({
     <div className="space-y-6 font-tech">
       {notification && (
         <div
-          className={`p-4 border rounded flex items-center justify-between text-xs ${
-            notification.type === "success"
+          className={`p-4 border rounded flex items-center justify-between text-xs ${notification.type === "success"
               ? "bg-status-success/15 border-status-success text-status-success"
               : "bg-status-error/15 border-status-error text-status-error"
-          }`}
+            }`}
         >
           <div className="flex items-center gap-2.5">
             {notification.type === "success" ? (
@@ -2790,15 +2978,14 @@ export default function ContentHubClientView({
             </div>
             <div className="flex items-center gap-3">
               <span
-                className={`px-3 py-1 rounded text-[10px] font-bold uppercase tracking-wider ${
-                  phaseStatus.phase === "not_started"
+                className={`px-3 py-1 rounded text-[10px] font-bold uppercase tracking-wider ${phaseStatus.phase === "not_started"
                     ? "bg-surface-color-light text-text-secondary border border-border-color"
                     : phaseStatus.phase === "reading"
-                    ? "bg-accent-secondary/15 text-accent-secondary border border-accent-secondary/40"
-                    : phaseStatus.phase === "selection"
-                    ? "bg-status-success/15 text-status-success border border-status-success/40"
-                    : "bg-status-error/15 text-status-error border border-status-error/40"
-                }`}
+                      ? "bg-accent-secondary/15 text-accent-secondary border border-accent-secondary/40"
+                      : phaseStatus.phase === "selection"
+                        ? "bg-status-success/15 text-status-success border border-status-success/40"
+                        : "bg-status-error/15 text-status-error border border-status-error/40"
+                  }`}
               >
                 {phaseStatus.phase.replace(/_/g, " ").toUpperCase()}
               </span>
@@ -2884,24 +3071,22 @@ export default function ContentHubClientView({
                         </td>
                         <td className="p-2">
                           <span
-                            className={`px-2 py-0.5 rounded text-[9px] font-bold uppercase ${
-                              item.enable_selection
+                            className={`px-2 py-0.5 rounded text-[9px] font-bold uppercase ${item.enable_selection
                                 ? "bg-status-success/15 text-status-success border border-status-success/40"
                                 : item.manual_lock
-                                ? "bg-status-error/15 text-status-error border border-status-error/40"
-                                : "bg-surface-color-light text-text-secondary border border-border-color/40"
-                            }`}
+                                  ? "bg-status-error/15 text-status-error border border-status-error/40"
+                                  : "bg-surface-color-light text-text-secondary border border-border-color/40"
+                              }`}
                           >
                             {item.enable_selection ? "Open" : item.manual_lock ? "Locked" : "Closed"}
                           </span>
                         </td>
                         <td className="p-2 text-center">
                           <span
-                            className={`px-2 py-0.5 rounded text-[9px] font-bold uppercase ${
-                              item.enable_selection && !item.manual_lock
+                            className={`px-2 py-0.5 rounded text-[9px] font-bold uppercase ${item.enable_selection && !item.manual_lock
                                 ? "bg-status-success/10 text-status-success"
                                 : "bg-surface-color-light text-text-secondary"
-                            }`}
+                              }`}
                           >
                             {item.enable_selection ? "Enabled" : "Disabled"}
                           </span>
@@ -2915,9 +3100,135 @@ export default function ContentHubClientView({
                     ))}
                   </tbody>
                 </table>
+          </div>
+        </div>
+      )}
+
+      {/* View Submissions Modal */}
+      {viewSubmissionsOpen && (
+        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/85 backdrop-blur-sm p-4">
+          <div className="bg-surface-color border border-border-color rounded-xl w-full max-w-4xl p-0 shadow-2xl flex flex-col h-[85vh] max-h-[700px]">
+            <div className="flex items-start justify-between border-b border-border-color pb-4 px-6 pt-6">
+              <div>
+                <h3 className="font-heading text-lg text-text-primary uppercase m-0 font-bold tracking-wide">
+                  Team Problem Statement Selections
+                </h3>
+                <p className="text-[10px] text-text-secondary/60 mt-1 font-mono">
+                  All successful team selections with selection time, team, and problem statement details.
+                </p>
               </div>
+              <button
+                onClick={() => setViewSubmissionsOpen(false)}
+                className="text-text-secondary hover:text-text-primary"
+              >
+                <X size={18} />
+              </button>
             </div>
-          )}
+
+            <div className="px-6 pb-6 flex items-center justify-between gap-4">
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] uppercase tracking-wider text-text-secondary font-bold">
+                  {submissions.length} selection{submissions.length !== 1 ? "s" : ""} found
+                </span>
+                {submissionsError && (
+                  <span className="text-[10px] text-status-error font-mono">
+                    {submissionsError}
+                  </span>
+                )}
+              </div>
+              <button
+                onClick={exportSubmissionsCsv}
+                disabled={submissionsExporting}
+                className="inline-flex items-center gap-2 px-4 py-2.5 border border-accent-secondary/40 text-accent-secondary rounded text-[10px] font-bold uppercase tracking-wider hover:bg-accent-secondary/10 disabled:opacity-50"
+              >
+                <Download size={12} />
+                <span>Export CSV</span>
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-auto px-6 pb-6">
+              {submissionsLoading && submissions.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-20">
+                  <Loader2 className="w-8 h-8 animate-spin text-accent-secondary mb-3" />
+                  <p className="text-[11px] text-text-secondary font-mono">Loading selections…</p>
+                </div>
+              ) : submissions.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-20 text-center">
+                  <FileText className="w-12 h-12 text-text-secondary/30 mb-4" />
+                  <p className="text-[11px] text-text-secondary/60 font-mono">
+                    No team problem statement selections found.
+                  </p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="border-b border-border-color">
+                        <th className="px-4 py-3 text-[10px] uppercase tracking-wider text-text-secondary font-bold font-mono">
+                          Selection Time
+                        </th>
+                        <th className="px-4 py-3 text-[10px] uppercase tracking-wider text-text-secondary font-bold font-mono">
+                          Team ID
+                        </th>
+                        <th className="px-4 py-3 text-[10px] uppercase tracking-wider text-text-secondary font-bold font-mono">
+                          Team Name
+                        </th>
+                        <th className="px-4 py-3 text-[10px] uppercase tracking-wider text-text-secondary font-bold font-mono">
+                          PS Code
+                        </th>
+                        <th className="px-4 py-3 text-[10px] uppercase tracking-wider text-text-secondary font-bold font-mono">
+                          PS Title
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border-color/40">
+                      {submissions.map((s) => (
+                        <tr key={`${s.team_id}-${s.problem_statement_id}`} className="hover:bg-surface-color/30 transition-colors">
+                          <td className="px-4 py-3 text-xs text-text-primary font-mono">
+                            {new Date(s.assigned_at).toLocaleString("en-GB", {
+                              timeZone: "Asia/Kolkata",
+                              day: "2-digit",
+                              month: "short",
+                              year: "numeric",
+                              hour: "2-digit",
+                              minute: "2-digit",
+                              hour12: false,
+                            })}
+                          </td>
+                          <td className="px-4 py-3 text-xs text-text-primary font-mono">
+                            {s.team_code || s.team_id.slice(0, 8)}
+                          </td>
+                          <td className="px-4 py-3 text-xs text-text-primary truncate max-w-[200px]">
+                            {s.team_name}
+                          </td>
+                          <td className="px-4 py-3 text-xs text-accent-primary font-mono font-bold">
+                            {s.ps_reference_number || "N/A"}
+                          </td>
+                          <td className="px-4 py-3 text-xs text-text-primary truncate max-w-[260px]">
+                            {s.ps_title}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+
+            <div className="border-t border-border-color px-6 py-4 flex items-center justify-between">
+              <span className="text-[10px] text-text-secondary/50 font-mono">
+                Timestamp in Asia/Kolkata timezone
+              </span>
+              <button
+                onClick={() => setViewSubmissionsOpen(false)}
+                className="px-4 py-2 border border-border-color text-text-secondary text-xs uppercase font-bold rounded hover:text-text-primary hover:bg-surface-color/30"
+              >
+                Done
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
         </div>
       )}
 
@@ -2962,11 +3273,10 @@ export default function ContentHubClientView({
               <button
                 type="button"
                 onClick={() => setActivityTimerMode("countdown")}
-                className={`py-2 px-3 rounded text-xs font-bold uppercase tracking-wider transition-all ${
-                  activityTimerMode === "countdown"
+                className={`py-2 px-3 rounded text-xs font-bold uppercase tracking-wider transition-all ${activityTimerMode === "countdown"
                     ? "bg-accent-secondary text-black shadow-md"
                     : "text-text-secondary hover:text-text-primary"
-                }`}
+                  }`}
               >
                 Countdown Duration
               </button>
@@ -2979,11 +3289,10 @@ export default function ContentHubClientView({
                     setActivityTimerDate(d.toISOString().slice(0, 16));
                   }
                 }}
-                className={`py-2 px-3 rounded text-xs font-bold uppercase tracking-wider transition-all ${
-                  activityTimerMode === "datetime"
+                className={`py-2 px-3 rounded text-xs font-bold uppercase tracking-wider transition-all ${activityTimerMode === "datetime"
                     ? "bg-accent-secondary text-black shadow-md"
                     : "text-text-secondary hover:text-text-primary"
-                }`}
+                  }`}
               >
                 Date &amp; Time
               </button>
@@ -3002,11 +3311,10 @@ export default function ContentHubClientView({
                         key={mins}
                         type="button"
                         onClick={() => setActivityTimerMinutes(mins)}
-                        className={`py-2 px-2 text-xs font-mono font-bold rounded border transition-all ${
-                          activityTimerMinutes === mins
+                        className={`py-2 px-2 text-xs font-mono font-bold rounded border transition-all ${activityTimerMinutes === mins
                             ? "border-accent-secondary bg-accent-secondary/20 text-accent-secondary shadow-[0_0_10px_rgba(255,0,127,0.2)]"
                             : "border-border-color bg-surface-color text-text-secondary hover:text-text-primary hover:border-text-secondary"
-                        }`}
+                          }`}
                       >
                         {mins >= 60 ? `${mins / 60}h` : `${mins}m`}
                       </button>
@@ -3152,7 +3460,7 @@ export default function ContentHubClientView({
           </div>
         </div>
       )}
-{activityModalOpen && (
+      {activityModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
           <div className="bg-surface-color border border-border-color rounded-lg w-full max-w-lg p-6 space-y-4 shadow-2xl">
             <div className="flex items-start justify-between border-b border-border-color pb-3">
@@ -3307,91 +3615,91 @@ export default function ContentHubClientView({
                 </div>
               </div>
 
-                {selectedActivity.type === "problem_statements" && (
-                  <div>
-                    <label className="block text-[10px] uppercase tracking-wider text-text-secondary mb-1.5">
-                      Domain / Track
-                    </label>
+              {selectedActivity.type === "problem_statements" && (
+                <div>
+                  <label className="block text-[10px] uppercase tracking-wider text-text-secondary mb-1.5">
+                    Domain / Track
+                  </label>
+                  <input
+                    value={itemForm.domain}
+                    onChange={(event) =>
+                      setItemForm({ ...itemForm, domain: event.target.value })
+                    }
+                    placeholder="e.g. Artificial Intelligence"
+                    className="w-full px-3 py-2.5 bg-surface-color-light border border-border-color rounded text-xs text-text-primary focus:border-accent-secondary outline-none"
+                  />
+                </div>
+              )}
+              {/* New team‑limit field – only relevant for problem statements */}
+              {selectedActivity.type === "problem_statements" && (
+                <div>
+                  <label className="block text-[10px] uppercase tracking-wider text-text-secondary mb-1.5">
+                    Team Limit (optional)
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    value={itemForm.teamLimit}
+                    onChange={(e) =>
+                      setItemForm({ ...itemForm, teamLimit: e.target.value })
+                    }
+                    placeholder="Leave empty for unlimited"
+                    className="w-full px-3 py-2.5 bg-surface-color-light border border-border-color rounded text-xs text-text-primary focus:border-accent-secondary outline-none"
+                  />
+                  {/* Enable selection and manual lock checkboxes */}
+                  <label className="inline-flex items-center mt-2">
                     <input
-                      value={itemForm.domain}
-                      onChange={(event) =>
-                        setItemForm({ ...itemForm, domain: event.target.value })
-                      }
-                      placeholder="e.g. Artificial Intelligence"
-                      className="w-full px-3 py-2.5 bg-surface-color-light border border-border-color rounded text-xs text-text-primary focus:border-accent-secondary outline-none"
-                    />
-                  </div>
-                )}
-                {/* New team‑limit field – only relevant for problem statements */}
-                {selectedActivity.type === "problem_statements" && (
-                  <div>
-                    <label className="block text-[10px] uppercase tracking-wider text-text-secondary mb-1.5">
-                      Team Limit (optional)
-                    </label>
-                    <input
-                      type="number"
-                      min="1"
-                      value={itemForm.teamLimit}
+                      type="checkbox"
+                      checked={itemForm.enableSelection}
                       onChange={(e) =>
-                        setItemForm({ ...itemForm, teamLimit: e.target.value })
+                        setItemForm({ ...itemForm, enableSelection: e.target.checked })
                       }
-                      placeholder="Leave empty for unlimited"
-                      className="w-full px-3 py-2.5 bg-surface-color-light border border-border-color rounded text-xs text-text-primary focus:border-accent-secondary outline-none"
+                      className="mr-2"
                     />
-                    {/* Enable selection and manual lock checkboxes */}
-                    <label className="inline-flex items-center mt-2">
+                    Enable Team Selection
+                  </label>
+                  <label className="inline-flex items-center mt-2">
+                    <input
+                      type="checkbox"
+                      checked={itemForm.manualLock}
+                      onChange={(e) =>
+                        setItemForm({ ...itemForm, manualLock: e.target.checked })
+                      }
+                      className="mr-2"
+                    />
+                    Manual Lock
+                  </label>
+                  {/* Selection window controls */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
+                    <div>
+                      <label className="block text-[10px] uppercase tracking-wider text-text-secondary mb-1.5">
+                        Selection Opening (optional)
+                      </label>
                       <input
-                        type="checkbox"
-                        checked={itemForm.enableSelection}
+                        type="datetime-local"
+                        value={itemForm.selectionOpening}
                         onChange={(e) =>
-                          setItemForm({ ...itemForm, enableSelection: e.target.checked })
+                          setItemForm({ ...itemForm, selectionOpening: e.target.value })
                         }
-                        className="mr-2"
+                        className="w-full px-3 py-2.5 bg-surface-color-light border border-border-color rounded text-xs text-text-primary focus:border-accent-secondary outline-none"
                       />
-                      Enable Team Selection
-                    </label>
-                    <label className="inline-flex items-center mt-2">
+                    </div>
+                    <div>
+                      <label className="block text-[10px] uppercase tracking-wider text-text-secondary mb-1.5">
+                        Selection Closing (optional)
+                      </label>
                       <input
-                        type="checkbox"
-                        checked={itemForm.manualLock}
+                        type="datetime-local"
+                        value={itemForm.selectionClosing}
                         onChange={(e) =>
-                          setItemForm({ ...itemForm, manualLock: e.target.checked })
+                          setItemForm({ ...itemForm, selectionClosing: e.target.value })
                         }
-                        className="mr-2"
+                        className="w-full px-3 py-2.5 bg-surface-color-light border border-border-color rounded text-xs text-text-primary focus:border-accent-secondary outline-none"
                       />
-                      Manual Lock
-                    </label>
-                    {/* Selection window controls */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
-                      <div>
-                        <label className="block text-[10px] uppercase tracking-wider text-text-secondary mb-1.5">
-                          Selection Opening (optional)
-                        </label>
-                        <input
-                          type="datetime-local"
-                          value={itemForm.selectionOpening}
-                          onChange={(e) =>
-                            setItemForm({ ...itemForm, selectionOpening: e.target.value })
-                          }
-                          className="w-full px-3 py-2.5 bg-surface-color-light border border-border-color rounded text-xs text-text-primary focus:border-accent-secondary outline-none"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-[10px] uppercase tracking-wider text-text-secondary mb-1.5">
-                          Selection Closing (optional)
-                        </label>
-                        <input
-                          type="datetime-local"
-                          value={itemForm.selectionClosing}
-                          onChange={(e) =>
-                            setItemForm({ ...itemForm, selectionClosing: e.target.value })
-                          }
-                          className="w-full px-3 py-2.5 bg-surface-color-light border border-border-color rounded text-xs text-text-primary focus:border-accent-secondary outline-none"
-                        />
-                      </div>
                     </div>
                   </div>
-                )}
+                </div>
+              )}
 
 
               {selectedActivity.type === "certificates" && (
@@ -4052,11 +4360,10 @@ export default function ContentHubClientView({
               <button
                 type="button"
                 onClick={() => setActivityTimerMode("countdown")}
-                className={`py-2 px-3 rounded text-xs font-bold uppercase tracking-wider transition-all ${
-                  activityTimerMode === "countdown"
+                className={`py-2 px-3 rounded text-xs font-bold uppercase tracking-wider transition-all ${activityTimerMode === "countdown"
                     ? "bg-accent-secondary text-black shadow-md"
                     : "text-text-secondary hover:text-text-primary"
-                }`}
+                  }`}
               >
                 Countdown Duration
               </button>
@@ -4069,11 +4376,10 @@ export default function ContentHubClientView({
                     setActivityTimerDate(d.toISOString().slice(0, 16));
                   }
                 }}
-                className={`py-2 px-3 rounded text-xs font-bold uppercase tracking-wider transition-all ${
-                  activityTimerMode === "datetime"
+                className={`py-2 px-3 rounded text-xs font-bold uppercase tracking-wider transition-all ${activityTimerMode === "datetime"
                     ? "bg-accent-secondary text-black shadow-md"
                     : "text-text-secondary hover:text-text-primary"
-                }`}
+                  }`}
               >
                 Date & Time
               </button>
@@ -4092,11 +4398,10 @@ export default function ContentHubClientView({
                         key={mins}
                         type="button"
                         onClick={() => setActivityTimerMinutes(mins)}
-                        className={`py-2 px-2 text-xs font-bold rounded border transition-all ${
-                          activityTimerMinutes === mins
+                        className={`py-2 px-2 text-xs font-bold rounded border transition-all ${activityTimerMinutes === mins
                             ? "border-accent-secondary bg-accent-secondary/20 text-accent-secondary shadow-[0_0_10px_rgba(255,0,127,0.2)]"
                             : "border-border-color bg-surface-color text-text-secondary hover:text-text-primary hover:border-text-secondary"
-                        }`}
+                          }`}
                       >
                         {mins >= 60 ? `${mins / 60}h` : `${mins}m`}
                       </button>
@@ -4351,6 +4656,83 @@ export default function ContentHubClientView({
           </div>
         </div>
       )}
+
+      {/* Publish For Selection Confirmation Modal */}
+      {selectionActivationConfirm && selectionActivationConfirm.open && (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/85 backdrop-blur-sm p-4">
+          <div className="bg-surface-color border border-accent-secondary/50 rounded-lg w-full max-w-sm p-6 space-y-4 shadow-2xl">
+            <div className="flex items-start justify-between border-b border-border-color pb-3">
+              <h3 className="font-heading text-lg text-text-primary uppercase m-0 flex items-center gap-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-accent-secondary animate-pulse" />
+                Publish For Selection?
+              </h3>
+              <button
+                onClick={() => setSelectionActivationConfirm(null)}
+                className="text-text-secondary hover:text-text-primary"
+              >
+                <X size={18} />
+              </button>
+            </div>
+            <div className="space-y-3">
+              <p className="text-xs text-text-secondary leading-relaxed">
+                Activating selection will allow eligible teams to choose from the published problem statements, strictly respecting each statement&apos;s available team capacity.
+              </p>
+              <div className="space-y-2 text-xs p-3 rounded-lg bg-surface-color-light/40 border border-border-color">
+                <div className="flex justify-between items-center">
+                  <span className="text-text-secondary">Eligible published statements:</span>
+                  <span className="font-bold text-accent-secondary font-mono">{selectionActivationConfirm.eligibleCount}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-text-secondary">Already in selection:</span>
+                  <span className="font-bold text-text-primary font-mono">{selectionActivationConfirm.alreadySelectedCount}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-text-secondary">Excluded (drafts/unpublished):</span>
+                  <span className="font-bold text-status-warning font-mono">{selectionActivationConfirm.excludedCount}</span>
+                </div>
+                {selectionActivationConfirm.selectionDuration && (
+                  <div className="flex justify-between items-center">
+                    <span className="text-text-secondary">Selection duration:</span>
+                    <span className="font-bold text-accent-primary font-mono">{selectionActivationConfirm.selectionDuration}</span>
+                  </div>
+                )}
+                <div className="flex justify-between items-center">
+                  <span className="text-text-secondary">Timezone:</span>
+                  <span className="font-bold text-text-primary font-mono">{selectionActivationConfirm.timezone}</span>
+                </div>
+              </div>
+              <div className="flex justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setSelectionActivationConfirm(null)}
+                  className="px-4 py-2 border border-border-color text-text-secondary text-xs uppercase font-bold rounded hover:text-text-primary transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={confirmSelectionActivation}
+                  disabled={selectionActivationLoading}
+                  className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-accent-secondary to-[#d0006f] text-white text-xs uppercase font-bold rounded hover:opacity-90 disabled:opacity-50 transition-all shadow-[0_0_15px_rgba(255,0,127,0.3)]"
+                >
+                  {selectionActivationLoading ? (
+                    <>
+                      <Loader2 size={13} className="animate-spin" />
+                      <span>Activating...</span>
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle2 size={13} />
+                      <span>Publish For Selection</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {formPublishConfirmOpen && formPublishConfirmItem && (
         <PublishConfirmationModal
           open={formPublishConfirmOpen}
