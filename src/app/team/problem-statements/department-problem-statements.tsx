@@ -27,6 +27,7 @@ interface DepartmentProblemStatementsProps {
   initialStatements: any[];
   initialCounts: Record<string, number>;
   defaultDepartment: Department | null;
+  teamSelection: string | null;
 }
 
 // Map department filter to database department values
@@ -77,6 +78,7 @@ export default function DepartmentProblemStatements({
   initialStatements,
   initialCounts,
   defaultDepartment,
+  teamSelection,
 }: DepartmentProblemStatementsProps) {
   // Default to CSE/AIML if no department specified
   const [activeDepartment, setActiveDepartment] = useState<Department>(defaultDepartment || "cse-aiml");
@@ -229,7 +231,7 @@ export default function DepartmentProblemStatements({
       {!loading && statements.length > 0 && (
         <div className="grid gap-4">
           {statements.map((stmt: any) => (
-            <StatementCard key={stmt.id} stmt={stmt} assignedCount={counts[stmt.id] ?? 0} />
+            <StatementCard key={stmt.id} stmt={stmt} assignedCount={counts[stmt.id] ?? 0} teamSelection={teamSelection} />
           ))}
         </div>
       )}

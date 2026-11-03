@@ -30,6 +30,7 @@ interface Statement {
 interface Props {
   stmt: Statement;
   assignedCount: number;
+  teamSelection: string | null;
 }
 
 function formatMs(ms: number): string {
@@ -50,7 +51,7 @@ const subscribeTime = (callback: () => void) => {
 const getClientTime = () => Date.now();
 const getServerTime = () => 0;
 
-export default function StatementCard({ stmt, assignedCount }: Props) {
+export default function StatementCard({ stmt, assignedCount, teamSelection }: Props) {
   const now = useSyncExternalStore(subscribeTime, getClientTime, getServerTime);
   const [expanded, setExpanded] = useState(false);
 
@@ -70,7 +71,13 @@ export default function StatementCard({ stmt, assignedCount }: Props) {
   const remainingMs = now !== null && activated && now < activated ? activated - now : 0;
   const full = stmt.team_limit != null && assignedCount >= stmt.team_limit;
 
-  const disableSelect = !isOpen || full || stmt.manual_lock;
+  // Check if this team has already selected this statement
+  const isSelectedByTeam = teamSelection === stmt.id;
+  // Check if this team has selected a different statement
+  const hasOtherSelection = teamSelection !== null && teamSelection !== stmt.id;
+
+  // Disable select if: not open, full, manual lock, already selected by this team, or team has another selection
+  const disableSelect = !isOpen || full || stmt.manual_lock || isSelectedByTeam || hasOtherSelection;
 
   return (
     <article className="glass-panel p-4 sm:p-6 border border-border-color hover:border-accent-secondary/40 transition-all rounded-xl flex flex-col justify-between gap-4">
@@ -161,7 +168,19 @@ export default function StatementCard({ stmt, assignedCount }: Props) {
       {/* Footer Details & Action Button */}
       <div className="pt-3 border-t border-border-color/60 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-3 text-xs text-text-secondary">
-          {stmt.team_limit != null && (
+          {isSelectedByTeam && (
+            <span className="inline-flex items-center gap-1.5 font-tech text-status-success font-bold">
+              <BookOpen size={13} className="text-status-success" />
+              <span>SELECTED</span>
+            </span>
+          )}
+          {hasOtherSelection && !isSelectedByTeam && (
+            <span className="inline-flex items-center gap-1.5 font-tech text-status-warning font-bold">
+              <AlertCircle size={13} className="text-status-warning" />
+              <span>LOCKED — Your team selected another PS</span>
+            </span>
+          )}
+          {!isSelectedByTeam && !hasOtherSelection && stmt.team_limit != null && (
             <span className={`inline-flex items-center gap-1.5 font-tech ${full ? "text-status-error font-bold" : ""}`}>
               <Users size={13} className={full ? "text-status-error" : "text-accent-secondary"} />
               <span>{assignedCount} / {stmt.team_limit} Teams Allotted</span>
@@ -180,6 +199,7 @@ export default function StatementCard({ stmt, assignedCount }: Props) {
             statementId={stmt.id}
             statementTitle={stmt.title}
             disabled={disableSelect}
+            isSelected={isSelectedByTeam}
           />
         </div>
       </div>

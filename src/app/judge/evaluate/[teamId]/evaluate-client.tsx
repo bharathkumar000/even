@@ -268,8 +268,13 @@ export default function EvaluateClientView({
       );
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err || "");
+      console.error("[Evaluation submit error]:", {
+        error: msg,
+        round_id: activeRound?.id,
+        team_id: teamId,
+      });
       if (msg.includes("441") || msg.includes("Server Components render")) {
-        setErrorMsg("Server error processing evaluation. Please verify your judge assignment and network connection.");
+        setErrorMsg("Server error processing evaluation. Please check your network connection and try again.");
       } else {
         setErrorMsg(msg || "Failed to process evaluation");
       }

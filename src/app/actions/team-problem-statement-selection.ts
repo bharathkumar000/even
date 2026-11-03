@@ -31,6 +31,24 @@ export async function selectProblemStatement(
       return { success: false, error: "Too many selection attempts. Please try again later." };
     }
 
+    // Check if team already has a selection
+    const { data: existingAssignment, error: existingError } = await supabaseAdmin
+      .from("team_problem_statement_assignments")
+      .select("problem_statement_id")
+      .eq("team_id", teamId)
+      .maybeSingle();
+
+    if (existingError) {
+      return { success: false, error: "Failed to check existing selection." };
+    }
+
+    if (existingAssignment) {
+      return {
+        success: false,
+        error: "Your team has already selected a Problem Statement. This selection is final and cannot be changed.",
+      };
+    }
+
     // Fetch the problem statement details
     const { data: statement, error } = await supabaseAdmin
       .from("problem_statements")
@@ -80,19 +98,23 @@ export async function selectProblemStatement(
       }
     }
 
-    // Attempt to allocate – upsert ensures a single assignment per team.
+    // Insert new assignment (INSERT only - no upsert, so DB unique constraint enforces one per team)
     const { error: assignmentError } = await supabaseAdmin
       .from("team_problem_statement_assignments")
-      .upsert(
-        {
-          team_id: teamId,
-          problem_statement_id: statementId,
-          assigned_at: new Date().toISOString(),
-        },
-        { onConflict: "team_id" }
-      );
+      .insert({
+        team_id: teamId,
+        problem_statement_id: statementId,
+        assigned_at: new Date().toISOString(),
+      });
 
     if (assignmentError) {
+      // Check if it's a unique constraint violation (team already selected)
+      if (assignmentError.code === "23505" || assignmentError.message?.includes("duplicate")) {
+        return {
+          success: false,
+          error: "Your team has already selected a Problem Statement. This selection is final and cannot be changed.",
+        };
+      }
       return { success: false, error: assignmentError.message };
     }
 
