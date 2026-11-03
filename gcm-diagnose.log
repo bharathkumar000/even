@@ -1,0 +1,210 @@
+﻿Diagnose log at 2026-11-03T13:56:07Z
+
+AppPath: C:\Program Files\Git\mingw64\bin\git-credential-manager.exe
+InstallDir: C:\Program Files\Git\mingw64\bin\
+Version: 2.6.1+786ab03440ddc82e807a97c0e540f5247e44cec6
+
+------------
+Diagnostic: Environment
+Skipped: False
+Success: True
+Exception: None
+Log:
+OSType: Windows
+OSVersion: 10.0 (build 26200)
+Reading environment variables... OK
+ Variables:
+HOMEPATH=\Users\rishi
+DriverData=C:\Windows\System32\Drivers\DriverData
+COMPUTERNAME=RISHITH
+GIT_TRACE2_PARENT_SID=b6a1323d-4d6b-47e5-87a9-7611e217bfa1
+CommonProgramFiles(x86)=C:\Program Files (x86)\Common Files
+OneDrive=C:\Users\rishi\OneDrive
+EFC_9288_1592913036=1
+SESSIONNAME=Console
+TMP=C:\Users\rishi\AppData\Local\Temp
+ANTIGRAVITY_TRAJECTORY_ID=36d0d31d-7953-43ad-a344-150ba983a75d
+NODE_USE_SYSTEM_CA=1
+PATHEXT=.COM;.EXE;.BAT;.CMD;.VBS;.VBE;.JS;.JSE;.WSF;.WSH;.MSC;.CPL
+USERNAME=rishi
+CHROME_CRASHPAD_PIPE_NAME=\\.\pipe\crashpad_45032_KTMERGUCOMHVFKHO
+TEMP=C:\Users\rishi\AppData\Local\Temp
+LOCALAPPDATA=C:\Users\rishi\AppData\Local
+PUBLIC=C:\Users\Public
+PROCESSOR_IDENTIFIER=Intel64 Family 6 Model 154 Stepping 3, GenuineIntel
+GIT_EDITOR=false
+windir=C:\Windows
+USERDOMAIN=RISHITH
+ANTIGRAVITY_CONVERSATION_ID=d2955242-08bc-4941-83f8-ab81698fa013
+PROCESSOR_REVISION=9a03
+AGY_ENABLE_HUB=1
+WPSCLI_HOME=C:\Users\rishi\AppData\Local\Kingsoft\WPS Office\12.1.0.27458\clitool
+PROCESSOR_LEVEL=6
+NUMBER_OF_PROCESSORS=12
+VSCODE_IPC_HOOK=\\.\pipe\64c63929-1.107.0-main-sock
+APPDATA=C:\Users\rishi\AppData\Roaming
+JJ_EDITOR=false
+ANTIGRAVITY_CSRF_TOKEN=0375156e-14b0-4b5a-b7d7-4103d19dff98
+ProgramFiles(x86)=C:\Program Files (x86)
+ANTIGRAVITY_APP_DATA_DIR=C:/Users/rishi/.gemini/antigravity
+VSCODE_NLS_CONFIG={"userLocale":"en-us","osLocale":"en-in","resolvedLanguage":"en","defaultMessagesFile":"C:\\Users\\rishi\\AppData\\Local\\Programs\\Antigravity IDE\\resources\\app\\out\\nls.messages.json","locale":"en-us","availableLanguages":{}}
+CommonProgramFiles=C:\Program Files (x86)\Common Files
+VSCODE_ESM_ENTRYPOINT=vs/workbench/api/node/extensionHostProcess
+ANTIGRAVITY_VSCODE_HOST=1
+ANTIGRAVITY_LS_ADDRESS=localhost:53578
+ProgramData=C:\ProgramData
+ProgramW6432=C:\Program Files
+PATH=C:/Users/rishi/.gemini/antigravity/bin;C:\Program Files\Common Files\Oracle\Java\javapath;C:\Windows\system32;C:\Windows;C:\Windows\System32\Wbem;C:\Windows\System32\WindowsPowerShell\v1.0\;C:\Windows\System32\OpenSSH\;C:\Program Files\nodejs\;C:\Program Files\dotnet\;C:\Program Files\Git\cmd;C:\Windows\system32;C:\Windows;C:\Windows\System32\Wbem;C:\Windows\System32\WindowsPowerShell\v1.0\;C:\Windows\System32\OpenSSH\;C:\Program Files\nodejs\;C:\Program Files\dotnet\;C:\Program Files\Git\cmd;C:\Users\rishi\AppData\Local\Microsoft\WindowsApps;C:\Users\rishi\AppData\Local\Programs\Microsoft VS Code\bin;C:\Users\rishi\AppData\Roaming\npm;C:\Users\rishi\AppData\Local\Programs\Antigravity\bin;C:\src\flutter\bin;C:\Users\rishi\.dotnet\tools;C:\Users\rishi\AppData\Local\Programs\Ollama;C:\Users\rishi\AppData\Local\Programs\Kiro\bin;C:\Users\rishi\AppData\Local\Programs\Antigravity IDE\bin;C:\Users\rishi\AppData\Local\Kingsoft\WPS Office\12.1.0.27458\clitool;C:\Users\rishi\AppData\Local\Microsoft\WinGet\Links;C:\Users\rishi\AppData\Local\Microsoft\WinGet\Links;C:\Users\rishi\AppData\Local\Microsoft\WinGet\Links;C:\Users\rishi\AppData\Local\Microsoft\WinGet\Links;
+ProgramFiles=C:\Program Files (x86)
+VSCODE_L10N_BUNDLE_LOCATION=
+EFC_9288_4126798990=1
+VSCODE_CODE_CACHE_PATH=C:\Users\rishi\AppData\Roaming\Antigravity IDE\CachedData\9e3a5da5d6731effd57d47d88bbe5df14ac6ccdd
+ANTIGRAVITY_PROJECT_ID=d67ca848-b7d6-4ce4-983e-f4573e5d1332
+HGEDITOR=false
+ANTIGRAVITY_SOURCE_METADATA={"tool":{"conversationId":"d2955242-08bc-4941-83f8-ab81698fa013", "stepIndex":1047, "toolCall":{"id":"call_1254637", "name":"run_command", "argumentsJson":"{\"CommandLine\":\"\\u0026 \\\"C:\\\\Program Files\\\\Git\\\\mingw64\\\\bin\\\\git-credential-manager.exe\\\" diagnose\",\"WaitMsBeforeAsync\":5000,\"toolSummary\":\"Run GCM diagnose\"}"}}}
+HOME=C:\Users\rishi
+ANTIGRAVITY_AGENT=1
+SystemRoot=C:\Windows
+EFC_9288_344590478=1
+ZES_ENABLE_SYSMAN=1
+LOGONSERVER=\\RISHITH
+VSCODE_CWD=C:\Users\rishi\AppData\Local\Programs\Antigravity IDE
+USERPROFILE=C:\Users\rishi
+CommonProgramW6432=C:\Program Files\Common Files
+ANTIGRAVITY_AUTH_SUCCESS_APP=antigravity-ide
+USERDOMAIN_ROAMINGPROFILE=RISHITH
+ANTIGRAVITY_AGENTAPI_EXE=C:\Users\rishi\.gemini\bin\agy.exe
+HOMEDRIVE=C:
+VSCODE_PID=45032
+PSModulePath=C:\Users\rishi\OneDrive\Documents\WindowsPowerShell\Modules;C:\Program Files\WindowsPowerShell\Modules;C:\Windows\system32\WindowsPowerShell\v1.0\Modules
+ELECTRON_RUN_AS_NODE=1
+ANTIGRAVITY_LS_VERSION=cli-2.28.2
+PROCESSOR_ARCHITEW6432=AMD64
+PROCESSOR_ARCHITECTURE=x86
+OS=Windows_NT
+ComSpec=C:\Windows\system32\cmd.exe
+VSCODE_HANDLES_UNCAUGHT_ERRORS=true
+SystemDrive=C:
+VSCODE_CRASH_REPORTER_PROCESS_TYPE=extensionHost
+OneDriveConsumer=C:\Users\rishi\OneDrive
+ALLUSERSPROFILE=C:\ProgramData
+
+
+------------
+Diagnostic: File system
+Skipped: False
+Success: True
+Exception: None
+Log:
+Temporary directory is 'C:\Users\rishi\AppData\Local\Temp\'...
+Checking basic file I/O...
+Writing to temporary file 'C:\Users\rishi\AppData\Local\Temp\c4a04fbeaf88fb1ad6fc8b9c'... OK
+Reading from temporary file 'C:\Users\rishi\AppData\Local\Temp\c4a04fbeaf88fb1ad6fc8b9c'... OK
+Deleting temporary file 'C:\Users\rishi\AppData\Local\Temp\c4a04fbeaf88fb1ad6fc8b9c'... OK
+Testing IFileSystem instance...
+UserHomePath: C:\Users\rishi
+UserDataDirectoryPath: C:\Users\rishi\.gcm
+GetCurrentDirectory(): C:\Projects\IVC-PULSE
+
+------------
+Diagnostic: Networking
+Skipped: False
+Success: True
+Exception: None
+Log:
+Checking networking and HTTP stack...
+Creating HTTP client... OK
+IsNetworkAvailable: True
+Sending HEAD request to http://example.com...Sending HEAD request to https://example.com... OK
+ OK
+Acquiring free TCP port... OK
+Testing local HTTP loopback connections...
+Creating new HTTP listener for http://localhost:55700/... OK
+Waiting for loopback connection... OK
+Writing response... OK
+Waiting for response data... OK
+Loopback connection data OK
+
+------------
+Diagnostic: Git
+Skipped: False
+Success: True
+Exception: None
+Log:
+Getting Git version... OK
+Git version is '2.52.0.windows.1'
+Locating current repository...Git repository at 'C:/Projects/IVC-PULSE/.git'
+ OK
+Listing all Git configuration... OK
+Git configuration:
+file:C:/Program Files/Git/etc/gitconfig	diff.astextplain.textconv=astextplain
+file:C:/Program Files/Git/etc/gitconfig	filter.lfs.clean=git-lfs clean -- %f
+file:C:/Program Files/Git/etc/gitconfig	filter.lfs.smudge=git-lfs smudge -- %f
+file:C:/Program Files/Git/etc/gitconfig	filter.lfs.process=git-lfs filter-process
+file:C:/Program Files/Git/etc/gitconfig	filter.lfs.required=true
+file:C:/Program Files/Git/etc/gitconfig	http.sslbackend=schannel
+file:C:/Program Files/Git/etc/gitconfig	core.autocrlf=true
+file:C:/Program Files/Git/etc/gitconfig	core.fscache=true
+file:C:/Program Files/Git/etc/gitconfig	core.symlinks=false
+file:C:/Program Files/Git/etc/gitconfig	pull.rebase=false
+file:C:/Program Files/Git/etc/gitconfig	credential.helper=manager
+file:C:/Program Files/Git/etc/gitconfig	credential.https://dev.azure.com.usehttppath=true
+file:C:/Program Files/Git/etc/gitconfig	init.defaultbranch=master
+file:C:/Users/rishi/.gitconfig	user.email=rishithsgowda22@gmail.com
+file:C:/Users/rishi/.gitconfig	user.name=rishithsgowda13
+file:.git/config	core.repositoryformatversion=0
+file:.git/config	core.filemode=false
+file:.git/config	core.bare=false
+file:.git/config	core.logallrefupdates=true
+file:.git/config	core.symlinks=false
+file:.git/config	core.ignorecase=true
+file:.git/config	remote.origin.url=https://github.com/rishithsgowda13/IVC-EVENTRA.git
+file:.git/config	remote.origin.fetch=+refs/heads/*:refs/remotes/origin/*
+file:.git/config	branch.main.vscode-merge-base=origin/main
+file:.git/config	branch.main.remote=origin
+file:.git/config	branch.main.merge=refs/heads/main
+file:.git/config	remote.upstream.url=https://github.com/Innovators-and-Visionaries-Club/IVC-EVENTRA.git
+file:.git/config	remote.upstream.fetch=+refs/heads/*:refs/remotes/upstream/*
+file:.git/config	branch.bha.remote=upstream
+file:.git/config	branch.bha.vscode-merge-base=upstream/bha
+file:.git/config	branch.bha.merge=refs/heads/bha
+file:.git/config	http.postbuffer=524288000
+file:.git/config	http.lowspeedlimit=1000
+file:.git/config	http.lowspeedtime=300
+
+
+------------
+Diagnostic: Credential storage
+Skipped: False
+Success: True
+Exception: None
+Log:
+ICredentialStore instance is of type: CredentialStore
+Writing test credential... OK
+Reading test credential... OK
+Deleting test credential... OK
+
+------------
+Diagnostic: Microsoft authentication (AAD/MSA)
+Skipped: False
+Success: True
+Exception: None
+Log:
+Broker is not enabled.
+Flow type is: Auto
+Gathering MSAL token cache data... OK
+CacheDirectory: C:\Users\rishi\AppData\Local\.IdentityService
+CacheFileName: msal.cache
+CacheFilePath: C:\Users\rishi\AppData\Local\.IdentityService\msal.cache
+Creating cache helper... OK
+Verifying MSAL token cache persistence... OK
+
+------------
+Diagnostic: GitHub API
+Skipped: False
+Success: True
+Exception: None
+Log:
+Using 'https://github.com/' as API target.
+Querying '/meta' endpoint... OK
+
