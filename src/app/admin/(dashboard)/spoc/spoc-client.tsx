@@ -146,24 +146,30 @@ export default function SpocClientView({
 
   // Filtered teams for allotment (Exclusive rule applied)
   const filteredTeams = useMemo(() => {
-    return teams.filter((t) => {
-      if (trackFilter !== "all" && t.track !== trackFilter) return false;
+    return teams
+      .filter((t) => {
+        if (trackFilter !== "all" && t.track !== trackFilter) return false;
 
-      // Exclusion rule: If team is allotted to ANOTHER SPOC, hide unless showOtherAssigned is true
-      const isAssignedToOther = t.assigned_spoc_id && t.assigned_spoc_id !== selectedSpocId;
-      const isStagedInThis = stagedTeamIds.has(t.id);
+        // Exclusion rule: If team is allotted to ANOTHER SPOC, hide unless showOtherAssigned is true
+        const isAssignedToOther = t.assigned_spoc_id && t.assigned_spoc_id !== selectedSpocId;
+        const isStagedInThis = stagedTeamIds.has(t.id);
 
-      if (!showOtherAssigned && isAssignedToOther && !isStagedInThis) {
-        return false;
-      }
+        if (!showOtherAssigned && isAssignedToOther && !isStagedInThis) {
+          return false;
+        }
 
-      const q = teamSearch.toLowerCase().trim();
-      if (!q) return true;
-      return (
-        t.name.toLowerCase().includes(q) ||
-        t.code?.toLowerCase().includes(q)
-      );
-    });
+        const q = teamSearch.toLowerCase().trim();
+        if (!q) return true;
+        return (
+          t.name.toLowerCase().includes(q) ||
+          t.code?.toLowerCase().includes(q)
+        );
+      })
+      .sort((a, b) => {
+        const idA = a.code || a.id || "";
+        const idB = b.code || b.id || "";
+        return idA.localeCompare(idB, undefined, { numeric: true, sensitivity: "base" });
+      });
   }, [teams, teamSearch, trackFilter, selectedSpocId, showOtherAssigned, stagedTeamIds]);
 
   // Helper to format WhatsApp URL
@@ -555,7 +561,7 @@ export default function SpocClientView({
                   : "No staff members match your search or filter."}
               </div>
             ) : (
-              filteredSpocs.map((s) => {
+              filteredSpocs.map((s, idx) => {
                 const isSelected = s.id === selectedSpocId;
                 const count = s.assigned_team_ids.length;
                 const waLink = getWhatsAppLink(s.phone, s.name);
@@ -571,6 +577,9 @@ export default function SpocClientView({
                     }`}
                   >
                     <div className="flex items-center gap-3">
+                      <span className="font-mono text-xs font-bold text-accent-secondary/80 shrink-0 min-w-[24px]">
+                        #{idx + 1}
+                      </span>
                       {/* Avatar preview */}
                       <div className="relative shrink-0 w-10 h-10 rounded-full overflow-hidden border border-border-color bg-surface-color-light flex items-center justify-center">
                         {s.avatar_url ? (
@@ -803,7 +812,7 @@ export default function SpocClientView({
                     No unassigned teams available for allotment. All teams are allotted or filtered.
                   </div>
                 ) : (
-                  filteredTeams.map((team) => {
+                  filteredTeams.map((team, idx) => {
                     const isAssignedToThis = stagedTeamIds.has(team.id);
                     const isAssignedToOther =
                       team.assigned_spoc_id && team.assigned_spoc_id !== activeSpoc.id;
@@ -820,16 +829,19 @@ export default function SpocClientView({
                             : "bg-surface-color/40 border-border-color/70 hover:border-accent-primary/40 hover:bg-surface-color"
                         }`}
                       >
-                        <div className="space-y-1">
+                        <div className="space-y-1 min-w-0">
                           <div className="flex items-center gap-2">
-                            <span className="font-heading text-sm text-text-primary uppercase tracking-wide">
-                              {team.name}
+                            <span className="font-mono text-xs font-bold text-accent-primary shrink-0">
+                              #{idx + 1}
                             </span>
                             {team.code && (
-                              <span className="font-mono text-[10px] text-accent-tertiary px-1.5 py-0.2 bg-accent-tertiary/10 border border-accent-tertiary/30 rounded">
+                              <span className="font-mono text-[10px] text-accent-tertiary px-1.5 py-0.2 bg-accent-tertiary/10 border border-accent-tertiary/30 rounded shrink-0">
                                 {team.code}
                               </span>
                             )}
+                            <span className="font-heading text-sm text-text-primary uppercase tracking-wide truncate">
+                              {team.name}
+                            </span>
                           </div>
 
                           <div className="flex items-center gap-2 text-[10px] font-mono text-text-secondary">

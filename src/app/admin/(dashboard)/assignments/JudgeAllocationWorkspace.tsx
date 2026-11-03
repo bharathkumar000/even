@@ -118,27 +118,33 @@ export default function JudgeAllocationWorkspace({
     [allJudges, selectedJudgeId]
   );
 
-  // Build filtered + eligible teams for the right panel
+  // Build filtered + eligible teams for the right panel, sorted by Team ID (code or id)
   const filteredTeams = useMemo(() => {
     const query = searchQuery.toLowerCase();
-    return teams.filter((t) => {
-      const matchesSearch =
-        !query ||
-        t.team_name?.toLowerCase().includes(query) ||
-        t.team_code?.toLowerCase().includes(query);
-      const matchesTrack =
-        !trackFilter || t.track === trackFilter;
-      if (!matchesSearch || !matchesTrack) return false;
+    return teams
+      .filter((t) => {
+        const matchesSearch =
+          !query ||
+          t.team_name?.toLowerCase().includes(query) ||
+          t.team_code?.toLowerCase().includes(query);
+        const matchesTrack =
+          !trackFilter || t.track === trackFilter;
+        if (!matchesSearch || !matchesTrack) return false;
 
-      const assignedJudges = assignmentsMap.get(t.team_id) ?? [];
-      const alreadyAssignedToSelected =
-        selectedJudgeId && assignedJudges.includes(selectedJudgeId);
+        const assignedJudges = assignmentsMap.get(t.team_id) ?? [];
+        const alreadyAssignedToSelected =
+          selectedJudgeId && assignedJudges.includes(selectedJudgeId);
 
-      // If not showing already allotted, hide teams assigned to selected judge
-      if (!showAlreadyAllotted && alreadyAssignedToSelected) return false;
+        // If not showing already allotted, hide teams assigned to selected judge
+        if (!showAlreadyAllotted && alreadyAssignedToSelected) return false;
 
-      return true;
-    });
+        return true;
+      })
+      .sort((a, b) => {
+        const codeA = a.team_code || a.team_id || "";
+        const codeB = b.team_code || b.team_id || "";
+        return codeA.localeCompare(codeB, undefined, { numeric: true, sensitivity: "base" });
+      });
   }, [
     teams,
     searchQuery,
@@ -468,7 +474,7 @@ export default function JudgeAllocationWorkspace({
                   No judges found
                 </div>
               ) : (
-                filteredJudges.map((judge) => {
+                filteredJudges.map((judge, idx) => {
                   const isSelected = selectedJudgeId === judge.id;
                   return (
                     <div
@@ -482,7 +488,10 @@ export default function JudgeAllocationWorkspace({
                     >
                       <div className="flex items-center justify-between mb-1">
                         <div className="flex items-center gap-2">
-                          <div className="w-6 h-6 rounded-full bg-surface-color border border-border-color flex items-center justify-center font-mono text-[10px] text-accent-secondary">
+                          <span className="font-mono text-xs font-bold text-accent-secondary/80 shrink-0 min-w-[24px]">
+                            #{idx + 1}
+                          </span>
+                          <div className="w-6 h-6 rounded-full bg-surface-color border border-border-color flex items-center justify-center font-mono text-[10px] text-accent-secondary shrink-0">
                             {(judge.full_name?.charAt(0) || judge.email?.charAt(0) || "?")
                               .toUpperCase()}
                           </div>
@@ -647,7 +656,7 @@ export default function JudgeAllocationWorkspace({
                   </p>
                 </div>
               ) : (
-                filteredTeams.map((team) => {
+                filteredTeams.map((team, idx) => {
                   const status = getTeamStatus(team);
                   const statusInfo = statusConfig[status] ?? DEFAULT_STATUS;
                   const eligible = isTeamEligible(team);
@@ -672,8 +681,15 @@ export default function JudgeAllocationWorkspace({
                       }`}
                     >
                       <div className="flex items-center justify-between mb-2">
-                        <div className="w-6 h-6 rounded-full bg-surface-color border border-border-color flex items-center justify-center font-mono text-[9px] text-accent-secondary shrink-0">
-                          {team.team_code?.charAt(0) || team.team_name?.charAt(0) || "?"}
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-mono text-xs font-bold text-accent-secondary">
+                            #{idx + 1}
+                          </span>
+                          {team.team_code && (
+                            <span className="font-mono text-[9px] text-accent-tertiary px-1.5 py-0.5 bg-accent-tertiary/10 border border-accent-tertiary/30 rounded">
+                              {team.team_code}
+                            </span>
+                          )}
                         </div>
                         <span
                           className={`px-1.5 py-0.5 rounded text-[9px] font-mono font-bold ${
@@ -692,12 +708,12 @@ export default function JudgeAllocationWorkspace({
                         </span>
                       </div>
                       <div className="flex items-center justify-between mb-1">
-                        <div>
+                        <div className="min-w-0 pr-2">
                           <div className="font-heading text-xs text-text-primary m-0 truncate">
                             {team.team_name || "Unnamed Team"}
                           </div>
-                          <div className="text-[9px] text-text-secondary/60 font-mono m-0 uppercase">
-                            {team.team_code || team.team_id.slice(0, 8)}
+                          <div className="text-[9px] text-text-secondary/60 font-mono m-0 uppercase truncate">
+                            ID: {team.team_code || team.team_id.slice(0, 8)}
                           </div>
                         </div>
                         <input

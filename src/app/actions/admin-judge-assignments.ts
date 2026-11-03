@@ -55,7 +55,7 @@ export async function getJudgeAssignmentGrid(roundId: string): Promise<JudgeAssi
     supabaseAdmin
       .from("teams")
       .select("id, name, code, track")
-      .order("name", { ascending: true }),
+      .order("code", { ascending: true }),
     supabaseAdmin
       .from("judge_assignments")
       .select("judge_id, team_id, round_id")
@@ -70,7 +70,12 @@ export async function getJudgeAssignmentGrid(roundId: string): Promise<JudgeAssi
       .eq("round_id", roundId),
   ]);
 
-  const teams = teamsRes.data || [];
+  const rawTeams = teamsRes.data || [];
+  const teams = [...rawTeams].sort((a, b) => {
+    const codeA = a.code || a.id || "";
+    const codeB = b.code || b.id || "";
+    return codeA.localeCompare(codeB, undefined, { numeric: true, sensitivity: "base" });
+  });
   const assignments = assignmentsRes.data || [];
   const judges = judgesRes.data || [];
   const evaluations = evalsRes.data || [];
@@ -229,7 +234,7 @@ export async function getJudgeAssignmentsForRound(roundId: string): Promise<{
   await requireAdmin();
 
   const [teamsRes, assignmentsRes, judgesRes] = await Promise.all([
-    supabaseAdmin.from("teams").select("id, name, code, track").order("name", { ascending: true }),
+    supabaseAdmin.from("teams").select("id, name, code, track").order("code", { ascending: true }),
     supabaseAdmin
       .from("judge_assignments")
       .select("team_id, judge_id")
@@ -250,7 +255,12 @@ export async function getJudgeAssignmentsForRound(roundId: string): Promise<{
     return { assignments: [], error: judgesRes.error.message };
   }
 
-  const teams = teamsRes.data ?? [];
+  const rawTeams = teamsRes.data ?? [];
+  const teams = [...rawTeams].sort((a, b) => {
+    const codeA = a.code || a.id || "";
+    const codeB = b.code || b.id || "";
+    return codeA.localeCompare(codeB, undefined, { numeric: true, sensitivity: "base" });
+  });
   const rawAssignments = assignmentsRes.data ?? [];
   const judges = judgesRes.data ?? [];
 
@@ -494,12 +504,16 @@ export async function autoBalanceJudges(input: AutoBalanceInput): Promise<{
   // Get all teams
   const { data: teams, error: teamsError } = await supabaseAdmin
     .from("teams")
-    .select("id, name")
-    .order("name", { ascending: true });
+    .select("id, name, code")
+    .order("code", { ascending: true });
   if (teamsError) {
     throw new Error(`Failed to load teams: ${teamsError.message}`);
   }
-  const allTeams = teams ?? [];
+  const allTeams = [...(teams ?? [])].sort((a, b) => {
+    const codeA = a.code || a.id || "";
+    const codeB = b.code || b.id || "";
+    return codeA.localeCompare(codeB, undefined, { numeric: true, sensitivity: "base" });
+  });
 
   // Get all judges
   const { data: judges, error: judgesError } = await supabaseAdmin

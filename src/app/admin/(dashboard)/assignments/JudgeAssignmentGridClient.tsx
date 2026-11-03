@@ -75,8 +75,12 @@ export default function JudgeAssignmentGridClient({
   const [filter, setFilter] = useState<"all" | "unassigned" | "partial" | "complete">("all");
 
   const filteredRows = useMemo(() => {
-    if (filter === "all") return rows;
-    return rows.filter((r) => r.status === filter);
+    const list = filter === "all" ? rows : rows.filter((r) => r.status === filter);
+    return [...list].sort((a, b) => {
+      const codeA = a.team_code || a.team_id || "";
+      const codeB = b.team_code || b.team_id || "";
+      return codeA.localeCompare(codeB, undefined, { numeric: true, sensitivity: "base" });
+    });
   }, [rows, filter]);
 
   const counts = useMemo(() => {
@@ -428,6 +432,7 @@ export default function JudgeAssignmentGridClient({
         <table className="w-full text-left border-collapse">
           <thead>
             <tr className="bg-surface-color/60 border-b border-border-color">
+              <th className="px-3 py-3 text-[10px] font-mono font-bold uppercase tracking-wider text-text-secondary w-12 text-center">#</th>
               <th className="px-4 py-3 text-[10px] font-mono font-bold uppercase tracking-wider text-text-secondary w-1/3">Team</th>
               <th className="px-4 py-3 text-[10px] font-mono font-bold uppercase tracking-wider text-text-secondary">Judge 1</th>
               <th className="px-4 py-3 text-[10px] font-mono font-bold uppercase tracking-wider text-text-secondary">Judge 2</th>
@@ -438,13 +443,16 @@ export default function JudgeAssignmentGridClient({
           <tbody className="divide-y divide-border-color/50">
             {filteredRows.length === 0 ? (
               <tr>
-                <td colSpan={5} className="p-8 text-center text-text-secondary text-xs">
+                <td colSpan={6} className="p-8 text-center text-text-secondary text-xs">
                   No teams match the selected filter.
                 </td>
               </tr>
             ) : (
-              filteredRows.map((row) => (
+              filteredRows.map((row, idx) => (
                 <tr key={row.team_id} className="hover:bg-surface-color/30 transition-colors group">
+                  <td className="px-3 py-4 text-xs font-mono font-bold text-accent-secondary text-center">
+                    #{idx + 1}
+                  </td>
                   <td className="px-4 py-4">
                     <div className="font-heading text-sm text-text-primary m-0 uppercase tracking-wide">
                       {row.team_name}

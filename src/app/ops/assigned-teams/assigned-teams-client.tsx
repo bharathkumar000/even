@@ -109,21 +109,27 @@ export default function AssignedTeamsClientView({
     }
   }, [lastSynced]);
 
-  // Filtered teams
+  // Filtered teams, sorted by Team ID (code or id)
   const filteredTeams = useMemo(() => {
-    return teams.filter((team) => {
-      if (statusFilter !== "all" && team.status !== statusFilter) return false;
-      if (trackFilter !== "all" && team.track !== trackFilter) return false;
+    return teams
+      .filter((team) => {
+        if (statusFilter !== "all" && team.status !== statusFilter) return false;
+        if (trackFilter !== "all" && team.track !== trackFilter) return false;
 
-      const q = searchQuery.toLowerCase().trim();
-      if (!q) return true;
-      return (
-        team.name.toLowerCase().includes(q) ||
-        team.code?.toLowerCase().includes(q) ||
-        team.track?.toLowerCase().includes(q) ||
-        team.id.toLowerCase().includes(q)
-      );
-    });
+        const q = searchQuery.toLowerCase().trim();
+        if (!q) return true;
+        return (
+          team.name.toLowerCase().includes(q) ||
+          team.code?.toLowerCase().includes(q) ||
+          team.track?.toLowerCase().includes(q) ||
+          team.id.toLowerCase().includes(q)
+        );
+      })
+      .sort((a, b) => {
+        const codeA = a.code || a.id || "";
+        const codeB = b.code || b.id || "";
+        return codeA.localeCompare(codeB, undefined, { numeric: true, sensitivity: "base" });
+      });
   }, [teams, searchQuery, statusFilter, trackFilter]);
 
   const handleOpenDetail = (team: AssignedTeam) => {
@@ -367,7 +373,7 @@ export default function AssignedTeamsClientView({
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {filteredTeams.map((team) => (
+            {filteredTeams.map((team, idx) => (
               <article
                 key={team.id}
                 onClick={() => handleOpenDetail(team)}
@@ -375,15 +381,15 @@ export default function AssignedTeamsClientView({
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex items-start gap-3">
-                    <div className="w-10 h-10 rounded-lg bg-accent-primary/10 border border-accent-primary/30 flex items-center justify-center shrink-0">
-                      <Users className="w-5 h-5 text-accent-primary" />
+                    <div className="w-10 h-10 rounded-lg bg-accent-primary/10 border border-accent-primary/30 flex items-center justify-center shrink-0 font-mono text-xs font-bold text-accent-primary">
+                      #{idx + 1}
                     </div>
                     <div>
                       <h3 className="font-heading text-base text-text-primary uppercase tracking-wide m-0 truncate">
                         {team.name}
                       </h3>
                       <p className="text-xs text-text-secondary font-mono m-0 mt-0.5">
-                        {team.code ? `Code: ${team.code}` : "No code"}
+                        {team.code ? `ID: ${team.code}` : "No ID"}
                       </p>
                     </div>
                   </div>
