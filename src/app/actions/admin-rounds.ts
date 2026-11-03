@@ -1,7 +1,6 @@
 "use server";
 
 import { requireAdmin } from "@/lib/auth/admin";
-import { createClient } from "@/lib/supabase/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import {
   RoundSchema,
@@ -66,7 +65,7 @@ export async function createRound(
     }
 
     const validated = parsed.data;
-    const supabase = await createClient();
+    const supabase = supabaseAdmin;
 
     // Resolve event_id: verify that the event actually exists in the database.
     let eventId: string | null = validated.event_id || null;
@@ -176,7 +175,7 @@ export async function updateRoundStatus(
     const parsedStatus = RoundSchema.shape.status.safeParse(status);
     const validStatus = parsedStatus.success ? parsedStatus.data : "draft";
 
-    const supabase = await createClient();
+    const supabase = supabaseAdmin;
 
     // Fetch previous status for diffing
     const { data: previousRound } = await supabase
@@ -249,7 +248,7 @@ export async function updateRound(
       return { success: false, error: "Round title is required." };
     }
 
-    const supabase = await createClient();
+    const supabase = supabaseAdmin;
 
     const { data: round, error } = await supabase
       .from("evaluation_rounds")
@@ -313,7 +312,7 @@ export async function deleteRound(roundId: string, csrfToken?: string): Promise<
       return { success: false, error: "Valid round identifier is required." };
     }
 
-    const supabase = await createClient();
+    const supabase = supabaseAdmin;
 
     // Clean up evaluations and criteria associated with this round to prevent foreign key errors
     await supabase.from("evaluations").delete().eq("round_id", roundId);
@@ -379,7 +378,7 @@ export async function createCriterion(
     }
 
     const validated = parsed.data;
-    const supabase = await createClient();
+    const supabase = supabaseAdmin;
 
     // Verify round exists in database
     const { data: roundExists, error: roundCheckError } = await supabase
@@ -471,7 +470,7 @@ export async function updateCriterion(
     }
 
     const validated = parsed.data;
-    const supabase = await createClient();
+    const supabase = supabaseAdmin;
 
     const { data: criterion, error } = await supabase
       .from("evaluation_criteria")
@@ -521,7 +520,7 @@ export async function deleteCriterion(criterionId: string, csrfToken?: string): 
       await validateCsrfToken(csrfToken || null);
     } catch {}
 
-    const supabase = await createClient();
+    const supabase = supabaseAdmin;
 
     const { error } = await supabase
       .from("evaluation_criteria")
@@ -564,7 +563,7 @@ export async function deleteCriterion(criterionId: string, csrfToken?: string): 
 
 export async function getRoundsData() {
   const fetchRounds = async () => {
-    const supabase = await createClient();
+    const supabase = supabaseAdmin;
     const [roundsRes, criteriaRes] = await Promise.all([
       supabase
         .from("evaluation_rounds")
@@ -589,7 +588,7 @@ export async function getRoundsData() {
 
 export async function getEventsForDropdown() {
   try {
-    const supabase = await createClient();
+    const supabase = supabaseAdmin;
     const { data, error } = await supabase
       .from("events")
       .select("id, title")
@@ -599,7 +598,7 @@ export async function getEventsForDropdown() {
       return [{ id: "11111111-1111-1111-1111-111111111111", title: "Main Event" }];
     }
 
-    return data.map((event) => ({
+    return data.map((event: { id: string; title: string }) => ({
       id: event.id,
       title: event.title,
     }));

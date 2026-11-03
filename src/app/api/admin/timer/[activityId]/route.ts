@@ -38,7 +38,7 @@ export async function GET(
       // Reading timer
       readingTimerEndTime: activityRow.timer_end_time,
       readingTimerAutoPublish: activityRow.timer_auto_publish ?? true,
-      readingTimerTimezone: activityRow.timer_timezone ?? "UTC",
+      readingTimerTimezone: activityRow.publication_timezone ?? "Asia/Kolkata",
       // Selection timer
       selectionOpening: activityRow.selection_opening,
       selectionClosing: activityRow.selection_closing,
