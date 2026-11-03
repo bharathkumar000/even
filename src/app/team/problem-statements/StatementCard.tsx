@@ -16,6 +16,7 @@ interface Statement {
   manual_lock: boolean;
   selection_opening?: string | null;
   selection_closing?: string | null;
+  selection_activated_at?: string | null;
   // SIH 2025 fields
   sih_ps_number?: string | null;
   organization?: string | null;
@@ -55,16 +56,18 @@ export default function StatementCard({ stmt, assignedCount }: Props) {
 
   const opening = stmt.selection_opening ? new Date(stmt.selection_opening).getTime() : null;
   const closing = stmt.selection_closing ? new Date(stmt.selection_closing).getTime() : null;
+  const activated = stmt.selection_activated_at ? new Date(stmt.selection_activated_at).getTime() : null;
 
   const isOpen =
     now !== null &&
     stmt.enable_selection &&
-    opening !== null &&
-    now >= opening &&
+    !stmt.manual_lock &&
+    activated !== null &&
+    now >= activated &&
     (closing === null || now <= closing);
 
   const isClosed = now !== null && closing !== null && now > closing;
-  const remainingMs = now !== null && opening && now < opening ? opening - now : 0;
+  const remainingMs = now !== null && activated && now < activated ? activated - now : 0;
   const full = stmt.team_limit != null && assignedCount >= stmt.team_limit;
 
   const disableSelect = !isOpen || full || stmt.manual_lock;

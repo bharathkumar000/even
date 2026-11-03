@@ -98,6 +98,21 @@ function isProblemStatementResourceLinks(row: ProblemStatement): boolean {
   return true;
 }
 
+// Map display department to database department values
+function getDepartmentFilter(department: string): string {
+  switch (department) {
+    case "cse-aiml":
+      return "CSE / AIML";
+    case "ece-eee":
+      return "Electronics and Communication";
+    case "me-cv":
+      // me-cv includes both Mechanical and Civil
+      return "Mechanical,Civil";
+    default:
+      return "";
+  }
+}
+
 // Get only published statements for team leaders
 export async function getPublishedProblemStatements(
   department?: "cse-aiml" | "ece-eee" | "me-cv"
@@ -108,13 +123,17 @@ export async function getPublishedProblemStatements(
     .eq("status", "published")
     .order("display_order", { ascending: true });
 
-  // Department filtering based on domain field
-  if (department === "cse-aiml") {
-    query = query.or("domain.ilike.%CSE%,domain.ilike.%AIML%");
-  } else if (department === "ece-eee") {
-    query = query.or("domain.ilike.%ECE%,domain.ilike.%EEE%,domain.ilike.%Electronics%,domain.ilike.%Electrical%");
-  } else if (department === "me-cv") {
-    query = query.or("domain.ilike.%ME%,domain.ilike.%CV%,domain.ilike.%Mechanical%,domain.ilike.%Civil%");
+  // Department filtering based on department field (not domain)
+  if (department) {
+    const deptValue = getDepartmentFilter(department);
+    if (deptValue.includes(",")) {
+      // Multiple values - use or for multiple departments
+      const values = deptValue.split(",").map(v => v.trim());
+      const orConditions = values.map(v => `department.ilike.%${v}%`).join(",");
+      query = query.or(orConditions);
+    } else {
+      query = query.ilike("department", `%${deptValue}%`);
+    }
   }
 
   const { data, error } = await query;
@@ -940,6 +959,136 @@ export async function expireSelections(activityId: string, csrfToken?: string) {
   };
 }
 
+/**
+ * Process expired scheduled timers for an activity.
+ * Checks content_scheduled_publications for pending schedules whose
+ * scheduled_at has passed, and executes the appropriate phase transition:
+ *   - reading mode  -> startReadingPhase
+ *   - selection mode -> publishForSelection
+ * Idempotent: marks schedules as completed/failed so repeated calls are safe.
+ */
+export async function processExpiredSchedules(
+  activityId: string,
+  csrfToken?: string
+): Promise<{
+  success: boolean;
+  processed: number;
+  message: string;
+  error?: string;
+}> {
+  const { user } = await requireAdmin();
+  await validateCsrfToken(csrfToken || null);
+
+  const now = new Date().toISOString();
+
+  // Get all items in this activity
+  const { data: activityRows, error: rowsError } = await supabaseAdmin
+    .from("problem_statements")
+    .select("id, resource_links")
+    .eq("domain", "content_hub_activity")
+    .eq("resource_links->__hub_activity->>type", "problem_statements");
+
+  if (rowsError) {
+    return { success: false, processed: 0, message: "Failed to load activity items.", error: rowsError.message };
+  }
+
+  const activityItemIds = (activityRows || []).filter(
+    (row: any) => {
+      const links = row.resource_links as Record<string, unknown>;
+      const marker = links && links.__hub_item;
+      return marker && typeof marker === "object" && (marker as Record<string, unknown>).activity_id === activityId;
+    }
+  ).map((row: any) => row.id);
+
+  if (activityItemIds.length === 0) {
+    return { success: false, processed: 0, message: "No problem statements found in this activity." };
+  }
+
+  // Find expired pending schedules for items in this activity
+  const { data: expiredSchedules, error: schedError } = await supabaseAdmin
+    .from("content_scheduled_publications")
+    .select("id, item_id, scheduled_at, mode, status")
+    .in("item_id", activityItemIds)
+    .eq("status", "pending")
+    .lt("scheduled_at", now);
+
+  if (schedError) {
+    return { success: false, processed: 0, message: "Failed to load scheduled timers.", error: schedError.message };
+  }
+
+  if ((expiredSchedules || []).length === 0) {
+    return { success: true, processed: 0, message: "No expired schedules to process." };
+  }
+
+  // Determine the mode from the expired schedules (all should be same for an activity)
+  const modes = new Set((expiredSchedules || []).map((s: any) => s.mode));
+  const mode = modes.size > 0 ? Array.from(modes)[0] : "reading";
+
+  let processed = 0;
+  const errors: string[] = [];
+
+  try {
+    if (mode === "selection") {
+      // Activate selection phase
+      const res = await publishForSelection(activityId, csrfToken);
+      if (!res.success) {
+        throw new Error(res.error || "Failed to activate selection phase.");
+      }
+      processed = res.activatedCount;
+    } else {
+      // Start reading phase
+      const res = await startReadingPhase(activityId, csrfToken);
+      if (!res.success) {
+        throw new Error(res.error || "Failed to start reading phase.");
+      }
+      processed = res.startedCount;
+    }
+  } catch (err: unknown) {
+    errors.push(err instanceof Error ? err.message : "Unknown error");
+  }
+
+  // Mark all expired schedules as completed or failed
+  const scheduleIds = (expiredSchedules || []).map((s: any) => s.id);
+  if (scheduleIds.length > 0) {
+    await supabaseAdmin
+      .from("content_scheduled_publications")
+      .update({
+        status: errors.length > 0 ? "failed" : "completed",
+        executed_at: now,
+        failure_reason: errors.length > 0 ? errors.join("; ") : null,
+      })
+      .in("id", scheduleIds);
+  }
+
+  await writeAudit({
+    statementId: activityId,
+    action: "edited",
+    previousStatus: "scheduled",
+    newStatus: mode === "selection" ? "selection" : "reading",
+    userId: user.id,
+    details: {
+      activity_id: activityId,
+      activity_type: "problem_statements",
+      mode,
+      processed_count: processed,
+      error_count: errors.length,
+      schedule_ids: scheduleIds,
+    },
+  });
+
+  revalidatePath("/admin/content-releases");
+  revalidatePath("/team/problem-statements");
+
+  return {
+    success: errors.length === 0,
+    processed,
+    message: errors.length > 0
+      ? `Processed ${processed} item(s) with ${errors.length} error(s).`
+      : `Processed ${processed} item(s) for ${mode} phase.`,
+    error: errors.length > 0 ? errors.join("; ") : undefined,
+  };
+}
+
 // ================================================================================
 // PHASE MANAGEMENT ACTIONS
 // ================================================================================
@@ -1074,6 +1223,7 @@ export async function publishForSelection(
     .from("problem_statements")
     .update({
       enable_selection: true,
+      selection_opening: now,
       selection_activated_at: now,
       selection_activated_by: user.id,
       manual_lock: false,

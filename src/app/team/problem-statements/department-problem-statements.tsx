@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { getPublishedProblemStatements, getAssignmentCounts } from "@/app/actions/admin-problem-statements";
 import StatementCard from "./StatementCard";
 
@@ -29,12 +29,57 @@ interface DepartmentProblemStatementsProps {
   defaultDepartment: Department | null;
 }
 
+// Map department filter to database department values
+function getDepartmentFilter(department: Department): string {
+  switch (department) {
+    case "cse-aiml":
+      return "CSE / AIML";
+    case "ece-eee":
+      return "Electronics and Communication";
+    case "me-cv":
+      return "Mechanical,Civil";
+    default:
+      return "";
+  }
+}
+
+// Filter statements by department field (not domain)
+function filterByDepartment(statements: any[], department: Department): any[] {
+  const deptValue = getDepartmentFilter(department);
+  const values = deptValue.split(",").map(v => v.trim().toLowerCase());
+  
+  return statements.filter((s: any) => {
+    const dept = (s.department || "").toLowerCase().trim();
+    return values.some(v => dept.includes(v));
+  });
+}
+
+// Compute overall phase from statements
+function computePhase(statements: any[]): { phase: "not_started" | "reading" | "selection" | "closed"; label: string; color: string } {
+  const now = Date.now();
+  const anyReadingStarted = statements.some((s: any) => s.reading_started_at);
+  const anySelectionActivated = statements.some((s: any) => s.selection_activated_at);
+  const anySelectionEnabled = statements.some((s: any) => s.enable_selection === true);
+
+  if (anySelectionActivated && anySelectionEnabled) {
+    return { phase: "selection", label: "SELECTION PHASE", color: "bg-status-success/15 border-status-success/50 text-status-success" };
+  }
+  if (anySelectionActivated && !anySelectionEnabled) {
+    return { phase: "closed", label: "SELECTION CLOSED", color: "bg-surface-color border border-border-color text-text-secondary" };
+  }
+  if (anyReadingStarted) {
+    return { phase: "reading", label: "READING PHASE", color: "bg-surface-color border border-border-color text-text-secondary" };
+  }
+  return { phase: "not_started", label: "NOT STARTED", color: "bg-surface-color border border-border-color text-text-secondary" };
+}
+
 export default function DepartmentProblemStatements({
   initialStatements,
   initialCounts,
   defaultDepartment,
 }: DepartmentProblemStatementsProps) {
-  const [activeDepartment, setActiveDepartment] = useState<Department | null>(defaultDepartment || null);
+  // Default to CSE/AIML if no department specified
+  const [activeDepartment, setActiveDepartment] = useState<Department>(defaultDepartment || "cse-aiml");
   const [departmentData, setDepartmentData] = useState<Record<Department, DepartmentData>>({
     "cse-aiml": { statements: [], counts: {}, loading: false, error: null },
     "ece-eee": { statements: [], counts: {}, loading: false, error: null },
@@ -44,16 +89,22 @@ export default function DepartmentProblemStatements({
   // Initialize with server-fetched data for the default department
   useEffect(() => {
     if (defaultDepartment) {
-      const filtered = initialStatements.filter((s: any) => {
-        const d = (s.domain || "").toLowerCase();
-        if (defaultDepartment === "cse-aiml") return d.includes("cse") || d.includes("aiml");
-        if (defaultDepartment === "ece-eee") return d.includes("ece") || d.includes("eee") || d.includes("electronics") || d.includes("electrical");
-        if (defaultDepartment === "me-cv") return d.includes("me") || d.includes("cv") || d.includes("mechanical") || d.includes("civil");
-        return false;
-      });
+      const filtered = filterByDepartment(initialStatements, defaultDepartment);
       setDepartmentData((prev) => ({
         ...prev,
         [defaultDepartment]: {
+          statements: filtered,
+          counts: initialCounts,
+          loading: false,
+          error: null,
+        },
+      }));
+    } else {
+      // Default to CSE/AIML if no defaultDepartment provided
+      const filtered = filterByDepartment(initialStatements, "cse-aiml");
+      setDepartmentData((prev) => ({
+        ...prev,
+        "cse-aiml": {
           statements: filtered,
           counts: initialCounts,
           loading: false,
@@ -100,49 +151,46 @@ export default function DepartmentProblemStatements({
   const current = activeDepartment ? departmentData[activeDepartment] : null;
   const deptInfo = DEPARTMENTS.find((d) => d.id === activeDepartment);
 
-  if (!activeDepartment) {
-    return (
-      <div className="text-center py-20">
-        <div className="inline-flex items-center gap-2 px-4 py-2 border border-border-color rounded-lg text-xs text-text-secondary font-mono uppercase mb-6">
-          <span>Select a Department</span>
-        </div>
-        <div className="flex justify-center gap-3">
-          {DEPARTMENTS.map((d) => (
-            <button
-              key={d.id}
-              onClick={() => setActiveDepartment(d.id)}
-              className="px-6 py-3 border border-border-color rounded-lg bg-surface-color/50 text-text-primary font-tech font-bold text-sm uppercase tracking-wider hover:bg-accent-secondary/10 hover:border-accent-secondary transition-all"
-            >
-              {d.label}
-            </button>
-          ))}
-        </div>
-      </div>
-    );
-  }
-
   const statements = current?.statements || [];
   const counts = current?.counts || {};
   const loading = current?.loading || false;
 
+  // Compute phase from all statements (not just filtered department)
+  const allStatements = initialStatements;
+  const phaseInfo = useMemo(() => computePhase(allStatements), [allStatements]);
+
   return (
     <div className="space-y-6">
-      {/* Department Tabs */}
-      <div className="flex flex-wrap justify-center gap-2 mb-4 border-b border-border-color pb-4">
+      {/* Phase Banner */}
+      <div className={`px-4 py-3 rounded-lg border font-tech text-xs uppercase tracking-wider font-bold flex items-center justify-between ${phaseInfo.color}`}>
+        <span>{phaseInfo.label}</span>
+        {phaseInfo.phase === "selection" && (
+          <span className="text-[10px] font-mono opacity-80">Team selection is open</span>
+        )}
+        {phaseInfo.phase === "reading" && (
+          <span className="text-[10px] font-mono opacity-80">Reading only — selection disabled</span>
+        )}
+        {phaseInfo.phase === "closed" && (
+          <span className="text-[10px] font-mono opacity-80">Selection closed — no further changes</span>
+        )}
+      </div>
+
+      {/* Domain Filters - Three equally sized horizontal options */}
+      <div className="flex flex-col sm:flex-row gap-3 mb-6">
         {DEPARTMENTS.map((d) => {
           const isActive = activeDepartment === d.id;
           return (
             <button
               key={d.id}
               onClick={() => setActiveDepartment(d.id)}
-              className={`px-5 py-2.5 text-sm font-tech font-bold uppercase tracking-wider rounded-lg transition-all ${
+              className={`flex-1 flex flex-col items-center justify-center gap-1.5 px-5 py-3.5 text-sm font-tech font-bold uppercase tracking-wider rounded-xl transition-all border-2 ${
                 isActive
-                  ? "bg-accent-secondary text-black border-accent-secondary shadow-[0_0_15px_rgba(255,0,127,0.3)]"
-                  : "text-text-secondary border-transparent hover:border-accent-secondary/40 hover:bg-surface-color/40"
+                  ? "bg-accent-secondary/15 text-accent-secondary border-accent-secondary shadow-[0_0_20px_rgba(255,0,127,0.25)]"
+                  : "text-text-secondary border-transparent hover:border-accent-secondary/40 hover:bg-surface-color/30"
               }`}
             >
-              {d.label}
-              <span className="ml-1 text-[10px] opacity-60">{d.subtitle}</span>
+              <span className="font-heading text-base">{d.label}</span>
+              <span className="text-[10px] font-mono opacity-60">{d.subtitle}</span>
             </button>
           );
         })}
@@ -172,7 +220,7 @@ export default function DepartmentProblemStatements({
             <span className="text-text-secondary/50">📋</span>
           </div>
           <p className="text-text-secondary font-tech text-sm uppercase">
-            No published problem statements for {deptInfo?.label}
+            No published problem statements available in this domain yet.
           </p>
         </div>
       )}
