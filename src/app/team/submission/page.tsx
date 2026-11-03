@@ -189,16 +189,16 @@ export default async function TeamSubmissionPage() {
           isLocked={isLocked}
           isNotOpen={isNotOpen}
           isLeader={isLeader}
-          currentSubmission={{
-            id: currentSubmissionId || "",
+          currentSubmission={currentSubmissionId ? {
+            id: currentSubmissionId,
             version: currentVersion || 0,
-            status: currentSubmissionId ? (currentFileRefs ? "submitted" : "draft") : "not_started",
+            status: currentFileRefs && currentFileRefs.length > 0 ? "submitted" : "draft",
             answers: currentAnswers || {},
             file_references: currentFileRefs || [],
             submitted_by: null,
             submitted_at: currentSubmittedAt || "",
             reference_number: currentReferenceNumber || "",
-          }}
+          } : null}
         />
       )}
     </div>

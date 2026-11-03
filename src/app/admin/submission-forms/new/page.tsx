@@ -19,6 +19,8 @@ import {
   LayoutList,
   Barcode,
 } from "lucide-react";
+import { createProjectSubmissionForm, updateProjectSubmissionForm } from "@/app/actions/project-submission-forms";
+import { withCsrfToken } from "@/lib/csrf-client";
 
 const QUESTION_TYPES = [
   { value: "short_answer", label: "Short Answer", icon: "text" },
@@ -159,7 +161,27 @@ export default function FormBuilderEditor() {
           questions: [],
         },
       ]);
-      setForm(null);
+      setForm({
+        id: "",
+        event_id: null,
+        round_id: null,
+        title: "",
+        description: null,
+        form_status: "draft",
+        submission_state: "not_open",
+        timezone: "Asia/Kolkata",
+        allow_early_view: false,
+        allow_draft_before_open: true,
+        allow_edit_after_submit: true,
+        allow_resubmission: true,
+        resubmission_policy: "none",
+        auto_lock_at_deadline: false,
+        allow_member_submit: true,
+        max_marks: 50,
+        view_available_at: null,
+        submission_open_at: null,
+        submission_close_at: null,
+      });
       return;
     }
 
@@ -318,12 +340,7 @@ export default function FormBuilderEditor() {
 
     setIsSaving(true);
     try {
-      const payload = {
-        title: form.title,
-        description: form.description,
-        form_status: form.form_status,
-        submission_state: form.submission_state,
-        round_id: form.round_id,
+      const formConfig = {
         sections: sections.map((s) => ({
           id: s.id,
           title: s.title,
@@ -354,13 +371,46 @@ export default function FormBuilderEditor() {
         })),
       };
 
-      const res = await fetch(`/api/admin/submission-forms/${mode === "create" ? "" : form.id}`, {
-        method: mode === "create" ? "POST" : "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-
-      if (!res.ok) throw new Error("Failed to save form");
+      if (mode === "create") {
+        await createProjectSubmissionForm({
+          title: form.title,
+          description: form.description || undefined,
+          form_status: (form.form_status as any) || "draft",
+          submission_state: (form.submission_state as any) || "not_open",
+          round_id: form.round_id || null,
+          timezone: form.timezone || "Asia/Kolkata",
+          allow_early_view: form.allow_early_view || false,
+          allow_draft_before_open: form.allow_draft_before_open ?? true,
+          allow_edit_after_submit: form.allow_edit_after_submit ?? true,
+          allow_resubmission: form.allow_resubmission ?? true,
+          resubmission_policy: form.resubmission_policy || "none",
+          auto_lock_at_deadline: form.auto_lock_at_deadline ?? false,
+          allow_member_submit: form.allow_member_submit ?? true,
+          max_marks: form.max_marks || 50,
+          form_config: formConfig,
+          ...withCsrfToken(),
+        });
+      } else if (form.id) {
+        await updateProjectSubmissionForm({
+          id: form.id,
+          title: form.title,
+          description: form.description || undefined,
+          form_status: (form.form_status as any) || "draft",
+          submission_state: (form.submission_state as any) || "not_open",
+          round_id: form.round_id || null,
+          timezone: form.timezone || "Asia/Kolkata",
+          allow_early_view: form.allow_early_view || false,
+          allow_draft_before_open: form.allow_draft_before_open ?? true,
+          allow_edit_after_submit: form.allow_edit_after_submit ?? true,
+          allow_resubmission: form.allow_resubmission ?? true,
+          resubmission_policy: form.resubmission_policy || "none",
+          auto_lock_at_deadline: form.auto_lock_at_deadline ?? false,
+          allow_member_submit: form.allow_member_submit ?? true,
+          max_marks: form.max_marks || 50,
+          form_config: formConfig,
+          ...withCsrfToken(),
+        });
+      }
 
       setNotification({ type: "success", message: "Form saved successfully" });
       setIsSaving(false);
@@ -372,8 +422,28 @@ export default function FormBuilderEditor() {
   };
 
   const updateFormField = (key: string, value: any) => {
-    if (!form) return;
-    setForm({ ...form, [key]: value });
+    setForm((prev) => (prev ? { ...prev, [key]: value } : {
+      id: "",
+      event_id: null,
+      round_id: null,
+      title: key === "title" ? value : "",
+      description: null,
+      form_status: "draft",
+      submission_state: "not_open",
+      timezone: "Asia/Kolkata",
+      allow_early_view: false,
+      allow_draft_before_open: true,
+      allow_edit_after_submit: true,
+      allow_resubmission: true,
+      resubmission_policy: "none",
+      auto_lock_at_deadline: false,
+      allow_member_submit: true,
+      max_marks: 50,
+      view_available_at: null,
+      submission_open_at: null,
+      submission_close_at: null,
+      [key]: value,
+    }));
   };
 
   if (isLoading) {
@@ -444,7 +514,7 @@ export default function FormBuilderEditor() {
           <div className="border border-border-color rounded-lg p-4">
             <label className="block text-[10px] uppercase tracking-wider text-text-secondary mb-2">Form Title</label>
             <input
-              value={mode === "create" ? "" : form?.title || ""}
+              value={form?.title || ""}
               onChange={(e) => updateFormField("title", e.target.value)}
               placeholder="Enter form title"
               className="w-full px-3 py-2 bg-surface-color border border-border-color rounded text-xs text-text-primary focus:border-accent-secondary outline-none"
@@ -455,7 +525,7 @@ export default function FormBuilderEditor() {
           <div className="border border-border-color rounded-lg p-4">
             <label className="block text-[10px] uppercase tracking-wider text-text-secondary mb-2">Status</label>
             <select
-              value={mode === "create" ? "draft" : form?.form_status || "draft"}
+              value={form?.form_status || "draft"}
               onChange={(e) => updateFormField("form_status", e.target.value)}
               className="w-full px-3 py-2 bg-surface-color border border-border-color rounded text-xs text-text-primary focus:border-accent-secondary outline-none"
             >
@@ -471,7 +541,7 @@ export default function FormBuilderEditor() {
           <div className="border border-border-color rounded-lg p-4">
             <label className="block text-[10px] uppercase tracking-wider text-text-secondary mb-2">Associate Round</label>
             <select
-              value={mode === "create" ? "" : (form?.round_id || "")}
+              value={form?.round_id || ""}
               onChange={(e) => updateFormField("round_id", e.target.value || null)}
               className="w-full px-3 py-2 bg-surface-color border border-border-color rounded text-xs text-text-primary focus:border-accent-secondary outline-none"
             >
@@ -739,7 +809,7 @@ export default function FormBuilderEditor() {
                 </div>
               )}
 
-              {selectedQuestion.question_type === "short_answer" || selectedQuestion.question_type === "long_answer" && (
+              {(selectedQuestion.question_type === "short_answer" || selectedQuestion.question_type === "long_answer") && (
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-[10px] uppercase tracking-wider text-text-secondary mb-2">Min Characters</label>
