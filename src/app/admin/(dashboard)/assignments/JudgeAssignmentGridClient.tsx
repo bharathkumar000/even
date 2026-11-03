@@ -13,11 +13,13 @@ import {
   Loader2,
   Gavel,
   Layers,
+  Trash2,
 } from "lucide-react";
 import {
   assignJudgeToTeam,
   removeJudgeFromTeam,
   replaceJudgeAssignment,
+  deleteAllJudgeAssignments,
   getJudgeAssignmentGrid,
   getJudgesSummary,
   getJudgeAssignmentStats,
@@ -51,6 +53,7 @@ export default function JudgeAssignmentGridClient({
   const [judges, setJudges] = useState<JudgeSummary[]>(initialJudges);
   const [stats, setStats] = useState<JudgeAssignmentStats | null>(initialStats);
   const [loading, setLoading] = useState(false);
+  const [deletingAll, setDeletingAll] = useState(false);
   const [saving, setSaving] = useState<Set<string>>(new Set()); // teamId -> saving
   const [notify, setNotifyState] = useState<{ type: "success" | "error"; message: string } | null>(
     null
@@ -230,6 +233,30 @@ export default function JudgeAssignmentGridClient({
     }
   };
 
+  /* ------------------------------------------------------------ DELETE ALL */
+  const handleDeleteAllAssignments = async () => {
+    setConfirm(null);
+    setDeletingAll(true);
+    try {
+      await deleteAllJudgeAssignments({
+        roundId,
+        ...withCsrfToken(),
+      });
+      showNotify(
+        "success",
+        `All judge assignments for round ${roundId.slice(0, 8)}… have been deleted.`
+      );
+      await refresh();
+    } catch (err: unknown) {
+      showNotify(
+        "error",
+        err instanceof Error ? err.message : "Failed to delete all assignments."
+      );
+    } finally {
+      setDeletingAll(false);
+    }
+  };
+
   const refresh = async () => {
     setLoading(true);
     try {
@@ -365,6 +392,20 @@ export default function JudgeAssignmentGridClient({
           >
             <Loader2 className={loading ? "w-3 h-3 animate-spin" : "w-3 h-3"} />
             <span>Refresh</span>
+          </button>
+          <button
+            onClick={() =>
+              openConfirm(
+                "Delete All Judge Assignments?",
+                `This will permanently remove all judge assignments for round ${roundId.slice(0, 8)}… . This action cannot be undone. Teams will return to unassigned status for this round. Continue?`,
+                handleDeleteAllAssignments
+              )
+            }
+            disabled={loading || deletingAll}
+            className="px-4 py-1.5 bg-status-error/10 border border-status-error/40 hover:bg-status-error/20 text-status-error text-xs font-bold uppercase tracking-wider rounded transition-colors disabled:opacity-50 cursor-pointer flex items-center gap-1.5"
+          >
+            <Trash2 size={13} />
+            <span>Delete All Assignments</span>
           </button>
         </div>
       </div>

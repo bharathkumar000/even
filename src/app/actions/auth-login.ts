@@ -31,18 +31,32 @@ export async function resolveUsernameToEmail(username: string): Promise<string |
     return null;
   }
 
+  const normalizedUsername = username.trim().toLowerCase();
+
   try {
-    const { data, error } = await supabaseAdmin.rpc(
+    // Step 1: Try the existing RPC (checks auth.users.user_metadata->>'username').
+    const { data: rpcData, error: rpcError } = await supabaseAdmin.rpc(
       "resolve_username_to_email",
-      { p_username: username.trim().toLowerCase() }
+      { p_username: normalizedUsername }
     );
 
-    if (error) {
-      console.error("Username resolution error:", error.message);
-      return null;
+    if (!rpcError && rpcData) {
+      return (rpcData as string | null) || null;
     }
 
-    return (data as string | null) || null;
+    // Step 2: Fallback — check profiles.username column directly.
+    // This covers usernames persisted in public.profiles (not just auth metadata).
+    const { data: profileData, error: profileError } = await supabaseAdmin
+      .from("profiles")
+      .select("email")
+      .eq("username", normalizedUsername)
+      .maybeSingle();
+
+    if (!profileError && profileData?.email) {
+      return profileData.email as string;
+    }
+
+    return null;
   } catch {
     return null;
   }

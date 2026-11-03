@@ -1,9 +1,10 @@
 import { getAllSubmissions } from "@/app/actions/team-submissions";
 import { getAttachmentDownloadUrl } from "@/app/actions/team-submissions";
+import { getProjectSubmissionFormById } from "@/app/actions/project-submission-forms";
 import { requireAdmin } from "@/lib/auth/admin";
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { Download, FileText, X, Eye, Copy } from "lucide-react";
+import { Download, FileText, X, Eye, Copy, ExternalLink } from "lucide-react";
 
 interface SubmissionRow {
   id: string;
@@ -49,6 +50,36 @@ export default async function SubmissionDetailPage({
 
   if (!submission) {
     redirect(`/admin/submission-forms/${id}/submissions?error=not_found`);
+  }
+
+  // Load the form config to resolve question titles and types for the detail view.
+  const questionMap: Record<string, { title: string; question_type: string | null }> = {};
+  try {
+    const { form } = await getProjectSubmissionFormById(id);
+    const sections = (form?.form_config as any)?.sections || [];
+    for (const section of sections) {
+      const questions = Array.isArray(section.questions) ? section.questions : [];
+      for (const q of questions) {
+        questionMap[q.id] = {
+          title: q.title ?? q.label ?? `Question ${String(q.id).slice(-4).toUpperCase()}`,
+          question_type: q.question_type ?? q.type ?? null,
+        };
+      }
+    }
+  } catch {
+    // Form config unavailable — fall back to question IDs.
+  }
+
+  function getSafeUrl(value: string): string | null {
+    try {
+      const url = new URL(value.trim());
+      if (url.protocol === "http:" || url.protocol === "https:") {
+        return url.toString();
+      }
+      return null;
+    } catch {
+      return null;
+    }
   }
 
   return (
@@ -145,16 +176,36 @@ export default async function SubmissionDetailPage({
           Submitted Answers
         </p>
         <div className="space-y-3">
-          {Object.entries(submission.answers || {}).map(([questionId, answer]) => (
-            <div key={questionId} className="glass-panel p-5 border border-border-color rounded-lg">
-              <p className="text-xs uppercase tracking-[1.5px] text-accent-secondary font-bold m-0 mb-1">
-                Question {questionId.slice(-4).toUpperCase()}
-              </p>
-              <p className="text-sm text-text-primary leading-relaxed m-0 break-words">
-                {answer !== null && answer !== undefined ? String(answer) : "—"}
-              </p>
-            </div>
-          ))}
+          {Object.entries(submission.answers || {}).map(([questionId, answer]) => {
+            const q = questionMap[questionId];
+            const title = q?.title || `Question ${questionId.slice(-4).toUpperCase()}`;
+            const qType = q?.question_type;
+            const isUrlAnswer = qType === "url" && typeof answer === "string" && answer.trim() !== "";
+            const safeUrl = isUrlAnswer ? getSafeUrl(answer) : null;
+
+            return (
+              <div key={questionId} className="glass-panel p-5 border border-border-color rounded-lg">
+                <p className="text-xs uppercase tracking-[1.5px] text-accent-secondary font-bold m-0 mb-1">
+                  {title}
+                </p>
+                {safeUrl ? (
+                  <a
+                    href={safeUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-sm text-accent-secondary underline break-all hover:text-accent-primary flex items-center gap-1.5"
+                  >
+                    {String(answer)}
+                    <ExternalLink size={12} className="text-text-secondary/60" />
+                  </a>
+                ) : (
+                  <p className="text-sm text-text-primary leading-relaxed m-0 break-words whitespace-pre-wrap">
+                    {answer !== null && answer !== undefined ? String(answer) : "—"}
+                  </p>
+                )}
+              </div>
+            );
+          })}
         </div>
       </div>
 

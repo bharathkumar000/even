@@ -38,13 +38,14 @@ export async function GET(
 
     // Read the published project submission form (not the legacy submission_forms table)
     const { data: form, error: formError } = await supabaseAdmin
-      .from("project_subjection_forms")
+      .from("project_submission_forms")
       .select("*")
       .eq("id", id)
+      .eq("form_status", "published")
       .maybeSingle();
 
     if (formError || !form) {
-      return NextResponse.json({ error: "Form not found" }, { status: 404 });
+      return NextResponse.json({ error: "Form not found or not published" }, { status: 404 });
     }
 
     // Build sections + questions from the JSONB form_config
@@ -89,14 +90,14 @@ export async function GET(
         id: form.id,
         title: form.title,
         description: form.description ?? null,
-        form_status: form.status,
-        submission_state: form.status === "published" ? "open" : "not_open",
-        submission_open_at: form.opens_at ?? null,
-        submission_close_at: form.closes_at ?? null,
-        timezone: "Asia/Kolkata",
-        allow_member_submit: false,
-        auto_lock_at_deadline: Boolean(form.allow_edit_after_submission),
-        max_marks: null,
+        form_status: form.form_status,
+        submission_state: form.submission_state ?? (form.form_status === "published" ? "open" : "not_open"),
+        submission_open_at: form.submission_open_at ?? null,
+        submission_close_at: form.submission_close_at ?? null,
+        timezone: form.timezone ?? "Asia/Kolkata",
+        allow_member_submit: Boolean(form.allow_member_submit),
+        auto_lock_at_deadline: Boolean(form.auto_lock_at_deadline ?? true),
+        max_marks: form.max_marks ?? null,
       },
       sections,
     });

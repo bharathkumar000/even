@@ -1,3 +1,4 @@
+import { createClient } from "@/lib/supabase/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { slugify } from "@/lib/utils";
 import EvaluateClientView, { TeamDetail, SubmissionDetail, ActiveRoundDetail, CriterionDetail, ExistingEvaluationDetail } from "./evaluate-client";
@@ -31,12 +32,23 @@ export default async function EvaluateTeamPage({
     }
   }
 
-
   let team: TeamDetail | null = null;
   let submission: SubmissionDetail | null = null;
   let activeRound: ActiveRoundDetail | null = null;
   let criteria: CriterionDetail[] = [];
   let existingEvaluation: ExistingEvaluationDetail | null = null;
+
+  // Get the authenticated judge's user ID for evaluation isolation
+  let judgeUserId: string | null = null;
+  try {
+    const supabase = await createClient();
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    if (!userError && user) {
+      judgeUserId = user.id;
+    }
+  } catch {
+    // Auth errors are non-fatal here; evaluation will be empty if unauthenticated
+  }
 
   try {
     const [teamRes, subRes, roundRes] = await Promise.all([
@@ -67,6 +79,9 @@ export default async function EvaluateTeamPage({
           .select("*")
           .eq("round_id", currentRound.id)
           .eq("team_id", teamId)
+          // CRITICAL: Only fetch the authenticated judge's own evaluation.
+          // Using supabaseAdmin bypasses RLS, so we must explicitly filter by judge_id.
+          .eq("judge_id", judgeUserId || "")
           .maybeSingle(),
       ]);
 

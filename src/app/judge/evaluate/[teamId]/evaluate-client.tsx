@@ -113,7 +113,9 @@ export default function EvaluateClientView({
   const [pitchCalling, setPitchCalling] = useState(false);
   const [pitchCallSent, setPitchCallSent] = useState(false);
 
-  const isLocked = existingEvaluation?.status === "locked";
+  const isLocked =
+    existingEvaluation?.status === "locked" ||
+    existingEvaluation?.status === "submitted";
   const draftKey = `ivc_draft_${activeRound?.id || "noround"}_${teamId}`;
 
   // Check localStorage for timer toggle preference on mount
