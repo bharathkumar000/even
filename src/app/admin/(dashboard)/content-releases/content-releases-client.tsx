@@ -481,6 +481,7 @@ export default function ContentHubClientView({
   // Filter states
   const [departmentFilter, setDepartmentFilter] = useState<string>("all");
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
+  const [sihYearFilter, setSihYearFilter] = useState<string>("all");
 
 
   const selectedActivity = useMemo(
@@ -4366,4 +4367,6 @@ export default function ContentHubClientView({
           loading={formPublishConfirmLoading}
         />
       )}
+    </div>
+  );
 }

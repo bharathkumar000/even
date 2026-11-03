@@ -79,9 +79,9 @@ export function mapDepartmentToDomain(department: string | null | undefined): Do
  * Public labels for each domain category.
  */
 export const DOMAIN_LABELS: Record<Exclude<DomainCategory, null>, { label: string; subtitle: string }> = {
-  cse-aiml: { label: "CSE / AIML", subtitle: "Computer Science & AI/ML" },
-  ece-eee: { label: "ECE / EEE", subtitle: "Electronics & Electrical" },
-  me-cv: { label: "ME / CV", subtitle: "Mechanical & Civil" },
+  "cse-aiml": { label: "CSE / AIML", subtitle: "Computer Science & AI/ML" },
+  "ece-eee": { label: "ECE / EEE", subtitle: "Electronics & Electrical" },
+  "me-cv": { label: "ME / CV", subtitle: "Mechanical & Civil" },
 };
 
 /**

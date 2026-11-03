@@ -1469,3 +1469,165 @@ async function writeAudit(params: {
     console.warn("Audit log write failed:", error.message);
   }
 }
+
+// Get all team problem statement selections with full details for admin view
+export interface TeamSelectionRecord {
+  assigned_at: string;
+  team_id: string;
+  team_name: string;
+  team_code: string | null;
+  problem_statement_id: string;
+  ps_reference_number: string | null;
+  ps_sih_ps_number: string | null;
+  ps_title: string;
+}
+
+export async function getTeamProblemStatementSelections(): Promise<{
+  selections: TeamSelectionRecord[];
+  total: number;
+  error?: string;
+}> {
+  try {
+    await requireAdmin();
+  } catch {
+    return { selections: [], total: 0, error: "Authentication required." };
+  }
+
+  const { data, error } = await supabaseAdmin
+    .from("team_problem_statement_assignments")
+    .select(
+      `
+      assigned_at,
+      team_id,
+      teams!inner (
+        id,
+        name,
+        code
+      ),
+      problem_statement_id,
+      problem_statements!inner (
+        id,
+        reference_number,
+        sih_ps_number,
+        title
+      )
+    `
+    )
+    .order("assigned_at", { ascending: false });
+
+  if (error) {
+    console.error("Failed to fetch team selections:", error.message);
+    return { selections: [], total: 0, error: error.message };
+  }
+
+  const selections: TeamSelectionRecord[] = (data || []).map((row: any) => ({
+    assigned_at: row.assigned_at,
+    team_id: row.team_id,
+    team_name: row.teams?.name || "Unknown Team",
+    team_code: row.teams?.code || null,
+    problem_statement_id: row.problem_statement_id,
+    ps_reference_number: row.problem_statements?.reference_number || null,
+    ps_sih_ps_number: row.problem_statements?.sih_ps_number || null,
+    ps_title: row.problem_statements?.title || "Unknown Problem Statement",
+  }));
+
+  return { selections, total: selections.length };
+}
+
+// Export all team problem statement selections as CSV
+export async function exportTeamProblemStatementSelections(): Promise<{
+  csv: string;
+  error?: string;
+}> {
+  try {
+    await requireAdmin();
+  } catch {
+    return { csv: "", error: "Authentication required." };
+  }
+
+  const { data, error } = await supabaseAdmin
+    .from("team_problem_statement_assignments")
+    .select(
+      `
+      assigned_at,
+      team_id,
+      teams!inner (
+        id,
+        name,
+        code
+      ),
+      problem_statement_id,
+      problem_statements!inner (
+        id,
+        reference_number,
+        sih_ps_number,
+        title
+      )
+    `
+    )
+    .order("assigned_at", { ascending: false });
+
+  if (error) {
+    console.error("Failed to fetch team selections for export:", error.message);
+    return { csv: "", error: error.message };
+  }
+
+  const selections: TeamSelectionRecord[] = (data || []).map((row: any) => ({
+    assigned_at: row.assigned_at,
+    team_id: row.team_id,
+    team_name: row.teams?.name || "Unknown Team",
+    team_code: row.teams?.code || null,
+    problem_statement_id: row.problem_statement_id,
+    ps_reference_number: row.problem_statements?.reference_number || null,
+    ps_sih_ps_number: row.problem_statements?.sih_ps_number || null,
+    ps_title: row.problem_statements?.title || "Unknown Problem Statement",
+  }));
+
+  // CSV headers
+  const headers = ["Selection Time", "Team ID", "Team Name", "PS Code", "PS Title"];
+
+  // Helper to escape CSV fields
+  const escapeCsv = (value: string): string => {
+    if (value === null || value === undefined) return "";
+    const str = String(value);
+    // Escape double quotes by doubling them
+    const escaped = str.replace(/"/g, '""');
+    // Wrap in quotes if contains comma, double quote, or newline
+    if (escaped.includes(",") || escaped.includes('"') || escaped.includes("\n") || escaped.includes("\r")) {
+      return `"${escaped}"`;
+    }
+    return escaped;
+  };
+
+  // Format timestamp in Asia/Kolkata
+  const formatTime = (iso: string): string => {
+    try {
+      const date = new Date(iso);
+      return new Intl.DateTimeFormat("en-GB", {
+        timeZone: "Asia/Kolkata",
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: false,
+      }).format(date);
+    } catch {
+      return iso;
+    }
+  };
+
+  const rows = selections.map((s) => [
+    formatTime(s.assigned_at),
+    s.team_code || s.team_id.slice(0, 8),
+    s.team_name,
+    s.ps_reference_number || "N/A",
+    s.ps_title,
+  ]);
+
+  const csvContent = [headers, ...rows]
+    .map((row) => row.map(escapeCsv).join(","))
+    .join("\n");
+
+  return { csv: csvContent };
+}
