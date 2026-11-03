@@ -783,7 +783,7 @@ export async function removeJudgeFromTeam(data: {
   // Audit log (non-blocking)
   void supabaseAdmin.from("audit_logs").insert([
     {
-      action: "REMOVE_JUDGE_FROM_TEAM",
+      action: "JUDGE_UNASSIGNED",
       entity_type: "judge_assignments",
       entity_id: teamId,
       admin_id: user.id,

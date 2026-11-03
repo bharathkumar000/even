@@ -1,8 +1,6 @@
-import { createClient } from "@/lib/supabase/server";
-import RoundsClientView, {
-  AdminRoundItem,
-  AdminCriterionItem,
-} from "./rounds-client";
+import { supabaseAdmin } from "@/lib/supabase/admin";
+import RoundsClientView from "./rounds-client";
+import type { AdminRoundItem, AdminCriterionItem } from "./rounds-client";
 
 export const dynamic = "force-dynamic";
 
@@ -13,16 +11,15 @@ export default async function AdminRoundsPage() {
 
   try {
     const fetchRoundsData = async () => {
-      const supabase = await createClient();
       const [roundsRes, criteriaRes, eventsRes] = await Promise.all([
-        supabase
+        supabaseAdmin
           .from("evaluation_rounds")
           .select("*")
           .order("sequence_order", { ascending: true }),
-        supabase
+        supabaseAdmin
           .from("evaluation_criteria")
           .select("*"),
-        supabase
+        supabaseAdmin
           .from("events")
           .select("id, title")
           .order("created_at", { ascending: false }),

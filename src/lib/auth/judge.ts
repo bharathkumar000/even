@@ -42,7 +42,7 @@ export async function requireActiveJudgeForTeam(teamId: string, roundId?: string
       .eq("team_id", teamId);
 
     if (roundId) {
-      assignmentQuery = assignmentQuery.eq("round_id", roundId);
+      assignmentQuery = assignmentQuery.or(`round_id.eq.${roundId},round_id.is.null`);
     }
 
     const { data: assignment, error: assignError } = await assignmentQuery.maybeSingle();
