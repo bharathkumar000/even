@@ -34,7 +34,7 @@ export interface RoundActionResult<T = any> {
  * Formats a Supabase PostgrestError preserving diagnostic fields
  * (message, code, details, hint) without exposing server secrets.
  */
-export function formatSupabaseError(
+function formatSupabaseError(
   error: PostgrestError | { message?: string; code?: string; details?: string | null; hint?: string | null } | null | undefined,
   fallback = "Database operation failed."
 ): string {
