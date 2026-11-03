@@ -78,7 +78,7 @@ export default function RecentlyScannedTeams({ limit = 3 }: RecentlyScannedTeams
       .on(
         "postgres_changes",
         {
-          event: "INSERT",
+          event: "*",
           schema: "public",
           table: "event_activity_logs",
         },
@@ -86,6 +86,9 @@ export default function RecentlyScannedTeams({ limit = 3 }: RecentlyScannedTeams
           void fetchScans();
         }
       )
+      .on("broadcast", { event: "scan_action_reverted" }, () => {
+        void fetchScans();
+      })
       .subscribe();
 
     return () => {
