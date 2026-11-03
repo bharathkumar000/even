@@ -1,14 +1,15 @@
 import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/auth/admin";
-import { supabaseAdmin } from "@/lib/supabase/admin";
+import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
     await requireAdmin();
+    const supabase = await createClient();
 
-    const { data: rounds, error } = await supabaseAdmin
+    const { data: rounds, error } = await supabase
       .from("evaluation_rounds")
       .select("id, title, sequence_order, status")
       .order("sequence_order", { ascending: true });
