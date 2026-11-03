@@ -47,9 +47,23 @@ export async function createRound(
 
     const validated = parsed.data;
 
-    // Resolve event_id with auto-fallback to active event
-    let eventId = validated.event_id;
-    if (!eventId || !UUID_REGEX.test(eventId)) {
+    // Resolve event_id: verify that the event actually exists in the database.
+    let eventId: string | null = validated.event_id || null;
+    if (eventId && UUID_REGEX.test(eventId)) {
+      const { data: exists } = await supabaseAdmin
+        .from("events")
+        .select("id")
+        .eq("id", eventId)
+        .maybeSingle();
+      if (!exists) {
+        eventId = null;
+      }
+    } else {
+      eventId = null;
+    }
+
+    // If no valid event specified, pick the most recent event if available
+    if (!eventId) {
       const { data: defaultEvent } = await supabaseAdmin
         .from("events")
         .select("id")
@@ -57,7 +71,17 @@ export async function createRound(
         .limit(1)
         .maybeSingle();
 
-      eventId = defaultEvent?.id || "11111111-1111-1111-1111-111111111111";
+      if (defaultEvent?.id) {
+        eventId = defaultEvent.id;
+      } else {
+        // Ensure default event exists in the database
+        const { data: newEv } = await supabaseAdmin
+          .from("events")
+          .upsert([{ id: "11111111-1111-1111-1111-111111111111", title: "IVC Hackathon 2026" }])
+          .select("id")
+          .maybeSingle();
+        eventId = newEv?.id || null;
+      }
     }
 
     const roundPayload = {
@@ -301,9 +325,31 @@ export async function createCriterion(
 
     const validated = parsed.data;
 
+    // Verify round exists in database
+    const { data: roundExists } = await supabaseAdmin
+      .from("evaluation_rounds")
+      .select("id")
+      .eq("id", validated.round_id)
+      .maybeSingle();
+
+    if (!roundExists) {
+      return {
+        success: false,
+        error: "The selected evaluation round does not exist. Please save the round first.",
+      };
+    }
+
+    const criterionPayload = {
+      round_id: validated.round_id,
+      title: validated.title,
+      description: validated.description || null,
+      max_marks: validated.max_marks,
+      is_required: validated.is_required ?? true,
+    };
+
     const { data: criterion, error } = await supabaseAdmin
       .from("evaluation_criteria")
-      .insert([validated])
+      .insert([criterionPayload])
       .select()
       .single();
 

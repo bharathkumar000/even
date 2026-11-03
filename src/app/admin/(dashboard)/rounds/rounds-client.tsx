@@ -159,6 +159,14 @@ export default function RoundsClientView({
     message: string;
   } | null>(null);
 
+  const cleanErrorMsg = (err: unknown, fallback: string) => {
+    const msg = (err instanceof Error ? err.message : String(err || "")).trim();
+    if (!msg || msg.includes("Minified React error #441") || msg.includes("Server Components render") || msg.includes("digest")) {
+      return `${fallback}: Database or authorization error. Please check your admin permissions or refresh the page.`;
+    }
+    return msg;
+  };
+
   // Active round object
   const activeRound = useMemo(
     () => rounds.find((r) => r.id === selectedRoundId) || null,
@@ -250,7 +258,7 @@ export default function RoundsClientView({
         );
         setNotification({
           type: "error",
-          message: err instanceof Error ? err.message : "Failed to save round.",
+          message: cleanErrorMsg(err, "Failed to save round"),
         });
       }
     } else {
@@ -305,7 +313,7 @@ export default function RoundsClientView({
         setSelectedRoundId(rounds[0]?.id || "");
         setNotification({
           type: "error",
-          message: err instanceof Error ? err.message : "Failed to create round.",
+          message: cleanErrorMsg(err, "Failed to create round"),
         });
       }
     }
@@ -465,7 +473,7 @@ export default function RoundsClientView({
         setCriteria((prev) => prev.map((c) => (c.id === origId ? origItem : c)));
         setNotification({
           type: "error",
-          message: err instanceof Error ? err.message : "Failed to save criterion.",
+          message: cleanErrorMsg(err, "Failed to save criterion"),
         });
       }
     } else {
