@@ -35,10 +35,11 @@ function formatMs(ms: number): string {
 }
 
 export default function StatementCard({ stmt, assignedCount }: Props) {
-  const [now, setNow] = useState(Date.now());
+  const [now, setNow] = useState(0);
   const [expanded, setExpanded] = useState(false);
 
   useEffect(() => {
+    setNow(Date.now());
     const interval = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(interval);
   }, []);

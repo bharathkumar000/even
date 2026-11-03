@@ -147,6 +147,6 @@ INSERT INTO public.team_members (team_id, user_id, role) VALUES
 ON CONFLICT (team_id, user_id) DO UPDATE SET role = 'leader';
 
 -- 7. Judge Assignment to Sample Team
-INSERT INTO public.judge_assignments (judge_id, team_id) VALUES
-('a2222222-2222-2222-2222-222222222222', '22222222-2222-2222-2222-222222222222')
-ON CONFLICT (judge_id, team_id) DO NOTHING;
+INSERT INTO public.judge_assignments (judge_id, team_id, round_id) VALUES
+('a2222222-2222-2222-2222-222222222222', '22222222-2222-2222-2222-222222222222', '44444444-4444-4444-4444-444444444444')
+ON CONFLICT (judge_id, team_id, round_id) DO UPDATE SET round_id = EXCLUDED.round_id;

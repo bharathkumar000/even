@@ -23,11 +23,25 @@ import {
 } from "lucide-react";
 import SignOutButton from "@/components/SignOutButton";
 
+interface NavItem {
+  href: string;
+  icon: any;
+  label: string;
+  badge?: string;
+  exact?: boolean;
+}
+
 export default function AdminSidebar() {
   const pathname = usePathname();
 
-  const navItems = [
-    { href: "/admin", icon: Users, label: "Overview" },
+  const [pendingHref, setPendingHref] = useState<string | null>(null);
+
+  React.useEffect(() => {
+    setPendingHref(null);
+  }, [pathname]);
+
+  const navItems: NavItem[] = [
+    { href: "/admin", icon: LayoutDashboard, label: "Overview" },
     { href: "/admin/content-releases", icon: FileCheck2, label: "Content Release" },
     { href: "/admin/submission-forms", icon: FileText, label: "Project Submissions" },
     { href: "/admin/users", icon: Users, label: "User Management" },
@@ -40,16 +54,12 @@ export default function AdminSidebar() {
     { href: "/admin/audit-logs", icon: ScrollText, label: "Audit Logs" },
   ];
 
-  const [pendingHref, setPendingHref] = useState<string | null>(null);
-
-  React.useEffect(() => {
-    setPendingHref(null);
-  }, [pathname]);
+  const isCurrentActive = (item: NavItem) =>
+    pathname === item.href || (item.href !== "/admin" && pathname?.startsWith(item.href));
 
   return (
     <aside className="w-full md:w-[280px] md:shrink-0 bg-surface-color md:border-r border-b md:border-b-0 border-border-color flex flex-col justify-between py-6 md:h-screen z-20 md:overflow-y-auto overscroll-contain custom-scrollbar">
       <div className="px-6 pb-6 border-b border-border-color flex flex-col items-center text-center shrink-0">
-        {/* Top Center Logo */}
         <div className="mb-3.5 relative flex items-center justify-center">
           <Image
             src="/ivc-logo-transparent.png"
@@ -60,8 +70,6 @@ export default function AdminSidebar() {
             className="w-[72px] h-[72px] object-contain drop-shadow-[0_0_15px_rgba(255,0,127,0.35)] hover:scale-105 transition-transform"
           />
         </div>
-
-        {/* Respective Portal Heading Below Logo */}
         <div className="flex flex-col items-center">
           <div className="flex items-center gap-2">
             <span className="p-1 bg-accent-secondary/15 border border-accent-secondary/40 rounded">
@@ -83,10 +91,8 @@ export default function AdminSidebar() {
         </p>
 
         {navItems.map((item) => {
-          const isCurrentActive =
-            pathname === item.href || (item.href !== "/admin" && pathname?.startsWith(item.href));
-          const isPending = pendingHref === item.href;
-          const isActive = isCurrentActive || isPending;
+          const isActiveItem = isCurrentActive(item);
+          const isItemPending = pendingHref === item.href;
 
           return (
             <Link
@@ -99,7 +105,7 @@ export default function AdminSidebar() {
                 }
               }}
               className={`group relative flex items-center justify-between py-3.5 px-4 rounded-2xl transition-all duration-300 ease-out active:scale-[0.98] ${
-                isActive
+                isActiveItem
                   ? "bg-[linear-gradient(90deg,#E0026E_0%,#B8005A_26%,#5B0832_60%,#240A1B_85%,#140E17_100%)] text-white shadow-[0_4px_22px_rgba(224,2,110,0.38),inset_0_1px_1px_rgba(255,255,255,0.22)] border border-pink-500/25 animate-active-pill"
                   : "text-[#94A3B8] border border-transparent hover:text-white hover:bg-white/[0.04] hover:translate-x-1"
               }`}
@@ -108,18 +114,18 @@ export default function AdminSidebar() {
                 <item.icon
                   size={19}
                   className={`transition-colors duration-200 shrink-0 ${
-                    isActive ? "text-white" : "text-[#94A3B8] group-hover:text-white"
+                    isActiveItem ? "text-white" : "text-[#94A3B8] group-hover:text-white"
                   }`}
                 />
                 <span
                   className={`text-[14px] font-medium tracking-normal transition-colors duration-200 ${
-                    isActive ? "text-white font-semibold" : "text-[#94A3B8] group-hover:text-white"
+                    isActiveItem ? "text-white font-semibold" : "text-[#94A3B8] group-hover:text-white"
                   }`}
                 >
                   {item.label}
                 </span>
               </div>
-              {isPending && !isCurrentActive && (
+              {isItemPending && !isCurrentActive(item) && (
                 <div className="w-1.5 h-1.5 rounded-full bg-white shadow-[0_0_8px_#FFF] animate-ping" />
               )}
             </Link>

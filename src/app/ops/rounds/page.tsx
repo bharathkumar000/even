@@ -34,7 +34,6 @@ interface Criterion {
   title: string;
   description?: string | null;
   max_marks: number;
-  weightage?: number | null;
   is_required?: boolean | null;
 }
 
@@ -90,7 +89,7 @@ export default async function OpsRoundsPage() {
         .order("sequence_order", { ascending: true }),
       supabaseAdmin
         .from("evaluation_criteria")
-        .select("id, round_id, title, description, max_marks, weightage, is_required"),
+        .select("id, round_id, title, description, max_marks, is_required"),
       supabaseAdmin
         .from("evaluations")
         .select("round_id, status"),
@@ -258,13 +257,12 @@ export default async function OpsRoundsPage() {
                 ) : (
                   <div className="overflow-x-auto">
                     <table className="w-full text-left border-collapse text-xs">
-                      <thead>
+<thead>
                         <tr className="border-b border-border-color bg-surface-color-light/40 text-text-secondary uppercase tracking-wider text-[10px]">
                           <th className="p-3 pl-5">#</th>
                           <th className="p-3">Criterion Name</th>
                           <th className="p-3">Description</th>
                           <th className="p-3 text-center">Max Marks</th>
-                          <th className="p-3 text-center">Weight</th>
                           <th className="p-3 text-center">Required</th>
                         </tr>
                       </thead>
@@ -285,9 +283,6 @@ export default async function OpsRoundsPage() {
                             <td className="p-3 text-center font-mono font-bold text-accent-tertiary">
                               {c.max_marks} pts
                             </td>
-                            <td className="p-3 text-center font-mono text-text-secondary">
-                              {c.weightage != null ? `${c.weightage}%` : "—"}
-                            </td>
                             <td className="p-3 text-center">
                               {c.is_required ? (
                                 <span className="inline-flex items-center gap-1 text-status-success text-[10px] font-bold uppercase">
@@ -301,7 +296,7 @@ export default async function OpsRoundsPage() {
                           </tr>
                         ))}
                       </tbody>
-                    </table>
+                      </table>
                   </div>
                 )}
               </div>

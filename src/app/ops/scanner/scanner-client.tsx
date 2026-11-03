@@ -9,23 +9,20 @@ import {
   Gift,
   UserCheck,
   ShieldAlert,
-  Users,
-  Sparkles,
-  Award,
+  Loader2,
+  RefreshCw,
 } from "lucide-react";
 import {
   fetchTeamMembersForScan,
-  recordMemberAction,
-  recordTeamBulkAction,
   manualTeamLookup,
   getLiveScanActivityStream,
+  getRecentlyScannedTeams,
   type LiveActivityFeedItem,
   type EnrichedActivityLog,
 } from "@/app/actions/operations";
-import type { ActionType } from "@/lib/validations/operations";
 import ScannerDesk from "@/components/ops/ScannerDesk";
+import RecentlyScannedTeams from "@/components/ops/RecentlyScannedTeams";
 
-import { CSRF_CONSTANTS } from "@/lib/csrf-constants";
 import { createClient } from "@/lib/supabase/client";
 import { playScanSuccess, playScanError } from "@/lib/feedback-sound";
 
@@ -89,34 +86,62 @@ export interface TeamScanData {
   activityLogs: EnrichedActivityLog[];
 }
 
+// Scan purposes mapped to existing action types (verification only).
+export interface ScanPurposeOption {
+  value: string;
+  label: string;
+  description: string;
+  icon: React.ComponentType<{ className?: string }>;
+}
+
+const SCAN_PURPOSES: ScanPurposeOption[] = [
+  {
+    value: "registration",
+    label: "Registration / Check-In",
+    description: "Verify registration and check-in status (read-only)",
+    icon: UserCheck,
+  },
+  {
+    value: "verification",
+    label: "Team QR Pass Verification",
+    description: "Verify team QR pass validity (read-only)",
+    icon: ShieldAlert,
+  },
+  {
+    value: "goodies",
+    label: "Kit Distribution Status",
+    description: "Verify existing kit distribution status (read-only)",
+    icon: Gift,
+  },
+  {
+    value: "lunch",
+    label: "Lunch Status",
+    description: "Verify existing lunch claim status (read-only)",
+    icon: Utensils,
+  },
+  {
+    value: "snacks",
+    label: "Snacks Status",
+    description: "Verify existing snack claim status (read-only)",
+    icon: Coffee,
+  },
+] as const;
+
 export default function ScannerClientView() {
   const [scanning, setScanning] = useState(false);
   const [manualId, setManualId] = useState("");
   const [teamData, setTeamData] = useState<TeamScanData | null>(null);
   const [loading, setLoading] = useState(false);
-  const [actionLoading, setActionLoading] = useState<string | null>(null);
-  const [selectedOperation, setSelectedOperation] = useState<string>("registration");
+  const [scanPurpose, setScanPurpose] = useState<string>("registration");
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [liveStreamLogs, setLiveStreamLogs] = useState<LiveActivityFeedItem[]>([]);
    const [streamLoading, setStreamLoading] = useState(false);
-   const [recentScans, setRecentScans] = useState<string[]>([]);
+    const [recentScans, setRecentScans] = useState<string[]>([]);
 
    const [lastSyncTime, setLastSyncTime] = useState<Date | null>(null);
-   const [csrfToken, setCsrfToken] = useState<string | undefined>(undefined);
 useEffect(() => {
   setLastSyncTime(new Date());
-  // Fetch CSRF token from server
-  void fetch("/api/csrf/init")
-    .then((res) => res.json())
-    .then((data) => {
-      if (data?.token) {
-        setCsrfToken(data.token);
-      }
-    })
-    .catch((err) => {
-      console.warn("CSRF init fetch failed:", err);
-    });
 }, []);
   const html5QrCodeRef = useRef<any>(null);
 
@@ -286,60 +311,27 @@ useEffect(() => {
       return;
     }
 
-    // If an operation is selected, attempt bulk claim; otherwise just load team data
-    const op = selectedOperation;
-    const supportedOps = ["registration", "goodies", "lunch", "snacks", "certificates"];
-    if (supportedOps.includes(op)) {
-      // Bulk claim for the selected operation
-      setActionLoading(`bulk-${op}`);
-      setErrorMsg(null);
-      const correlationId = crypto.randomUUID();
-      try {
-        const res = await recordTeamBulkAction(teamId, op as ActionType, csrfToken, {
-          method: "qr",
-          correlationId,
-        });
-        playScanSuccess();
-        setSuccessMsg(
-          `Bulk Claim Complete: Distributed "${op.toUpperCase()}" to ${res.claimedCount} members.`
-        );
-        broadcastScanEvent(teamId, undefined, op as ActionType);
-        fetchLiveStream();
-        loadTeamData(teamId);
-      } catch (err: unknown) {
-        playScanError();
-        setErrorMsg(err instanceof Error ? err.message : `Bulk ${op} claim failed`);
-      } finally {
-        setActionLoading(null);
-      }
-    } else if (op === "feedback") {
-      playScanError();
-      setErrorMsg("Feedback operation is not supported in Ops scanner.");
-    } else {
-      // No operation selected or unsupported, just load team roster
-      loadTeamData(teamId);
-    }
-  };
-
-  const loadTeamData = async (teamId: string) => {
-    if (!teamId) return;
+    // SPOC scanner is read-only: load team data for verification only.
+    // No claims, distributions, check-ins, or certificate records are created.
     setLoading(true);
     setErrorMsg(null);
     setSuccessMsg(null);
     try {
       const res = await fetchTeamMembersForScan(teamId);
       playScanSuccess();
-        setTeamData(res);
-        setSuccessMsg(`Loaded roster for team "${res.team.name}"`);
-        // Update recent scans (keep up to 3 items: current + two previous)
-        setRecentScans(prev => {
-          const filtered = prev.filter(id => id !== res.team.id);
-          const newList = [res.team.id, ...filtered];
-          return newList.slice(0, 3);
-        });
+      setTeamData(res);
+      setSuccessMsg(
+        `Team Verified: "${res.team.name}" (${teamId.slice(0, 8)}...)`
+      );
+      // Update recent scans (keep up to 3 items: current + two previous)
+      setRecentScans((prev) => {
+        const filtered = prev.filter((id) => id !== res.team.id);
+        const newList = [res.team.id, ...filtered];
+        return newList.slice(0, 3);
+      });
     } catch (err: unknown) {
       playScanError();
-      setErrorMsg(err instanceof Error ? err.message : "Failed to fetch team details");
+      setErrorMsg(err instanceof Error ? err.message : "Team verification failed");
       setTeamData(null);
     } finally {
       setLoading(false);
@@ -372,123 +364,10 @@ useEffect(() => {
     }
   };
 
-  const broadcastScanEvent = (teamId: string, participantId?: string, actionType?: ActionType) => {
-    try {
-      const supabase = createClient();
-      const channel = supabase.channel("ops-realtime-activity");
-      channel.send({
-        type: "broadcast",
-        event: "scan_action_recorded",
-        payload: {
-          team_id: teamId,
-          participant_id: participantId,
-          action_type: actionType,
-        },
-      });
-    } catch {}
-  };
-
-  const handleActionClick = async (participantId: string, actionType: ActionType) => {
-    if (!teamData?.team?.id) return;
-    const actionKey = `${participantId}-${actionType}`;
-    setErrorMsg(null);
-    setActionLoading(actionKey);
-    const correlationId = crypto.randomUUID();
-
-    // Optimistic update
-    const optimisticLog: EnrichedActivityLog = {
-      id: `temp-${Date.now()}`,
-      participant_id: participantId,
-      action_type: actionType,
-      created_at: new Date().toISOString(),
-      scanner_name: "You (Just now)",
-      scanner_email: "",
-    };
-
-    setTeamData((prev) =>
-      !prev
-        ? null
-        : {
-            ...prev,
-            activityLogs: [...prev.activityLogs, optimisticLog],
-          }
-    );
-
-    try {
-      const res = await recordMemberAction({
-        team_id: teamData.team.id,
-        participant_id: participantId,
-        action_type: actionType,
-        [CSRF_CONSTANTS.HEADER_NAME]: csrfToken,
-        method: "qr",
-        correlationId,
-      });
-
-      playScanSuccess();
-      setSuccessMsg(
-        `Recorded "${actionType.toUpperCase()}"! Distributed by ${res.record.scanner_name}.`
-      );
-
-      // Broadcast to other club members
-      broadcastScanEvent(teamData.team.id, participantId, actionType);
-
-      // Refresh live stream & team
-      fetchLiveStream();
-      loadTeamData(teamData.team.id);
-    } catch (err: unknown) {
-      playScanError();
-      // Revert optimistic update on failure
-      setTeamData((prev) =>
-        !prev
-          ? null
-          : {
-              ...prev,
-              activityLogs: prev.activityLogs.filter(
-                (log) => !(log.participant_id === participantId && log.action_type === actionType)
-              ),
-            }
-      );
-      setErrorMsg(err instanceof Error ? err.message : "Action claim failed");
-      setSuccessMsg(null);
-    } finally {
-      setActionLoading(null);
-    }
-  };
-
-  const handleBulkActionClick = async (actionType: ActionType) => {
-    if (!teamData?.team?.id) return;
-    setActionLoading(`bulk-${actionType}`);
-    setErrorMsg(null);
-    const correlationId = crypto.randomUUID();
-
-    try {
-      const res = await recordTeamBulkAction(teamData.team.id, actionType, csrfToken, {
-        method: "qr",
-        correlationId,
-      });
-      playScanSuccess();
-      setSuccessMsg(
-        `Bulk Claim Complete: Distributed "${actionType.toUpperCase()}" to ${res.claimedCount} members.`
-      );
-      broadcastScanEvent(teamData.team.id, undefined, actionType);
-      fetchLiveStream();
-      loadTeamData(teamData.team.id);
-    } catch (err: unknown) {
-      playScanError();
-      setErrorMsg(err instanceof Error ? err.message : `Bulk ${actionType} claim failed`);
-    } finally {
-      setActionLoading(null);
-    }
-  };
-
   const getLogForAction = (participantId: string, actionType: string) => {
     return teamData?.activityLogs?.find(
       (log) => log.participant_id === participantId && log.action_type === actionType
     );
-  };
-
-  const isClaimed = (participantId: string, actionType: string) => {
-    return Boolean(getLogForAction(participantId, actionType));
   };
 
   // Anti-fraud summary for the active team
@@ -553,22 +432,50 @@ useEffect(() => {
       >
         Live Activity Feed
       </a>
+      {/* Scan Purpose Selector - positioned directly above the scanner */}
       <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 mb-4 bg-surface-color/60 border border-border-color p-3 rounded">
-        <label htmlFor="operation-select" className="font-bold uppercase text-xs text-text-secondary shrink-0">Select Active Desk / Operation</label>
+        <label
+          htmlFor="scan-purpose-select"
+          className="font-bold uppercase text-xs text-text-secondary shrink-0"
+        >
+          Select Scan Purpose
+        </label>
         <select
-          id="operation-select"
-          value={selectedOperation}
-          onChange={(e) => setSelectedOperation(e.target.value)}
+          id="scan-purpose-select"
+          value={scanPurpose}
+          onChange={(e) => setScanPurpose(e.target.value)}
           className="bg-surface-color border border-border-color p-2 text-xs font-tech text-text-primary outline-none focus:border-accent-secondary rounded w-full sm:w-auto"
         >
-          <option value="registration">Registration / Check‑In Desk</option>
-          <option value="goodies">Goodies / Swag Kit Desk</option>
-          <option value="lunch">Lunch Token Desk</option>
-          <option value="snacks">Snacks / Refreshments Desk</option>
-          <option value="certificates">Certificates Desk</option>
-          <option value="feedback">Feedback Desk</option>
+          {SCAN_PURPOSES.map((p) => (
+            <option key={p.value} value={p.value}>
+              {p.label}
+            </option>
+          ))}
         </select>
+        <span
+          className={`text-[10px] text-text-secondary/70 font-mono shrink-0 ${scanPurpose === "verification" ? "text-accent-tertiary" : ""}`}
+        >
+          {scanPurpose === "verification"
+            ? "Read-only verification — no records modified"
+            : `Verification: ${SCAN_PURPOSES.find((p) => p.value === scanPurpose)?.label} (read-only)`
+          }
+        </span>
       </div>
+      
+      {/* Scan Next Team - resets scanner for next verification */}
+      {teamData && (
+        <button
+          onClick={() => {
+            setTeamData(null);
+            setSuccessMsg(null);
+            setErrorMsg(null);
+          }}
+          className="px-5 py-2.5 border border-accent-tertiary rounded text-accent-tertiary font-tech font-bold uppercase text-xs transition-all hover:bg-accent-tertiary/10 flex items-center gap-2"
+        >
+          <RefreshCw size={14} />
+          <span>Scan Next Team</span>
+        </button>
+      )}
       
 {/* Scanner & Manual Lookup Controls */}
          <div>
@@ -636,49 +543,17 @@ useEffect(() => {
                 <span className="font-mono text-text-primary">{teamData.team.id}</span>
               </p>
             </div>
-
-            {/* Quick Bulk Distribution Actions */}
-            <div className="flex flex-wrap items-center gap-2">
-              <button
-                onClick={() => handleBulkActionClick("goodies")}
-                disabled={actionLoading === "bulk-goodies" || teamData.members.every((m) => isClaimed(m.id, "goodies"))}
-                className="px-3 py-1.5 bg-accent-primary/20 hover:bg-accent-primary hover:text-black border border-accent-primary text-accent-primary font-bold text-xs uppercase flex items-center gap-1.5 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                title="Claim goodies for all members in one click"
-              >
-                <Gift size={13} />
-                <span>Distribute All Goodies</span>
-              </button>
-
-              <button
-                onClick={() => handleBulkActionClick("registration")}
-                disabled={actionLoading === "bulk-registration" || teamData.members.every((m) => isClaimed(m.id, "registration"))}
-                className="px-3 py-1.5 bg-accent-tertiary/20 hover:bg-accent-tertiary hover:text-black border border-accent-tertiary text-accent-tertiary font-bold text-xs uppercase flex items-center gap-1.5 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <UserCheck size={13} />
-                <span>Check-In All</span>
-              </button>
-
-              <button
-                onClick={() => handleBulkActionClick("certificates")}
-                disabled={actionLoading === "bulk-certificates" || teamData.members.every((m) => isClaimed(m.id, "certificates"))}
-                className="px-3 py-1.5 bg-purple-500/20 hover:bg-purple-500 hover:text-white border border-purple-500 text-purple-400 font-bold text-xs uppercase flex items-center gap-1.5 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                title="Issue certificates for all members in one click"
-              >
-                <Award size={13} />
-                <span>Issue All Certificates</span>
-              </button>
-            </div>
           </div>
 
           {/* Members Table */}
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse text-xs">
-              <thead>
-                <tr className="border-b border-border-color bg-surface-color-light/40 text-text-secondary uppercase tracking-wider">
+              <thead className="border-b border-border-color bg-surface-color-light/40 text-text-secondary uppercase tracking-wider">
+                <tr>
                   <th className="p-3">Participant</th>
                   <th className="p-3">Role</th>
                   <th className="p-3 text-center">Registration</th>
-                  <th className="p-3 text-center">Goodies / Kit</th>
+                  <th className="p-3 text-center">Kit / Goodies</th>
                   <th className="p-3 text-center">Lunch</th>
                   <th className="p-3 text-center">Snacks</th>
                   <th className="p-3 text-center">Certificates</th>
@@ -695,9 +570,24 @@ useEffect(() => {
                   teamData.members.map((m: TeamScanMember) => {
                     const regLog = getLogForAction(m.id, "registration");
                     const goodiesLog = getLogForAction(m.id, "goodies");
-                    const lunchLog = getLogForAction(m.id, "lunch");
-                    const snacksLog = getLogForAction(m.id, "snacks");
+                    const lunchLogs = teamData.activityLogs.filter(
+                      (l) => l.participant_id === m.id && l.action_type === "lunch" && l.result === "success"
+                    );
+                    const snacksLogs = teamData.activityLogs.filter(
+                      (l) => l.participant_id === m.id && l.action_type === "snacks" && l.result === "success"
+                    );
                     const certLog = getLogForAction(m.id, "certificates");
+
+                    const statusBadge = (claimed: boolean, label: string, color: "status-success" | "text-text-secondary") => (
+                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase border ${
+                        claimed
+                          ? "bg-status-success/10 text-status-success border-status-success/40"
+                          : "bg-surface-color text-text-secondary border-border-color"
+                      }`}>
+                        {claimed ? <CheckCircle2 size={11} className={`text-${color === "status-success" ? "status-success" : "text-text-secondary"}`} /> : ""}
+                        {label}
+                      </span>
+                    );
 
                     return (
                       <tr key={m.id} className="hover:bg-surface-color-light/20 transition-colors">
@@ -722,23 +612,11 @@ useEffect(() => {
                           </span>
                         </td>
 
-                        {/* Registration Button & Audit info */}
+                        {/* Registration Status (read-only) */}
                         <td className="p-3 text-center">
-                          <button
-                            onClick={() => handleActionClick(m.id, "registration")}
-                            disabled={Boolean(regLog) || actionLoading === `${m.id}-registration`}
-                            className={`px-3 py-1 text-[11px] font-bold uppercase transition-all flex items-center justify-center gap-1 mx-auto ${
-                              regLog
-                                ? "bg-status-success/15 text-status-success border border-status-success cursor-default"
-                                : "bg-surface-color hover:bg-accent-tertiary hover:text-black border border-border-color"
-                            }`}
-                          >
-                            <UserCheck size={13} />
-                            {regLog ? "Checked-In" : "Check In"}
-                          </button>
+                          {statusBadge(Boolean(regLog), regLog ? "Checked-In" : "Pending", "status-success")}
                           {regLog && (
                             <p className="text-[9px] text-text-secondary font-mono m-0 mt-1">
-                              By {regLog.scanner_name?.split(" ")[0]} •{" "}
                               {new Date(regLog.created_at).toLocaleTimeString([], {
                                 hour: "2-digit",
                                 minute: "2-digit",
@@ -747,23 +625,11 @@ useEffect(() => {
                           )}
                         </td>
 
-                        {/* Goodies Button & Audit info */}
+                        {/* Goodies Status (read-only) */}
                         <td className="p-3 text-center">
-                          <button
-                            onClick={() => handleActionClick(m.id, "goodies")}
-                            disabled={Boolean(goodiesLog) || actionLoading === `${m.id}-goodies`}
-                            className={`px-3 py-1 text-[11px] font-bold uppercase transition-all flex items-center justify-center gap-1 mx-auto ${
-                              goodiesLog
-                                ? "bg-status-success/15 text-status-success border border-status-success cursor-default"
-                                : "bg-surface-color hover:bg-accent-primary hover:text-black border border-border-color"
-                            }`}
-                          >
-                            <Gift size={13} />
-                            {goodiesLog ? "Claimed" : "Distribute"}
-                          </button>
+                          {statusBadge(Boolean(goodiesLog), goodiesLog ? "Distributed" : "Pending", "status-success")}
                           {goodiesLog && (
                             <p className="text-[9px] text-text-secondary font-mono m-0 mt-1">
-                              By {goodiesLog.scanner_name?.split(" ")[0]} •{" "}
                               {new Date(goodiesLog.created_at).toLocaleTimeString([], {
                                 hour: "2-digit",
                                 minute: "2-digit",
@@ -772,73 +638,21 @@ useEffect(() => {
                           )}
                         </td>
 
-                        {/* Lunch Button & Audit info */}
+                        {/* Lunch Status (read-only) */}
                         <td className="p-3 text-center">
-                          <button
-                            onClick={() => handleActionClick(m.id, "lunch")}
-                            disabled={((teamData.activityLogs?.filter(l => l.participant_id === m.id && l.action_type === "lunch").length) || 0) >= 3 || actionLoading === `${m.id}-lunch`}
-                            className={`px-3 py-1 text-[11px] font-bold uppercase transition-all flex items-center justify-center gap-1 mx-auto ${
-                              lunchLog
-                                ? "bg-status-success/15 text-status-success border border-status-success cursor-default"
-                                : "bg-surface-color hover:bg-accent-secondary hover:text-white border border-border-color"
-                            }`}
-                          >
-                            <Utensils size={13} />
-                            {lunchLog ? "Claimed" : "Claim"}
-                          </button>
-                          {lunchLog && (
-                            <p className="text-[9px] text-text-secondary font-mono m-0 mt-1">
-                              By {lunchLog.scanner_name?.split(" ")[0]} •{" "}
-                              {new Date(lunchLog.created_at).toLocaleTimeString([], {
-                                hour: "2-digit",
-                                minute: "2-digit",
-                              })}
-                            </p>
-                          )}
+                          {statusBadge(lunchLogs.length > 0, `${lunchLogs.length}/3`, "status-success")}
                         </td>
 
-                        {/* Snacks Button & Audit info */}
+                        {/* Snacks Status (read-only) */}
                         <td className="p-3 text-center">
-                          <button
-                            onClick={() => handleActionClick(m.id, "snacks")}
-                            disabled={((teamData.activityLogs?.filter(l => l.participant_id === m.id && l.action_type === "snacks").length) || 0) >= 3 || actionLoading === `${m.id}-snacks`}
-                            className={`px-3 py-1 text-[11px] font-bold uppercase transition-all flex items-center justify-center gap-1 mx-auto ${
-                              snacksLog
-                                ? "bg-status-success/15 text-status-success border border-status-success cursor-default"
-                                : "bg-surface-color hover:bg-yellow-400 hover:text-black border border-border-color"
-                            }`}
-                          >
-                            <Coffee size={13} />
-                            {snacksLog ? "Claimed" : "Claim"}
-                          </button>
-                          {snacksLog && (
-                            <p className="text-[9px] text-text-secondary font-mono m-0 mt-1">
-                              By {snacksLog.scanner_name?.split(" ")[0]} •{" "}
-                              {new Date(snacksLog.created_at).toLocaleTimeString([], {
-                                hour: "2-digit",
-                                minute: "2-digit",
-                              })}
-                            </p>
-                          )}
+                          {statusBadge(snacksLogs.length > 0, `${snacksLogs.length}/3`, "status-success")}
                         </td>
 
-                        {/* Certificates Button & Audit info */}
+                        {/* Certificates Status (read-only) */}
                         <td className="p-3 text-center">
-                          <button
-                            onClick={() => handleActionClick(m.id, "certificates")}
-                            disabled={Boolean(certLog) || actionLoading === `${m.id}-certificates`}
-                            className={`px-3 py-1 text-[11px] font-bold uppercase transition-all flex items-center justify-center gap-1 mx-auto ${
-                              certLog
-                                ? "bg-status-success/15 text-status-success border border-status-success cursor-default"
-                                : "bg-surface-color hover:bg-purple-500 hover:text-white border border-border-color"
-                            }`}
-                          >
-                            <Award size={13} />
-                            {certLog ? "Issued" : "Issue"}
-                          </button>
+                          {statusBadge(Boolean(certLog), certLog ? "Issued" : "Pending", "status-success")}
                           {certLog && (
                             <p className="text-[9px] text-text-secondary font-mono m-0 mt-1">
-                              By {certLog.scanner_name?.split(" ")[0]} •{" "}
                               {new Date(certLog.created_at).toLocaleTimeString([], {
                                 hour: "2-digit",
                                 minute: "2-digit",
@@ -856,6 +670,8 @@ useEffect(() => {
         </div>
       )}
 
+      {/* Recently Scanned Teams - at the bottom of the ops overview */}
+      <RecentlyScannedTeams limit={3} />
 
     </div>
   );

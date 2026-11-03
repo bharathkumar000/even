@@ -542,3 +542,48 @@ export async function autoBalanceSpocAssignments(
     allocatedTeamsCount: newRows.length,
   };
 }
+
+/**
+ * Delete ALL team assignments for a given Staff SPOC.
+ * Removes every team_spoc_assignments row linked to this staff member's SPOC row,
+ * effectively unassigning all teams from this SPOC.
+ */
+export async function deleteAllSpocAssignments(data: {
+  spocId: string;
+  [CSRF_CONSTANTS.HEADER_NAME]?: string;
+}) {
+  const { user } = await requireAdmin();
+  await validateCsrfToken(data[CSRF_CONSTANTS.HEADER_NAME] || null);
+
+  const staff = await getEligibleStaff(data.spocId);
+  const spocRow = await ensureSpocRowForStaff(staff);
+
+  const { error: deleteError } = await supabaseAdmin
+    .from("team_spoc_assignments")
+    .delete()
+    .eq("spoc_id", spocRow.id);
+
+  if (deleteError) {
+    throw new Error(`Failed to delete SPOC assignments: ${deleteError.message}`);
+  }
+
+  // Audit log (non-blocking)
+  void supabaseAdmin.from("audit_logs").insert([
+    {
+      action: "DELETE_ALL_SPOC_ASSIGNMENTS",
+      entity_type: "team_spoc_assignments",
+      entity_id: data.spocId,
+      admin_id: user.id,
+      details: {
+        staff_profile_id: staff.id,
+        spoc_id: spocRow.id,
+      },
+      created_at: new Date().toISOString(),
+    },
+  ]);
+
+  revalidatePath("/admin/spoc");
+  revalidatePath("/team");
+
+  return { success: true };
+}

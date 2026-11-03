@@ -84,13 +84,9 @@ function formatLocalTime(iso?: string | null, opts?: { utc?: boolean }) {
 function formatRelative(iso?: string | null) {
   if (!iso) return "";
   try {
-    const diffSec = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
-    if (diffSec < 45) return "just now";
-    const diffMin = Math.floor(diffSec / 60);
-    if (diffMin < 60) return `${diffMin}m ago`;
-    const diffHr = Math.floor(diffMin / 60);
-    if (diffHr < 24) return `${diffHr}h ago`;
-    return `${Math.floor(diffHr / 24)}d ago`;
+    const d = new Date(iso);
+    // Deterministic absolute date/time for SSR-safe rendering
+    return d.toLocaleDateString([], { month: "short", day: "numeric" }) + " " + d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
   } catch {
     return "";
   }

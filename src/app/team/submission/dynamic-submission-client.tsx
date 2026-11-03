@@ -120,6 +120,7 @@ export default function TeamDynamicSubmissionClientView({
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [mounted, setMounted] = useState(false);
   const [notification, setNotification] = useState<{ type: "success" | "error"; message: string } | null>(null);
   const [submissionReceipt, setSubmissionReceipt] = useState<{ referenceNumber: string; submittedAt: string } | null>(null);
   const [showReview, setShowReview] = useState(false);
@@ -131,6 +132,7 @@ export default function TeamDynamicSubmissionClientView({
 
   useEffect(() => {
     loadForm();
+    setMounted(true);
   }, [formId]);
 
   const loadForm = async () => {
@@ -714,7 +716,7 @@ export default function TeamDynamicSubmissionClientView({
             <div className="px-3 py-1.5 rounded bg-surface-color border border-border-color text-xs">
               <Timer size={12} className="mr-1.5 text-accent-secondary animate-pulse" />
               <span className="font-mono font-bold text-text-primary">
-                {formatCountdown(getDeadlineSeconds())}
+                {mounted ? formatCountdown(getDeadlineSeconds()) : "--:--:--"}
               </span>
               <span className="text-text-secondary ml-1">Remaining</span>
             </div>
