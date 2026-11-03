@@ -400,6 +400,20 @@ export default function ScannerClientView() {
           });
         }
       })
+      .on("broadcast", { event: "scan_action_reverted" }, (payload) => {
+        fetchLiveStream();
+        const changedTeamId = payload?.payload?.team_id;
+        if (changedTeamId) {
+          setTeamData((current) => {
+            if (current && current.team.id === changedTeamId) {
+              fetchTeamMembersForScan(changedTeamId)
+                .then((updated) => setTeamData(updated))
+                .catch(() => {});
+            }
+            return current;
+          });
+        }
+      })
       .subscribe();
 
     const pollInterval = setInterval(() => {

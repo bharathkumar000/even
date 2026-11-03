@@ -168,7 +168,7 @@ export default function RoundsClientView({
       return fallback;
     }
     if (msg.includes("Minified React error #441") || msg.includes("Server Components render")) {
-      return `${fallback}: Server or database connection error. Please verify your environment variables (.env.local) and check the server console.`;
+      return `${fallback}: Internal server rendering error. Please refresh the page.`;
     }
     return msg;
   };

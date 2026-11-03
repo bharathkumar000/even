@@ -540,10 +540,17 @@ export default function AuditLogsClientView({
                       icon: <Activity size={13} />,
                       color: "text-text-secondary",
                     };
-                    const resultBadge = RESULT_BADGES[log.result || ""] || {
-                      label: log.result || "-",
-                      className: "bg-surface-color text-text-secondary border-border-color",
-                    };
+                    const isReverted =
+                      log.result === "reverted" ||
+                      (log.result === "rejected" &&
+                        (log.new_status === "unclaimed" ||
+                          (log.reason && log.reason.toLowerCase().includes("revert"))));
+                    const resultBadge = isReverted
+                      ? RESULT_BADGES.reverted
+                      : RESULT_BADGES[log.result || ""] || {
+                          label: log.result || "-",
+                          className: "bg-surface-color text-text-secondary border-border-color",
+                        };
 
                     return (
                       <tr
@@ -647,7 +654,7 @@ export default function AuditLogsClientView({
                               <Undo2 size={11} />
                               <span>Revert</span>
                             </button>
-                          ) : log.result === "reverted" ? (
+                          ) : isReverted ? (
                             <span className="px-2 py-0.5 rounded bg-yellow-500/10 border border-yellow-500/30 text-yellow-400/90 text-[10px] font-mono uppercase">
                               Unclaimed
                             </span>
@@ -832,15 +839,26 @@ export default function AuditLogsClientView({
                   <span className="text-[10px] text-text-secondary uppercase block mb-1">
                     Result Status
                   </span>
-                  <span
-                    className={`font-bold uppercase ${
-                      selectedLog.result === "success"
-                        ? "text-status-success"
-                        : "text-status-error"
-                    }`}
-                  >
-                    {selectedLog.result}
-                  </span>
+                  {(() => {
+                    const isSelReverted =
+                      selectedLog.result === "reverted" ||
+                      (selectedLog.result === "rejected" &&
+                        (selectedLog.new_status === "unclaimed" ||
+                          (selectedLog.reason && selectedLog.reason.toLowerCase().includes("revert"))));
+                    return (
+                      <span
+                        className={`font-bold uppercase ${
+                          selectedLog.result === "success"
+                            ? "text-status-success"
+                            : isSelReverted
+                            ? "text-yellow-400"
+                            : "text-status-error"
+                        }`}
+                      >
+                        {isSelReverted ? "Reverted (Unclaimed)" : selectedLog.result}
+                      </span>
+                    );
+                  })()}
                 </div>
               </div>
 
@@ -887,7 +905,13 @@ export default function AuditLogsClientView({
                     {selectedLog.previous_status || "None"}
                   </span>
                   <span className="text-text-secondary">&rarr;</span>
-                  <span className="px-2 py-0.5 rounded bg-status-success/20 border border-status-success/40 text-status-success font-bold">
+                  <span
+                    className={`px-2 py-0.5 rounded font-bold uppercase ${
+                      selectedLog.new_status === "unclaimed"
+                        ? "bg-yellow-500/20 border border-yellow-500/40 text-yellow-400"
+                        : "bg-status-success/20 border border-status-success/40 text-status-success"
+                    }`}
+                  >
                     {selectedLog.new_status || "Claimed"}
                   </span>
                 </div>
