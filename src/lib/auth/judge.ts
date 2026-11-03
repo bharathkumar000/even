@@ -33,22 +33,18 @@ export async function requireActiveJudgeForTeam(teamId: string, roundId?: string
     throw new Error("Forbidden: Judge role required");
   }
 
-  // Admins can evaluate any team; judges must be in judge_assignments for this team AND round
+  // Admins can evaluate any team; judges must be assigned to this team (any round).
+  // Round-specific validation is handled separately in the evaluation action.
   if (profile?.role !== "admin") {
-    let assignmentQuery = supabaseAdmin
+    const { data: assignment, error: assignError } = await supabaseAdmin
       .from("judge_assignments")
-      .select("id")
+      .select("id, round_id")
       .eq("judge_id", user.id)
-      .eq("team_id", teamId);
-
-    if (roundId) {
-      assignmentQuery = assignmentQuery.or(`round_id.eq.${roundId},round_id.is.null`);
-    }
-
-    const { data: assignment, error: assignError } = await assignmentQuery.maybeSingle();
+      .eq("team_id", teamId)
+      .maybeSingle();
 
     if (assignError || !assignment) {
-      throw new Error("Forbidden: You are not assigned to evaluate this team for this round");
+      throw new Error("Forbidden: You are not assigned to evaluate this team");
     }
   }
 

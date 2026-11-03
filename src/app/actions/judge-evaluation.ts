@@ -23,10 +23,23 @@ function logEvalAction(operation: string, details: Record<string, unknown>) {
   });
 }
 
+function logEvalError(operation: string, error: Error | string, context: Record<string, unknown>) {
+  console.error(`[EVAL:${operation}:ERROR]`, {
+    timestamp: new Date().toISOString(),
+    error: error instanceof Error ? error.message : String(error),
+    error_type: error instanceof Error ? error.constructor.name : typeof error,
+    ...context,
+  });
+}
+
 export async function saveOrSubmitEvaluation(
   data: SubmitEvaluationInput & { [CSRF_CONSTANTS.HEADER_NAME]?: string }
 ): Promise<EvaluationActionResult> {
   const operation = "saveOrSubmitEvaluation";
+  
+  // Declare variables accessible in catch block
+  let validated: any = null;
+  let judgeUserId: string | null = null;
 
   try {
     // 1. Validate input schema first (need round_id for auth check)
@@ -37,7 +50,7 @@ export async function saveOrSubmitEvaluation(
       logEvalAction("validation_failed", { error: errMessage });
       return { success: false, error: errMessage };
     }
-    const validated = parsed.data;
+    validated = parsed.data;
 
     logEvalAction("input_validated", {
       round_id: validated.round_id,
@@ -52,8 +65,7 @@ export async function saveOrSubmitEvaluation(
       console.warn("[CSRF] saveOrSubmitEvaluation notice:", csrfErr);
     }
 
-    // 2. Verify judge authentication & team assignment (for this round)
-    let judgeUserId: string | null = null;
+    // 2. Verify judge authentication & team assignment
     let { user } = await requireActiveJudgeForTeam(validated.team_id, validated.round_id);
     judgeUserId = user.id;
 
@@ -218,8 +230,10 @@ export async function saveOrSubmitEvaluation(
   } catch (err: unknown) {
     const errMsg =
       err instanceof Error ? err.message : "An unexpected error occurred while saving evaluation.";
-    logEvalAction("unhandled_error", {
-      error: errMsg,
+    logEvalError("unhandled_error", err instanceof Error ? err : new Error(errMsg), {
+      round_id: validated?.round_id,
+      team_id: validated?.team_id,
+      judge_id: judgeUserId,
       error_type: err instanceof Error ? err.constructor.name : typeof err,
     });
     console.error("[saveOrSubmitEvaluation error]:", err);

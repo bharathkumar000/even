@@ -1480,6 +1480,7 @@ async function writeAudit(params: {
 
 // Get all team problem statement selections with full details for admin view
 export interface TeamSelectionRecord {
+  assignment_id: string;
   assigned_at: string;
   team_id: string;
   team_name: string;
@@ -1505,6 +1506,7 @@ export async function getTeamProblemStatementSelections(): Promise<{
     .from("team_problem_statement_assignments")
     .select(
       `
+      id,
       assigned_at,
       team_id,
       teams!inner (
@@ -1529,6 +1531,7 @@ export async function getTeamProblemStatementSelections(): Promise<{
   }
 
   const selections: TeamSelectionRecord[] = (data || []).map((row: any) => ({
+    assignment_id: row.id,
     assigned_at: row.assigned_at,
     team_id: row.team_id,
     team_name: row.teams?.name || "Unknown Team",
@@ -1557,6 +1560,7 @@ export async function exportTeamProblemStatementSelections(): Promise<{
     .from("team_problem_statement_assignments")
     .select(
       `
+      id,
       assigned_at,
       team_id,
       teams!inner (
@@ -1581,14 +1585,15 @@ export async function exportTeamProblemStatementSelections(): Promise<{
   }
 
   const selections: TeamSelectionRecord[] = (data || []).map((row: any) => ({
+    assignment_id: row.id,
     assigned_at: row.assigned_at,
     team_id: row.team_id,
-    team_name: row.teams?.name || "Unknown Team",
-    team_code: row.teams?.code || null,
+    team_name: row.teams?.[0]?.name || "Unknown Team",
+    team_code: row.teams?.[0]?.code || null,
     problem_statement_id: row.problem_statement_id,
-    ps_reference_number: row.problem_statements?.reference_number || null,
-    ps_sih_ps_number: row.problem_statements?.sih_ps_number || null,
-    ps_title: row.problem_statements?.title || "Unknown Problem Statement",
+    ps_reference_number: row.problem_statements?.[0]?.reference_number || null,
+    ps_sih_ps_number: row.problem_statements?.[0]?.sih_ps_number || null,
+    ps_title: row.problem_statements?.[0]?.title || "Unknown Problem Statement",
   }));
 
   // CSV headers
@@ -1638,4 +1643,79 @@ export async function exportTeamProblemStatementSelections(): Promise<{
     .join("\n");
 
   return { csv: csvContent };
+}
+
+// Delete a team problem statement assignment (admin only)
+export async function deleteTeamProblemStatementAssignment(
+  assignmentId: string,
+  csrfToken?: string
+): Promise<{
+  success: boolean;
+  message: string;
+  error?: string;
+}> {
+  const { user } = await requireAdmin();
+  await validateCsrfToken(csrfToken || null);
+
+  // First, get the assignment details to verify and return info
+  const { data: assignment, error: fetchError } = await supabaseAdmin
+    .from("team_problem_statement_assignments")
+    .select(
+      `
+      id,
+      team_id,
+      problem_statement_id,
+      teams!inner (name, code),
+      problem_statements!inner (reference_number, title)
+    `
+    )
+    .eq("id", assignmentId)
+    .single();
+
+  if (fetchError || !assignment) {
+    console.error("Failed to fetch assignment for deletion:", fetchError?.message);
+    return { success: false, message: "Assignment not found.", error: "Assignment not found." };
+  }
+
+  // Delete the assignment
+  const { error: deleteError } = await supabaseAdmin
+    .from("team_problem_statement_assignments")
+    .delete()
+    .eq("id", assignmentId);
+
+  if (deleteError) {
+    console.error("Failed to delete team problem statement assignment:", deleteError.message);
+    return {
+      success: false,
+      message: "Failed to delete assignment.",
+      error: deleteError.message,
+    };
+  }
+
+  // Audit log
+  await supabaseAdmin.from("audit_logs").insert([
+    {
+      action: "DELETE_TEAM_PS_ASSIGNMENT",
+      entity_type: "team_problem_statement_assignment",
+      entity_id: assignmentId,
+      admin_id: user.id,
+      details: {
+        team_id: assignment.team_id,
+        team_name: assignment.teams?.[0]?.name,
+        team_code: assignment.teams?.[0]?.code,
+        problem_statement_id: assignment.problem_statement_id,
+        ps_reference_number: assignment.problem_statements?.[0]?.reference_number,
+        ps_title: assignment.problem_statements?.[0]?.title,
+      },
+      created_at: new Date().toISOString(),
+    },
+  ]);
+
+  revalidatePath("/admin/content-releases");
+  revalidatePath("/team/problem-statements");
+
+  return {
+    success: true,
+    message: `Selection deleted. Team ${assignment.teams?.[0]?.code || assignment.team_id} can now select again. PS ${assignment.problem_statements?.[0]?.reference_number} capacity released.`,
+  };
 }

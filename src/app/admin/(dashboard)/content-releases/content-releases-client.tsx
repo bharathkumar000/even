@@ -71,6 +71,7 @@ import { PublishConfirmationModal } from "@/components/admin/PublishConfirmation
 import {
   getTeamProblemStatementSelections,
   exportTeamProblemStatementSelections,
+  deleteTeamProblemStatementAssignment,
   unpublishProblemStatement,
   bulkPublishProblemStatements,
   bulkUnpublishProblemStatements,
@@ -449,6 +450,7 @@ export default function ContentHubClientView({
   // View Submissions (team PS assignments) modal state
   const [viewSubmissionsOpen, setViewSubmissionsOpen] = useState(false);
   const [submissions, setSubmissions] = useState<Array<{
+    assignment_id: string;
     assigned_at: string;
     team_id: string;
     team_name: string;
@@ -459,6 +461,18 @@ export default function ContentHubClientView({
   const [submissionsLoading, setSubmissionsLoading] = useState(false);
   const [submissionsError, setSubmissionsError] = useState<string | null>(null);
   const [submissionsExporting, setSubmissionsExporting] = useState(false);
+
+  // Delete selection confirmation modal state
+  const [deleteSelectionOpen, setDeleteSelectionOpen] = useState(false);
+  const [deleteSelectionItem, setDeleteSelectionItem] = useState<{
+    assignment_id: string;
+    team_name: string;
+    team_code: string | null;
+    team_id: string;
+    ps_reference_number: string | null;
+    ps_title: string;
+  } | null>(null);
+  const [deleteSelectionLoading, setDeleteSelectionLoading] = useState(false);
 
   // Selection timer state
   const [selectionTimerOpening, setSelectionTimerOpening] = useState<string>("");
@@ -1282,6 +1296,7 @@ export default function ContentHubClientView({
       } else {
         setSubmissions(
           (res.selections || []).map((s) => ({
+            assignment_id: s.assignment_id,
             assigned_at: s.assigned_at,
             team_id: s.team_id,
             team_name: s.team_name,
@@ -1331,6 +1346,42 @@ export default function ContentHubClientView({
       });
     } finally {
       setSubmissionsExporting(false);
+    }
+  };
+
+  const handleDeleteSelection = async (item: {
+    assignment_id: string;
+    team_name: string;
+    team_code: string | null;
+    team_id: string;
+    ps_reference_number: string | null;
+    ps_title: string;
+  }) => {
+    setDeleteSelectionItem(item);
+    setDeleteSelectionOpen(true);
+  };
+
+  const confirmDeleteSelection = async () => {
+    if (!deleteSelectionItem) return;
+    setDeleteSelectionLoading(true);
+    try {
+      const res = await deleteTeamProblemStatementAssignment(deleteSelectionItem.assignment_id);
+      if (res.success) {
+        setNotification({ type: "success", message: res.message });
+        // Refresh the submissions list
+        await fetchSubmissions();
+      } else {
+        setNotification({ type: "error", message: res.message });
+      }
+    } catch (err: unknown) {
+      setNotification({
+        type: "error",
+        message: err instanceof Error ? err.message : "Failed to delete selection.",
+      });
+    } finally {
+      setDeleteSelectionLoading(false);
+      setDeleteSelectionOpen(false);
+      setDeleteSelectionItem(null);
     }
   };
 
@@ -2114,6 +2165,19 @@ export default function ContentHubClientView({
             >
               <Trash2 size={15} />
               <span>Unpublish All</span>
+            </button>
+
+            {/* VIEW SUBMISSIONS button */}
+            <button
+              type="button"
+              onClick={() => {
+                setViewSubmissionsOpen(true);
+                void fetchSubmissions();
+              }}
+              className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-accent-secondary to-accent-primary text-black font-tech font-bold uppercase tracking-wider text-xs rounded transition-all hover:opacity-90 shadow-[0_0_18px_rgba(255,0,127,0.28)]"
+            >
+              <Table size={15} />
+              <span>View Submissions</span>
             </button>
           </div>
         </div>
@@ -4150,6 +4214,9 @@ export default function ContentHubClientView({
                   <table className="w-full text-left border-collapse">
                     <thead>
                       <tr className="border-b border-border-color">
+                        <th className="px-4 py-3 text-[10px] uppercase tracking-wider text-text-secondary font-bold font-mono w-16">
+                          Action
+                        </th>
                         <th className="px-4 py-3 text-[10px] uppercase tracking-wider text-text-secondary font-bold font-mono">
                           Selection Time
                         </th>
@@ -4170,6 +4237,16 @@ export default function ContentHubClientView({
                     <tbody className="divide-y divide-border-color/40">
                       {submissions.map((s) => (
                         <tr key={`${s.team_id}-${s.ps_reference_number}`} className="hover:bg-surface-color/30 transition-colors">
+                          <td className="px-4 py-3 text-center">
+                            <button
+                              onClick={() => handleDeleteSelection(s)}
+                              disabled={deleteSelectionLoading}
+                              className="inline-flex items-center justify-center p-1.5 text-status-error hover:bg-status-error/10 hover:text-status-error rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                              title="Delete selection"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </td>
                           <td className="px-4 py-3 text-xs text-text-primary font-mono">
                             {new Date(s.assigned_at).toLocaleString("en-GB", {
                               timeZone: "Asia/Kolkata",
@@ -4565,9 +4642,85 @@ export default function ContentHubClientView({
                 {unpublishAllConfirmLoading ? "Unpublishing…" : "Unpublish All"}
               </button>
             </div>
+</div>
+        </div>
+      )}
+
+      {/* Delete Selection Confirmation Modal */}
+      {deleteSelectionOpen && deleteSelectionItem && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/85 backdrop-blur-sm p-4">
+          <div className="bg-surface-color border border-status-error/40 rounded-xl w-full max-w-md p-6 space-y-4 shadow-2xl">
+            <div className="flex items-start justify-between border-b border-border-color pb-3">
+              <h3 className="font-heading text-lg text-status-error uppercase m-0">
+                Delete Team Selection
+              </h3>
+              <button
+                onClick={() => setDeleteSelectionOpen(false)}
+                disabled={deleteSelectionLoading}
+                className="text-text-secondary hover:text-text-primary disabled:opacity-50"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              <div className="flex items-start gap-2 mb-1">
+                <span className="text-[10px] text-text-primary font-bold">
+                  {deleteSelectionItem.team_name}
+                </span>
+              </div>
+              <div className="flex items-start gap-2 mb-1">
+                <span className="text-[9px] text-text-secondary">
+                  Team ID:{" "}
+                  <span className="font-mono font-bold">
+                    {deleteSelectionItem.team_code || deleteSelectionItem.team_id.slice(0, 8)}
+                  </span>
+                </span>
+              </div>
+              <div className="flex items-start gap-2 mb-1">
+                <span className="text-[9px] text-text-secondary">
+                  Selected PS:{" "}
+                  <span className="font-mono font-bold text-accent-primary">
+                    {deleteSelectionItem.ps_reference_number || "N/A"}
+                  </span>
+                </span>
+              </div>
+              <div className="flex items-start gap-2 mb-3">
+                <span className="text-[9px] text-text-secondary">
+                  PS Title:{" "}
+                  <span className="font-mono text-text-primary">
+                    {deleteSelectionItem.ps_title}
+                  </span>
+                </span>
+              </div>
+              <div className="p-3 rounded-lg bg-status-error/10 border border-status-error/30 text-status-error text-[11px]">
+                Deleting this selection will permanently remove the team's problem statement
+                assignment. The team will be able to select a different problem statement
+                (if selection is still open), and the previously selected PS will regain
+                one available capacity slot for other teams.
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                onClick={() => setDeleteSelectionOpen(false)}
+                disabled={deleteSelectionLoading}
+                className="px-4 py-2 border border-border-color text-text-secondary text-xs uppercase font-bold rounded hover:text-text-primary disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmDeleteSelection}
+                disabled={deleteSelectionLoading}
+                className="px-4 py-2 bg-status-error text-white text-xs uppercase font-bold rounded hover:bg-status-error/90 disabled:opacity-50"
+              >
+                {deleteSelectionLoading ? "Deleting..." : "Delete Selection"}
+              </button>
+            </div>
           </div>
         </div>
       )}
+
       {formPublishConfirmOpen && formPublishConfirmItem && (
         <PublishConfirmationModal
           open={formPublishConfirmOpen}

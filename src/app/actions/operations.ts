@@ -242,9 +242,8 @@ export async function recordMemberAction(data: ScanActionInput & {
       ? (profile as { full_name?: string | null }).full_name ?? user.email ?? "Operations"
       : user.email ?? "Operations";
 
-  // 1. Duplicate check in event_activity_logs with scanner attribution.
-  //    Existing behaviour preserved: lunch/snacks allow up to 3 claims;
-  //    registration/goodies/certificates allow one claim.
+  // Check existing successful claims for this participant + action
+  // lunch/snacks allow up to 3 claims; registration/goodies/certificates allow one
   const { data: existingRecords, error: checkError } = await supabaseAdmin
     .from("event_activity_logs")
     .select("id, created_at, scanned_by, result")
@@ -258,9 +257,12 @@ export async function recordMemberAction(data: ScanActionInput & {
 
   const existingSuccessCount = (existingRecords || []).length;
 
-  // registration/goodies/certificates allow one successful claim;
-  // lunch/snacks allow up to three.
-  const alreadyCompleted = async () => {
+  const maxReached =
+    (validated.action_type === "lunch" || validated.action_type === "snacks")
+      ? existingSuccessCount >= 3
+      : existingSuccessCount > 0;
+
+  if (maxReached) {
     const prev = existingRecords?.[0];
     let prevScannerName = "another club member";
     if (prev?.scanned_by) {
@@ -276,22 +278,7 @@ export async function recordMemberAction(data: ScanActionInput & {
           hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: true,
         })
       : "";
-    return {
-      message: `FRAUD BLOCKED: "${validated.action_type.toUpperCase()}"${
-        timeStr ? ` already claimed at ${timeStr} from ${prevScannerName}` : ""
-      }. Duplicate claim strictly prohibited.`,
-      prevScannerName,
-      timeStr,
-    };
-  };
-
-  const maxReached =
-    (validated.action_type === "lunch" || validated.action_type === "snacks")
-      ? existingSuccessCount >= 3
-      : existingSuccessCount > 0;
-
-  if (maxReached) {
-    const { message } = await alreadyCompleted();
+    const message = `ALREADY ${validated.action_type.toUpperCase()}: ${validated.action_type === "registration" ? "REGISTERED" : "CLAIMED"}${timeStr ? ` at ${timeStr} from ${prevScannerName}` : ""}.`;
     // Record the rejected/duplicate attempt as audit history without changing state.
     try {
       await recordScannerActivity({
@@ -309,8 +296,9 @@ export async function recordMemberAction(data: ScanActionInput & {
     throw new Error(message);
   }
 
-  // 2. Insert activity log as the authoritative success record + audit entry
-  //    (transactionally consistent: state change and success audit row together).
+  // 2. Insert activity log atomically with ON CONFLICT handling.
+  // The partial unique index uq_scanner_successful_claim (participant_id, action_type WHERE result='success')
+  // prevents duplicate successful claims. If a concurrent request wins the race, we catch the conflict.
   const nowIso = new Date().toISOString();
   const { data: record, error: insertError } = await supabaseAdmin
     .from("event_activity_logs")
@@ -331,10 +319,67 @@ export async function recordMemberAction(data: ScanActionInput & {
       },
     ])
     .select()
-    .single();
+    .maybeSingle();
 
+  // Handle unique constraint violation (race condition or stale constraint)
   if (insertError) {
+    const isUniqueViolation =
+      insertError.code === "23505" ||
+      insertError.message?.includes("uq_participant_action") ||
+      insertError.message?.includes("uq_scanner_successful_claim") ||
+      insertError.message?.includes("duplicate key");
+
+    if (isUniqueViolation) {
+      // Concurrent request already inserted the successful claim.
+      // Fetch the existing record to return proper attribution.
+      const { data: existing } = await supabaseAdmin
+        .from("event_activity_logs")
+        .select("id, created_at, scanned_by")
+        .eq("participant_id", validated.participant_id)
+        .eq("action_type", validated.action_type)
+        .eq("result", "success")
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      let prevScannerName = "another club member";
+      if (existing?.scanned_by) {
+        const { data: prevScanner } = await supabaseAdmin
+          .from("profiles")
+          .select("full_name")
+          .eq("id", existing.scanned_by)
+          .maybeSingle();
+        if (prevScanner?.full_name) prevScannerName = prevScanner.full_name;
+      }
+      const timeStr = existing?.created_at
+        ? new Date(existing.created_at).toLocaleTimeString("en-US", {
+            hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: true,
+          })
+        : "";
+
+      // Record the duplicate attempt for audit trail
+      try {
+        await recordScannerActivity({
+          teamId: validated.team_id,
+          participantId: validated.participant_id,
+          action: validated.action_type,
+          method,
+          result: "already_completed",
+          reason: "Concurrent duplicate claim detected.",
+          correlationId: `${correlationId}-race`,
+        });
+      } catch {}
+
+      throw new Error(
+        `ALREADY ${validated.action_type.toUpperCase()}: ${validated.action_type === "registration" ? "REGISTERED" : "CLAIMED"}${timeStr ? ` at ${timeStr} from ${prevScannerName}` : ""}.`
+      );
+    }
+
     throw new Error(`Failed to record scan action: ${insertError.message}`);
+  }
+
+  if (!record) {
+    throw new Error("Failed to record scan action: no record returned");
   }
 
   // 3. Auto-update team QR token & timestamp to prevent fraud
@@ -1226,6 +1271,58 @@ export async function processAutomatedScan(params: {
     }
   };
 
+  // Helper to handle unique constraint violation and return already_completed result
+  const handleDuplicateInsert = async (
+    participantId: string,
+    actionType: ActionType,
+    teamId: string,
+    teamName: string,
+    participantName: string
+  ): Promise<ProcessScanResult> => {
+    // Fetch the existing record to return proper attribution
+    const { data: existing } = await supabaseAdmin
+      .from("event_activity_logs")
+      .select("id, created_at, scanned_by, operator_name")
+      .eq("participant_id", participantId)
+      .eq("action_type", actionType)
+      .eq("result", "success")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    let prevScannerName = "another club member";
+    if (existing?.scanned_by) {
+      const { data: prevScanner } = await supabaseAdmin
+        .from("profiles")
+        .select("full_name")
+        .eq("id", existing.scanned_by)
+        .maybeSingle();
+      if (prevScanner?.full_name) prevScannerName = prevScanner.full_name;
+    } else if (existing?.operator_name) {
+      prevScannerName = existing.operator_name;
+    }
+    const timeStr = existing?.created_at ? formatTime(existing.created_at) : "";
+
+    const teamData = await fetchTeamMembersForScan(teamId).catch(() => null);
+
+    return {
+      success: false,
+      status: "already_completed",
+      action_type: actionType,
+      message: `ALREADY ${actionType === "registration" ? "REGISTERED" : "CLAIMED"}: ${participantName} (${teamName}) already completed ${actionType.toUpperCase()}${timeStr ? ` at ${timeStr} from ${prevScannerName}` : ""}.`,
+      previousClaim: { time: timeStr, operator: prevScannerName },
+      team: {
+        id: teamId,
+        name: teamName,
+      },
+      participant: {
+        id: participantId,
+        name: participantName,
+      },
+      teamData,
+    };
+  };
+
   // =========================================================================
   // CASE A: SPECIFIC PARTICIPANT TARGETED (Or solo team)
   // =========================================================================
@@ -1279,7 +1376,7 @@ export async function processAutomatedScan(params: {
       };
     }
 
-    // Insert successful claim into event_activity_logs
+    // Insert successful claim into event_activity_logs with unique constraint handling
     const correlationId = crypto.randomUUID();
     const { error: insertErr } = await supabaseAdmin
       .from("event_activity_logs")
@@ -1300,7 +1397,23 @@ export async function processAutomatedScan(params: {
         },
       ]);
 
+    // Handle unique constraint violation (race condition)
     if (insertErr) {
+      const isUniqueViolation =
+        insertErr.code === "23505" ||
+        insertErr.message?.includes("uq_participant_action") ||
+        insertErr.message?.includes("duplicate key");
+
+      if (isUniqueViolation) {
+        return handleDuplicateInsert(
+          targetMember.user_id,
+          params.actionType,
+          team.id,
+          team.name,
+          participantName
+        );
+      }
+
       return {
         success: false,
         status: "error",
@@ -1447,7 +1560,160 @@ export async function processAutomatedScan(params: {
     .from("event_activity_logs")
     .insert(insertPayloads);
 
+  // Handle unique constraint violation (race condition) for bulk insert
   if (insertErr) {
+    const isUniqueViolation =
+      insertErr.code === "23505" ||
+      insertErr.message?.includes("uq_participant_action") ||
+      insertErr.message?.includes("duplicate key");
+
+    if (isUniqueViolation) {
+      // One or more members already have this action completed.
+      // Re-query to find which members were already claimed.
+      const { data: existingLogs } = await supabaseAdmin
+        .from("event_activity_logs")
+        .select("participant_id, created_at, operator_name, scanned_by")
+        .eq("team_id", team.id)
+        .eq("action_type", params.actionType)
+        .eq("result", "success")
+        .in("participant_id", membersToClaim.map((m) => m.user_id));
+
+      const alreadyClaimedIds = new Set(
+        (existingLogs || []).map((l) => l.participant_id)
+      );
+
+      // Filter out already claimed members
+      const newlyClaimed = membersToClaim.filter(
+        (m) => !alreadyClaimedIds.has(m.user_id)
+      );
+
+      if (newlyClaimed.length === 0) {
+        // All members were already claimed - return already_completed
+        const prev = existingLogs?.[0];
+        let prevScannerName = "another club member";
+        if (prev?.scanned_by) {
+          const { data: prevScanner } = await supabaseAdmin
+            .from("profiles")
+            .select("full_name")
+            .eq("id", prev.scanned_by)
+            .maybeSingle();
+          if (prevScanner?.full_name) prevScannerName = prevScanner.full_name;
+        } else if (prev?.operator_name) {
+          prevScannerName = prev.operator_name;
+        }
+        const timeStr = prev?.created_at ? formatTime(prev.created_at) : "";
+
+        const teamData = await fetchTeamMembersForScan(team.id).catch(() => null);
+
+        return {
+          success: false,
+          status: "already_completed",
+          action_type: params.actionType,
+          message: `ALREADY ${params.actionType === "registration" ? "REGISTERED" : "CLAIMED"}: All selected member(s) of team "${team.name}" have already received ${params.actionType.toUpperCase()}${timeStr ? ` at ${timeStr} from ${prevScannerName}` : ""}.`,
+          previousClaim: { time: timeStr, operator: prevScannerName },
+          team: {
+            id: team.id,
+            name: team.name,
+            code: team.code,
+            track: team.track,
+            leader_name: team.leader_name,
+          },
+          totalMembers: members.length,
+          claimedCount: 0,
+          teamData,
+        };
+      }
+
+      // Some members were newly claimed, some were already claimed - retry insert for newly claimed only
+      const retryPayloads = newlyClaimed.map((m) => ({
+        team_id: team.id,
+        participant_id: m.user_id,
+        action_type: params.actionType,
+        method: "qr",
+        result: "success",
+        new_status: "claimed",
+        scanned_by: user.id,
+        operator_id: operatorId,
+        operator_name: operatorName,
+        operator_role: operatorRole,
+        correlation_id: `${baseCorrelationId}-${m.user_id.slice(0, 8)}`,
+        created_at: nowIso,
+      }));
+
+      const { error: retryErr } = await supabaseAdmin
+        .from("event_activity_logs")
+        .insert(retryPayloads);
+
+      if (retryErr) {
+        return {
+          success: false,
+          status: "error",
+          action_type: params.actionType,
+          message: `Database insert failed: ${retryErr.message}`,
+        };
+      }
+
+      // Continue with success for newly claimed members
+      const claimedNames = newlyClaimed.map((m) => m.name || "Participant").join(", ");
+
+      // Rotate QR token
+      const nextToken = `SEC-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
+      try {
+        await supabaseAdmin
+          .from("teams")
+          .update({
+            qr_token: nextToken,
+            last_scanned_at: nowIso,
+            last_scanned_by: user.id,
+          })
+          .eq("id", team.id);
+      } catch {}
+
+      // Write to audit_logs
+      try {
+        await supabaseAdmin.from("audit_logs").insert([
+          {
+            action: `OPS_SCAN_TEAM_${params.actionType.toUpperCase()}`,
+            entity_type: "team",
+            entity_id: team.id,
+            admin_id: user.id,
+            details: {
+              team_id: team.id,
+              team_name: team.name,
+              action_type: params.actionType,
+              claimed_count: newlyClaimed.length,
+              unclaimed_members: newlyClaimed.map((m) => ({
+                id: m.user_id,
+                name: m.name,
+              })),
+              single_member_mode: isSingleMemberDistribution,
+              partially_duplicate: true,
+            },
+            created_at: nowIso,
+          },
+        ]);
+      } catch {}
+
+      const teamData = await fetchTeamMembersForScan(team.id).catch(() => null);
+
+      return {
+        success: true,
+        status: "success",
+        action_type: params.actionType,
+        message: `SUCCESS: ${params.actionType.toUpperCase()} recorded for ${newlyClaimed.length} member(s) of "${team.name}" (${alreadyClaimedIds.size} already had this action)!`,
+        team: {
+          id: team.id,
+          name: team.name,
+          code: team.code,
+          track: team.track,
+          leader_name: team.leader_name,
+        },
+        claimedCount: newlyClaimed.length,
+        totalMembers: members.length,
+        teamData,
+      };
+    }
+
     return {
       success: false,
       status: "error",

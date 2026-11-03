@@ -225,50 +225,53 @@ export default async function TeamDashboardPage() {
       {/* Primary KPI Row: Team Status & Submission State */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
         {/* Approved Roster Card */}
-        <div className="glass-panel p-5 border border-border-color flex flex-col justify-between">
-          <div className="flex items-start justify-between">
-            <div>
-              <span className="text-[10px] uppercase tracking-wider text-text-secondary font-bold block mb-1">
+        <div className="glass-panel p-5 border border-border-color rounded-xl flex flex-col justify-between relative overflow-hidden transition-all hover:border-border-color/80 group">
+          <div className="flex items-start justify-between gap-3 mb-2">
+            <div className="min-w-0 flex-1">
+              <span className="text-[10px] uppercase tracking-wider text-text-secondary font-bold block mb-1 truncate">
                 Roster Members
               </span>
-              <p className="font-heading text-3xl text-text-primary uppercase m-0 font-bold">
+              <p className="font-heading text-2xl sm:text-3xl text-text-primary uppercase m-0 font-bold tracking-tight truncate">
                 {totalMembers}
               </p>
             </div>
-            <div className="p-2.5 bg-accent-tertiary/10 border border-accent-tertiary/30 text-accent-tertiary rounded">
+            <div className="p-2.5 bg-accent-tertiary/10 border border-accent-tertiary/30 text-accent-tertiary rounded-lg shrink-0 flex items-center justify-center transition-transform group-hover:scale-105">
               <Users size={20} />
             </div>
           </div>
-          <div className="pt-4 border-t border-border-color/50 mt-3 flex items-center justify-between text-xs">
-            <span className="text-status-success flex items-center gap-1 font-bold">
+          <div className="pt-3 border-t border-border-color/50 mt-3 flex items-center justify-between text-xs gap-2">
+            <span className="text-status-success flex items-center gap-1 font-bold shrink-0">
               <CheckCircle2 size={13} /> Active Roster
             </span>
-            <span className="text-text-secondary font-mono">{teamInfo?.leader_name || "Leader"}</span>
+            <span className="text-text-secondary font-mono truncate">{teamInfo?.leader_name || "Leader"}</span>
           </div>
         </div>
 
         {/* Problem Statements Card */}
-        <div className="glass-panel p-5 border border-border-color flex flex-col justify-between">
-          <div className="flex items-start justify-between">
-            <div>
-              <span className="text-[10px] uppercase tracking-wider text-text-secondary font-bold block mb-1">
+        <div className="glass-panel p-5 border border-border-color rounded-xl flex flex-col justify-between relative overflow-hidden transition-all hover:border-border-color/80 group">
+          <div className="flex items-start justify-between gap-3 mb-2">
+            <div className="min-w-0 flex-1">
+              <span className="text-[10px] uppercase tracking-wider text-text-secondary font-bold block mb-1 truncate">
                 Problem Statement
               </span>
-              <p className="font-heading text-2xl text-accent-tertiary uppercase m-0 font-bold truncate">
+              <p
+                className="font-heading text-xl sm:text-2xl text-accent-tertiary uppercase m-0 font-bold tracking-tight truncate"
+                title="Track Deliverable"
+              >
                 Track Deliverable
               </p>
             </div>
-            <div className="p-2.5 bg-accent-tertiary/10 border border-accent-tertiary/30 text-accent-tertiary rounded">
+            <div className="p-2.5 bg-accent-tertiary/10 border border-accent-tertiary/30 text-accent-tertiary rounded-lg shrink-0 flex items-center justify-center transition-transform group-hover:scale-105">
               <ScrollText size={20} />
             </div>
           </div>
-          <div className="pt-4 border-t border-border-color/50 mt-3 flex items-center justify-between text-xs">
-            <span className="text-text-secondary">
+          <div className="pt-3 border-t border-border-color/50 mt-3 flex items-center justify-between text-xs gap-2">
+            <span className="text-text-secondary truncate">
               Domain: <span className="text-text-primary font-bold">{teamInfo?.track || "Innovation"}</span>
             </span>
             <Link
               href="/team/problem-statements"
-              className="text-accent-tertiary hover:underline font-bold uppercase text-[11px] flex items-center gap-1"
+              className="text-accent-tertiary hover:underline font-bold uppercase text-[11px] flex items-center gap-1 shrink-0"
             >
               <span>View Statements</span>
               <ArrowRight size={12} />
@@ -277,22 +280,23 @@ export default async function TeamDashboardPage() {
         </div>
 
         {/* Deliverables Submission Card */}
-        <div className="glass-panel p-5 border border-border-color flex flex-col justify-between">
-          <div className="flex items-start justify-between">
-            <div>
-              <span className="text-[10px] uppercase tracking-wider text-text-secondary font-bold block mb-1">
+        <div className="glass-panel p-5 border border-border-color rounded-xl flex flex-col justify-between relative overflow-hidden transition-all hover:border-border-color/80 group">
+          <div className="flex items-start justify-between gap-3 mb-2">
+            <div className="min-w-0 flex-1">
+              <span className="text-[10px] uppercase tracking-wider text-text-secondary font-bold block mb-1 truncate">
                 Deliverables Status
               </span>
               <p
-                className={`font-heading text-2xl uppercase m-0 font-bold ${
+                className={`font-heading text-xl sm:text-2xl uppercase m-0 font-bold tracking-tight truncate ${
                   hasSubmitted ? "text-status-success" : "text-status-warning"
                 }`}
+                title={hasSubmitted ? "Submitted" : "Pending Action"}
               >
                 {hasSubmitted ? "Submitted" : "Pending Action"}
               </p>
             </div>
             <div
-              className={`p-2.5 rounded border ${
+              className={`p-2.5 rounded-lg border shrink-0 flex items-center justify-center transition-transform group-hover:scale-105 ${
                 hasSubmitted
                   ? "bg-status-success/10 border-status-success text-status-success"
                   : "bg-status-warning/10 border-status-warning text-status-warning"
@@ -301,13 +305,13 @@ export default async function TeamDashboardPage() {
               <FileUp size={20} />
             </div>
           </div>
-          <div className="pt-4 border-t border-border-color/50 mt-3 flex items-center justify-between text-xs">
-            <span className="text-text-secondary">
+          <div className="pt-3 border-t border-border-color/50 mt-3 flex items-center justify-between text-xs gap-2">
+            <span className="text-text-secondary truncate">
               Round: <span className="text-text-primary font-bold">{activeRound?.title || "Round 1"}</span>
             </span>
             <Link
               href="/team/submission"
-              className="text-accent-secondary hover:underline font-bold uppercase text-[11px] flex items-center gap-1"
+              className="text-accent-secondary hover:underline font-bold uppercase text-[11px] flex items-center gap-1 shrink-0"
             >
               <span>{hasSubmitted ? "Review" : "Upload Now"}</span>
               <ArrowRight size={12} />
@@ -316,27 +320,27 @@ export default async function TeamDashboardPage() {
         </div>
 
         {/* Results / Standings Card */}
-        <div className="glass-panel p-5 border border-border-color flex flex-col justify-between">
-          <div className="flex items-start justify-between">
-            <div>
-              <span className="text-[10px] uppercase tracking-wider text-text-secondary font-bold block mb-1">
+        <div className="glass-panel p-5 border border-border-color rounded-xl flex flex-col justify-between relative overflow-hidden transition-all hover:border-border-color/80 group">
+          <div className="flex items-start justify-between gap-3 mb-2">
+            <div className="min-w-0 flex-1">
+              <span className="text-[10px] uppercase tracking-wider text-text-secondary font-bold block mb-1 truncate">
                 Evaluation Standing
               </span>
-              <p className="font-heading text-2xl text-accent-primary uppercase m-0 font-bold">
+              <p className="font-heading text-xl sm:text-2xl text-accent-primary uppercase m-0 font-bold tracking-tight truncate">
                 {publishedResult ? `Rank #${publishedResult.rank || 1}` : "Under Review"}
               </p>
             </div>
-            <div className="p-2.5 bg-accent-primary/10 border border-accent-primary/30 text-accent-primary rounded">
+            <div className="p-2.5 bg-accent-primary/10 border border-accent-primary/30 text-accent-primary rounded-lg shrink-0 flex items-center justify-center transition-transform group-hover:scale-105">
               <Trophy size={20} />
             </div>
           </div>
-          <div className="pt-4 border-t border-border-color/50 mt-3 flex items-center justify-between text-xs">
-            <span className="text-text-secondary">
+          <div className="pt-3 border-t border-border-color/50 mt-3 flex items-center justify-between text-xs gap-2">
+            <span className="text-text-secondary truncate">
               {publishedResult ? `${publishedResult.total_score} Points` : "Judging in Progress"}
             </span>
             <Link
               href="/team/results"
-              className="text-accent-primary hover:underline font-bold uppercase text-[11px] flex items-center gap-1"
+              className="text-accent-primary hover:underline font-bold uppercase text-[11px] flex items-center gap-1 shrink-0"
             >
               <span>View Scorecard</span>
               <ArrowRight size={12} />

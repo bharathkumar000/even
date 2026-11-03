@@ -227,6 +227,12 @@ export default function ScannerClientView() {
   const cooldownTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   const html5QrCodeRef = useRef<any>(null);
+  const scanPurposeRef = useRef<ActionType>(scanPurpose);
+  const isPollingRef = useRef(false);
+
+  useEffect(() => {
+    scanPurposeRef.current = scanPurpose;
+  }, [scanPurpose]);
 
   useEffect(() => {
     setLastSyncTime(new Date());
@@ -315,14 +321,17 @@ export default function ScannerClientView() {
     if (syncedCount > 0) {
       playScanSuccess();
       fetchLiveStream();
-      setTeamData((current) => {
-        if (current?.team?.id) {
-          fetchTeamMembersForScan(current.team.id)
-            .then((updated) => setTeamData(updated))
-            .catch(() => {});
-        }
-        return current;
-      });
+      if (teamData?.team?.id && !isPollingRef.current) {
+        isPollingRef.current = true;
+        fetchTeamMembersForScan(teamData.team.id)
+          .then((updated) => {
+            setTeamData(updated);
+            isPollingRef.current = false;
+          })
+          .catch(() => {
+            isPollingRef.current = false;
+          });
+      }
     }
   }, [csrfToken, fetchLiveStream]);
 
@@ -374,65 +383,85 @@ export default function ScannerClientView() {
         (payload) => {
           fetchLiveStream();
           const changedTeamId = (payload.new as any)?.team_id;
-          if (changedTeamId) {
-            setTeamData((current) => {
-              if (current && current.team.id === changedTeamId) {
-                fetchTeamMembersForScan(changedTeamId)
-                  .then((updated) => setTeamData(updated))
-                  .catch(() => {});
-              }
-              return current;
-            });
+          if (changedTeamId && teamData?.team?.id === changedTeamId) {
+            if (!isPollingRef.current) {
+              isPollingRef.current = true;
+              fetchTeamMembersForScan(changedTeamId)
+                .then((updated) => {
+                  setTeamData(updated);
+                  isPollingRef.current = false;
+                })
+                .catch(() => {
+                  isPollingRef.current = false;
+                });
+            }
           }
         }
       )
       .on("broadcast", { event: "scan_action_recorded" }, (payload) => {
         fetchLiveStream();
         const changedTeamId = payload?.payload?.team_id;
-        if (changedTeamId) {
-          setTeamData((current) => {
-            if (current && current.team.id === changedTeamId) {
-              fetchTeamMembersForScan(changedTeamId)
-                .then((updated) => setTeamData(updated))
-                .catch(() => {});
-            }
-            return current;
-          });
+        if (changedTeamId && teamData?.team?.id === changedTeamId) {
+          if (!isPollingRef.current) {
+            isPollingRef.current = true;
+            fetchTeamMembersForScan(changedTeamId)
+              .then((updated) => {
+                setTeamData(updated);
+                isPollingRef.current = false;
+              })
+              .catch(() => {
+                isPollingRef.current = false;
+              });
+          }
         }
       })
       .on("broadcast", { event: "scan_action_reverted" }, (payload) => {
         fetchLiveStream();
         const changedTeamId = payload?.payload?.team_id;
-        if (changedTeamId) {
-          setTeamData((current) => {
-            if (current && current.team.id === changedTeamId) {
-              fetchTeamMembersForScan(changedTeamId)
-                .then((updated) => setTeamData(updated))
-                .catch(() => {});
-            }
-            return current;
-          });
+        if (changedTeamId && teamData?.team?.id === changedTeamId) {
+          if (!isPollingRef.current) {
+            isPollingRef.current = true;
+            fetchTeamMembersForScan(changedTeamId)
+              .then((updated) => {
+                setTeamData(updated);
+                isPollingRef.current = false;
+              })
+              .catch(() => {
+                isPollingRef.current = false;
+              });
+          }
         }
       })
       .subscribe();
 
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [fetchLiveStream, teamData?.team?.id]);
+
+  // Separate polling effect to avoid calling Server Actions during render
+  useEffect(() => {
+    if (!teamData?.team?.id) return;
+
     const pollInterval = setInterval(() => {
+      if (!isPollingRef.current) {
+        isPollingRef.current = true;
+        fetchTeamMembersForScan(teamData.team.id)
+          .then((updated) => {
+            setTeamData(updated);
+            isPollingRef.current = false;
+          })
+          .catch(() => {
+            isPollingRef.current = false;
+          });
+      }
       fetchLiveStream();
-      setTeamData((current) => {
-        if (current?.team?.id) {
-          fetchTeamMembersForScan(current.team.id)
-            .then((updated) => setTeamData(updated))
-            .catch(() => {});
-        }
-        return current;
-      });
     }, 4000);
 
     return () => {
-      supabase.removeChannel(channel);
       clearInterval(pollInterval);
     };
-  }, [fetchLiveStream]);
+  }, [teamData?.team?.id, fetchLiveStream]);
 
   const stopScanner = async () => {
     try {
@@ -499,7 +528,7 @@ export default function ScannerClientView() {
    * Executes the selected operation automatically upon QR detection or manual submission.
    * Confirms database transaction, updates roster, triggers cooldown, and re-arms scanner.
    */
-  const handleDetectedCode = async (
+  const handleDetectedCode = useCallback(async (
     rawCode: string,
     targetParticipantId?: string,
     overrideActionType?: ActionType
@@ -508,7 +537,7 @@ export default function ScannerClientView() {
     isProcessingRef.current = true;
     setLoading(true);
 
-    const effectiveActionType = overrideActionType ?? scanPurpose;
+    const effectiveActionType = overrideActionType ?? scanPurposeRef.current;
 
     try {
       const res = await processAutomatedScan({
@@ -592,7 +621,7 @@ export default function ScannerClientView() {
         status: "error",
         title: "TRANSACTION FAILED",
         message: msg,
-        actionType: scanPurpose,
+        actionType: scanPurposeRef.current,
         timestamp: new Date().toLocaleTimeString([], {
           hour: "2-digit",
           minute: "2-digit",
@@ -620,7 +649,7 @@ export default function ScannerClientView() {
         }
       }, 1000);
     }
-  };
+  }, [csrfToken, fetchLiveStream, playScanError, playScanSuccess]);
 
   // Manual team lookup for verification / inspection
   const handleManualLookup = async (teamId: string) => {
@@ -640,7 +669,7 @@ export default function ScannerClientView() {
         status: "error",
         title: "LOOKUP ERROR",
         message: err instanceof Error ? err.message : "Failed to fetch team details",
-        actionType: scanPurpose,
+        actionType: scanPurposeRef.current,
         timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
       });
       setTeamData(null);
