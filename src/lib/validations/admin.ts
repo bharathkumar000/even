@@ -9,10 +9,10 @@ export const RoundSchema = z.object({
 });
 
 export const CriterionSchema = z.object({
-  round_id: z.string().uuid(),
+  round_id: z.string().uuid("Valid round ID is required"),
   title: requiredLimitedString(FIELD_LIMITS.title, "Title").transform(sanitizeText),
-  description: z.string().optional().transform((val) => val ? sanitizeText(val) : undefined),
-  max_marks: z.number().positive("Max marks must be greater than 0").max(1000, "Max marks cannot exceed 1000"),
+  description: z.string().optional().nullable().transform((val) => (val && val.trim() !== "" ? sanitizeText(val) : undefined)),
+  max_marks: z.coerce.number().positive("Max marks must be greater than 0").max(1000, "Max marks cannot exceed 1000"),
   is_required: z.boolean().default(true),
 });
 
