@@ -72,7 +72,6 @@ export default function LiveActivityStream({
   };
 
   const formatTimestamp = (iso: string) => {
-    if (!mounted) return { timeStr: "", dateStr: "", relativeStr: "" };
     try {
       const date = new Date(iso);
       const timeStr = date.toLocaleTimeString("en-US", {
@@ -86,11 +85,7 @@ export default function LiveActivityStream({
         day: "numeric",
       });
 
-       // No relative time calculation to avoid hydration mismatch; leave empty
-       const relativeStr = "";
-
-
-      return { timeStr, dateStr, relativeStr };
+      return { timeStr, dateStr, relativeStr: "" };
     } catch {
       return { timeStr: iso, dateStr: "", relativeStr: "" };
     }
@@ -137,7 +132,7 @@ export default function LiveActivityStream({
         </div>
 
         <div className="flex items-center gap-2">
-          {mounted && lastSyncTime && (
+          {lastSyncTime && (
             <span className="text-[10px] text-text-secondary flex items-center gap-1 font-mono">
               <Clock size={12} />
                Sync: {lastSyncTime.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false })}

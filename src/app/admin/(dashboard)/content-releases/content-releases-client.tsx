@@ -1,5 +1,7 @@
 "use client";
 
+import { CSRF_CONSTANTS } from "@/lib/csrf-constants";
+
 import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
 import type { FormEvent } from "react";
 import type { LucideIcon } from "lucide-react";
@@ -23,6 +25,7 @@ import {
   History,
   Import,
   Loader2,
+  Lock,
   Megaphone,
   Paperclip,
   Pencil,
@@ -64,7 +67,17 @@ import {
   deleteProjectSubmissionForm,
 } from "@/app/actions/project-submission-forms";
 import { PublishConfirmationModal } from "@/components/admin/PublishConfirmationModal";
-import { unpublishProblemStatement } from "@/app/actions/admin-problem-statements";
+import {
+  unpublishProblemStatement,
+  bulkPublishProblemStatements,
+  bulkUnpublishProblemStatements,
+  bulkAllowSelection,
+  bulkDisableSelection,
+  bulkCloseSelection,
+  setReadingTimer,
+  setSelectionTimer,
+  expireSelections,
+} from "@/app/actions/admin-problem-statements";
 import {
   importPdfExtract,
   importPdfContentWithoutStorage,
@@ -418,6 +431,22 @@ export default function ContentHubClientView({
   } | null>(null);
   const [formPublishConfirmLoading, setFormPublishConfirmLoading] = useState(false);
 
+  // Bulk action confirmation modal state
+  const [bulkActionConfirmOpen, setBulkActionConfirmOpen] = useState(false);
+  const [bulkActionConfirmItem, setBulkActionConfirmItem] = useState<{
+    id: string;
+    title: string;
+    action: "publish" | "unpublish" | "allow-selection" | "disable-selection" | "close-selection";
+  } | null>(null);
+  const [bulkActionConfirmLoading, setBulkActionConfirmLoading] = useState(false);
+
+  // Selection timer state
+  const [selectionTimerOpening, setSelectionTimerOpening] = useState<string>("");
+  const [selectionTimerClosing, setSelectionTimerClosing] = useState<string>("");
+  const [selectionTimerEnd, setSelectionTimerEnd] = useState<string | null>(null);
+  const [selectionTimerRemaining, setSelectionTimerRemaining] = useState<number>(0);
+  const [selectionTimerLoading, setSelectionTimerLoading] = useState(false);
+
   // PDF Import dialog state
   const [pdfImportOpen, setPdfImportOpen] = useState(false);
   const [importingPdf, setImportingPdf] = useState(false);
@@ -427,6 +456,12 @@ export default function ContentHubClientView({
     () => activities.find((activity) => activity.id === selectedActivityId) || null,
     [activities, selectedActivityId]
   );
+
+  const readingTimerEnd = activityTimerEnd;
+  const readingTimerRemaining = activityTimerRemaining;
+  const draftForms = selectedActivity?.type === "project_submissions"
+    ? submissionForms.filter((f) => f.form_status === "draft").length
+    : items.filter((i) => i.activity_id === selectedActivityId && i.status === "draft").length;
 
   const activityItems = useMemo(() => {
     if (!selectedActivity) return [];
@@ -579,13 +614,16 @@ export default function ContentHubClientView({
         throw new Error(error);
       }
       setSubmissionForms(forms);
+      if (selectedActivity?.type === "project_submissions") {
+        await fetchTimerState(_activityId);
+      }
     } catch (err: unknown) {
       setNotification({
         type: "error",
         message: err instanceof Error ? err.message : "Failed to load submission forms.",
       });
     }
-  }, []);
+  }, [selectedActivity]);
 
   // Load submission forms when Project Submissions activity is selected
   useEffect(() => {
@@ -724,6 +762,7 @@ export default function ContentHubClientView({
   // Project Submissions workspace handlers
 
 
+
   const openCreateForm = () => {
     setFormTitle("");
     setFormDescription("");
@@ -804,6 +843,164 @@ export default function ContentHubClientView({
       setFormPublishConfirmLoading(false);
       setFormPublishConfirmOpen(false);
       setFormPublishConfirmItem(null);
+    }
+  };
+
+  // ================================================================================
+  // Timer Management Functions
+  // ================================================================================
+
+  const fetchTimerState = async (activityId: string) => {
+    try {
+      const res = await fetch(`/api/admin/timer/${activityId}`);
+      if (!res.ok) return;
+      const data = await res.json();
+      setSelectionTimerOpening(data.selectionOpening || "");
+      setSelectionTimerClosing(data.selectionClosing || "");
+      setSelectionTimerEnd(data.readingTimerEndTime || null);
+      setSelectionTimerRemaining(
+        data.readingTimerEndTime
+          ? Math.max(0, Math.floor((new Date(data.readingTimerEndTime).getTime() - Date.now()) / 1000))
+          : 0
+      );
+    } catch {
+      // Silent fail - timer state is optional
+    }
+  };
+
+  const handleSaveReadingTimer = async (
+    scheduledAt: string,
+    autoPublish: boolean
+  ) => {
+    const activityId = selectedActivityId;
+    if (!activityId) return;
+    setSchedulingActivity(true);
+    try {
+      const res = await fetch(`/api/admin/timer/${activityId}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ type: "reading", scheduledAt, autoPublish, [CSRF_CONSTANTS.HEADER_NAME]: "" }),
+      });
+      if (!res.ok) throw new Error("Failed to set reading timer");
+      const result = await res.json();
+      setNotification({
+        type: "success",
+        message: result.message || "Reading timer set successfully.",
+      });
+      // Fetch updated timer state
+      await fetchTimerState(activityId);
+    } catch (err: unknown) {
+      setNotification({
+        type: "error",
+        message: err instanceof Error ? err.message : "Failed to set reading timer.",
+      });
+    } finally {
+      setSchedulingActivity(false);
+      setActivityTimerModalOpen(false);
+    }
+  };
+
+  const handleSaveSelectionTimer = async (
+    selectionOpening: string | null,
+    selectionClosing: string | null
+  ) => {
+    const activityId = selectedActivityId;
+    if (!activityId) return;
+    setSchedulingActivity(true);
+    try {
+      const res = await fetch(`/api/admin/timer/${activityId}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ type: "selection", selectionOpening, selectionClosing, [CSRF_CONSTANTS.HEADER_NAME]: "" }),
+      });
+      if (!res.ok) throw new Error("Failed to set selection timer");
+      const result = await res.json();
+      setNotification({
+        type: "success",
+        message: result.message || "Selection timer set successfully.",
+      });
+      // Fetch updated timer state
+      await fetchTimerState(activityId);
+    } catch (err: unknown) {
+      setNotification({
+        type: "error",
+        message: err instanceof Error ? err.message : "Failed to set selection timer.",
+      });
+    } finally {
+      setSchedulingActivity(false);
+      setActivityTimerModalOpen(false);
+    }
+  };
+
+  const handleExpireSelections = async () => {
+    const activityId = selectedActivityId;
+    if (!activityId) return;
+    setSchedulingActivity(true);
+    try {
+      const res = await fetch(`/api/admin/timer/${activityId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "expireSelections", [CSRF_CONSTANTS.HEADER_NAME]: "" }),
+      });
+      if (!res.ok) throw new Error("Failed to expire selections");
+      const result = await res.json();
+      setNotification({
+        type: "success",
+        message: result.message || "Expired selections processed.",
+      });
+      await fetchTimerState(activityId);
+    } catch (err: unknown) {
+      setNotification({
+        type: "error",
+        message: err instanceof Error ? err.message : "Failed to expire selections.",
+      });
+    } finally {
+      setSchedulingActivity(false);
+    }
+  };
+
+  // ================================================================================
+  // Bulk Action Functions
+  // ================================================================================
+
+  const handleBulkAction = async (action: "publish" | "unpublish" | "allow-selection" | "disable-selection" | "close-selection") => {
+    if (!selectedActivityId) return;
+    setBulkActionConfirmItem({
+      id: selectedActivityId,
+      title: selectedActivity?.title || "Activity",
+      action,
+    });
+    setBulkActionConfirmOpen(true);
+  };
+
+  const confirmBulkAction = async () => {
+    if (!bulkActionConfirmItem) return;
+    setBulkActionConfirmLoading(true);
+    const activityId = bulkActionConfirmItem.id;
+    try {
+      const res = await fetch(`/api/admin/problem-statements/bulk/${bulkActionConfirmItem.action}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ activityId, [CSRF_CONSTANTS.HEADER_NAME]: "" }),
+      });
+      if (!res.ok) throw new Error("Bulk action failed");
+      const result = await res.json();
+      setNotification({
+        type: "success",
+        message: result.message || "Bulk action completed successfully.",
+      });
+      // Refresh data
+      setSubmissionForms([]);
+      await fetchTimerState(activityId);
+    } catch (err: unknown) {
+      setNotification({
+        type: "error",
+        message: err instanceof Error ? err.message : "Bulk action failed.",
+      });
+    } finally {
+      setBulkActionConfirmLoading(false);
+      setBulkActionConfirmOpen(false);
+      setBulkActionConfirmItem(null);
     }
   };
 
@@ -1833,9 +2030,6 @@ export default function ContentHubClientView({
     const publishedForms = submissionForms.filter(
       (f) => f.form_status === "published"
     ).length;
-    const draftForms = submissionForms.filter(
-      (f) => f.form_status === "draft"
-    ).length;
 
     return (
       <div className="space-y-5">
@@ -1876,6 +2070,50 @@ export default function ContentHubClientView({
               <Plus size={15} />
               <span>Create Submission Form</span>
             </button>
+
+            {/* Timer controls - only for project_submissions activity */}
+            {selectedActivity.type === "project_submissions" && (
+              <>
+                <button
+                  onClick={() => setActivityTimerModalOpen(true)}
+                  className={`inline-flex items-center justify-center gap-2 px-4 py-2.5 border rounded font-tech font-bold uppercase tracking-wider text-xs transition-all ${
+                    readingTimerEnd
+                      ? "border-accent-secondary bg-accent-secondary/15 text-accent-secondary shadow-[0_0_15px_rgba(255,0,127,0.3)]"
+                      : "border-border-color bg-surface-color text-text-primary hover:border-accent-secondary hover:text-accent-secondary"
+                  }`}
+                >
+                  <Timer size={15} className={readingTimerEnd ? "animate-pulse" : ""} />
+                  <span>
+                    {readingTimerEnd
+                      ? `Reading Timer: ${formatCountdown(readingTimerRemaining)}`
+                      : "Reading Timer"}
+                  </span>
+                </button>
+                <button
+                  onClick={() => setActivityTimerModalOpen(true)}
+                  className={`inline-flex items-center justify-center gap-2 px-4 py-2.5 border rounded font-tech font-bold uppercase tracking-wider text-xs transition-all ${
+                    selectionTimerEnd
+                      ? "border-accent-primary bg-accent-primary/15 text-accent-primary shadow-[0_0_15px_rgba(0,240,255,0.3)]"
+                      : "border-border-color bg-surface-color text-text-primary hover:border-accent-primary hover:text-accent-primary"
+                  }`}
+                >
+                  <CalendarClock size={15} />
+                  <span>
+                    {selectionTimerEnd
+                      ? `Selection Timer: ${formatCountdown(selectionTimerRemaining)}`
+                      : "Selection Timer"}
+                  </span>
+                </button>
+                <button
+                  onClick={handleExpireSelections}
+                  disabled={schedulingActivity}
+                  className="inline-flex items-center justify-center gap-2 px-4 py-2.5 border border-status-error/40 text-status-error rounded text-[10px] font-bold uppercase tracking-wider transition-all disabled:opacity-50"
+                >
+                  <X size={13} />
+                  <span>Close Selections Now</span>
+                </button>
+              </>
+            )}
           </div>
         </div>
 
@@ -1905,6 +2143,64 @@ export default function ContentHubClientView({
             </p>
           </div>
         </div>
+
+        {/* Bulk Action Toolbar */}
+        {submissionForms.length > 0 && (
+          <div className="border border-border-color rounded-lg p-4 bg-surface-color/50 mb-4">
+            <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
+              <div className="flex items-center gap-2">
+                <h3 className="font-heading text-xs text-text-primary uppercase tracking-wider m-0">
+                  Bulk Actions
+                </h3>
+                <p className="text-[9px] text-text-secondary m-0">
+                  Apply to all forms in this activity
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  onClick={() => handleBulkAction("publish")}
+                  disabled={schedulingActivity}
+                  className="px-3 py-2 border border-status-success/40 text-status-success rounded text-[10px] font-bold uppercase tracking-wider hover:bg-status-success/10 disabled:opacity-50"
+                >
+                  <Send size={12} />
+                  <span>Publish All</span>
+                </button>
+                <button
+                  onClick={() => handleBulkAction("unpublish")}
+                  disabled={schedulingActivity}
+                  className="px-3 py-2 border border-status-warning/40 text-status-warning rounded text-[10px] font-bold uppercase tracking-wider hover:bg-status-warning/10 disabled:opacity-50"
+                >
+                  <X size={12} />
+                  <span>Unpublish All</span>
+                </button>
+                <button
+                  onClick={() => handleBulkAction("allow-selection")}
+                  disabled={schedulingActivity}
+                  className="px-3 py-2 border border-accent-secondary/40 text-accent-secondary rounded text-[10px] font-bold uppercase tracking-wider hover:bg-accent-secondary/10 disabled:opacity-50"
+                >
+                  <Check size={12} />
+                  <span>Allow Selection</span>
+                </button>
+                <button
+                  onClick={() => handleBulkAction("disable-selection")}
+                  disabled={schedulingActivity}
+                  className="px-3 py-2 border border-accent-primary/40 text-accent-primary rounded text-[10px] font-bold uppercase tracking-wider hover:bg-accent-primary/10 disabled:opacity-50"
+                >
+                  <AlertCircle size={12} />
+                  <span>Disable Selection</span>
+                </button>
+                <button
+                  onClick={() => handleBulkAction("close-selection")}
+                  disabled={schedulingActivity}
+                  className="px-3 py-2 border border-status-error/40 text-status-error rounded text-[10px] font-bold uppercase tracking-wider hover:bg-status-error/10 disabled:opacity-50"
+                >
+                  <Lock size={12} />
+                  <span>Close Selection</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {submissionForms.length === 0 ? (
           <div className="border border-dashed border-border-color bg-surface-color/30 rounded-lg p-12 text-center">
@@ -1988,38 +2284,82 @@ export default function ContentHubClientView({
                       <span>View Submissions</span>
                     </Link>
                     {isPublished ? (
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleUnpublishForm(form);
-                        }}
-                        className="inline-flex items-center gap-1.5 px-3 py-2 rounded border text-[10px] font-bold uppercase tracking-wider transition-colors border-status-warning/40 text-status-warning hover:bg-status-warning/10"
-                      >
-                        <X size={13} />
-                        <span>Unpublish</span>
-                      </button>
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={() => {
+                            setBulkActionConfirmItem({
+                              id: form.id,
+                              title: form.title,
+                              action: "unpublish",
+                            });
+                            setBulkActionConfirmOpen(true);
+                          }}
+                          className="px-2.5 py-1 border border-status-warning/40 text-status-warning rounded text-[10px] font-bold uppercase tracking-wider hover:bg-status-warning/10"
+                        >
+                          <X size={12} />
+                          <span>Unpublish</span>
+                        </button>
+                        <button
+                          onClick={() => {
+                            setBulkActionConfirmItem({
+                              id: form.id,
+                              title: form.title,
+                              action: "disable-selection",
+                            });
+                            setBulkActionConfirmOpen(true);
+                          }}
+                          className="px-2.5 py-1 border border-accent-primary/40 text-accent-primary rounded text-[10px] font-bold uppercase tracking-wider hover:bg-accent-primary/10"
+                        >
+                          <AlertCircle size={12} />
+                          <span>Disable Selection</span>
+                        </button>
+                        <button
+                          onClick={() => {
+                            setBulkActionConfirmItem({
+                              id: form.id,
+                              title: form.title,
+                              action: "close-selection",
+                            });
+                            setBulkActionConfirmOpen(true);
+                          }}
+                          className="px-2.5 py-1 border border-status-error/40 text-status-error rounded text-[10px] font-bold uppercase tracking-wider hover:bg-status-error/10"
+                        >
+                          <Lock size={12} />
+                          <span>Close Selection</span>
+                        </button>
+                      </div>
                     ) : (
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handlePublishForm(form);
-                        }}
-                        className="inline-flex items-center gap-1.5 px-3 py-2 rounded border text-[10px] font-bold uppercase tracking-wider transition-colors border-status-success/40 text-status-success hover:bg-status-success/10"
-                      >
-                        <Send size={13} />
-                        <span>Publish</span>
-                      </button>
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={() => {
+                            setBulkActionConfirmItem({
+                              id: form.id,
+                              title: form.title,
+                              action: "publish",
+                            });
+                            setBulkActionConfirmOpen(true);
+                          }}
+                          className="px-2.5 py-1 border border-status-success/40 text-status-success rounded text-[10px] font-bold uppercase tracking-wider hover:bg-status-success/10"
+                        >
+                          <Send size={12} />
+                          <span>Publish</span>
+                        </button>
+                        <button
+                          onClick={() => {
+                            setBulkActionConfirmItem({
+                              id: form.id,
+                              title: form.title,
+                              action: "allow-selection",
+                            });
+                            setBulkActionConfirmOpen(true);
+                          }}
+                          className="px-2.5 py-1 border border-accent-secondary/40 text-accent-secondary rounded text-[10px] font-bold uppercase tracking-wider hover:bg-accent-secondary/10"
+                        >
+                          <Check size={12} />
+                          <span>Allow Selection</span>
+                        </button>
+                      </div>
                     )}
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleArchiveForm(form);
-                      }}
-                      className="p-2 border border-border-color rounded text-text-secondary hover:text-status-error hover:border-status-error/50 transition-colors"
-                      title="Archive form"
-                    >
-                      <Trash2 size={14} />
-                    </button>
                   </div>
                 </article>
               );
@@ -3148,6 +3488,320 @@ export default function ContentHubClientView({
         </div>
       )}
 
+      {formPublishConfirmOpen && formPublishConfirmItem && (
+        <PublishConfirmationModal
+          open={formPublishConfirmOpen}
+          onClose={() => setFormPublishConfirmOpen(false)}
+          onConfirm={confirmPublishForm}
+          content={{
+            id: formPublishConfirmItem.id,
+            title: formPublishConfirmItem.title,
+            type: "Submission Form",
+            currentStatus:
+              formPublishConfirmItem.action === "publish" ? "Draft" : "Published",
+            visibility: "All Teams",
+          }}
+          loading={formPublishConfirmLoading}
+        />
+      )}
+
+      {/* Bulk Action Confirmation Modal */}
+      {bulkActionConfirmOpen && bulkActionConfirmItem && (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/85 backdrop-blur-sm p-4">
+          <div className="bg-surface-color border border-accent-secondary/40 rounded-lg w-full max-w-sm p-6 space-y-4 shadow-2xl">
+            <div className="flex items-start justify-between border-b border-border-color pb-3">
+              <h3 className="font-heading text-lg text-text-primary uppercase m-0">
+                Confirm Bulk Action
+              </h3>
+              <button
+                onClick={() => setBulkActionConfirmOpen(false)}
+                className="text-text-secondary hover:text-text-primary"
+              >
+                <X size={18} />
+              </button>
+            </div>
+            <div className="space-y-3">
+              <div className="flex items-start gap-2 mb-1">
+                <span className="text-[10px] text-text-primary font-bold">
+                  {bulkActionConfirmItem.title}
+                </span>
+              </div>
+              <div className="flex items-start gap-2 mb-1">
+                <span className="text-[9px] text-text-secondary">
+                  Action:{" "}
+                  <span className="font-bold uppercase">
+                    {bulkActionConfirmItem.action.replace(/-/g, " ")}
+                  </span>
+                </span>
+              </div>
+              <div className="flex items-start gap-2 mb-3">
+                <span className="text-[9px] text-text-secondary">
+                  This will apply the action to all forms in this activity.
+                </span>
+              </div>
+              <div className="flex justify-end gap-2 pt-2">
+                <button
+                  onClick={() => setBulkActionConfirmOpen(false)}
+                  className="px-4 py-2 border border-border-color text-text-secondary text-xs uppercase font-bold rounded hover:text-text-primary"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={confirmBulkAction}
+                  disabled={bulkActionConfirmLoading}
+                  className={`px-4 py-2 bg-accent-secondary text-white text-xs uppercase font-bold rounded hover:bg-accent-secondary/90 disabled:opacity-50`}
+                >
+                  {bulkActionConfirmLoading ? "Processing..." : "Confirm Action"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {formPublishConfirmOpen && formPublishConfirmItem && (
+        <PublishConfirmationModal
+          open={formPublishConfirmOpen}
+          onClose={() => setFormPublishConfirmOpen(false)}
+          onConfirm={confirmPublishForm}
+          content={{
+            id: formPublishConfirmItem.id,
+            title: formPublishConfirmItem.title,
+            type: "Submission Form",
+            currentStatus:
+              formPublishConfirmItem.action === "publish" ? "Draft" : "Published",
+            visibility: "All Teams",
+          }}
+          loading={formPublishConfirmLoading}
+        />
+      )}
+
+      {/* Timer Configuration Modal */}
+      {activityTimerModalOpen && selectedActivity && (
+        <div className="fixed inset-0 z-80 flex items-center justify-center bg-black/85 backdrop-blur-md p-4">
+          <div className="bg-[#0a0a0c] border border-accent-secondary/40 rounded-xl w-full max-w-lg p-6 space-y-5 shadow-[0_0_50px_rgba(0,0,0,0.8)] text-text-primary">
+            {/* Header */}
+            <div className="flex items-start justify-between border-b border-border-color pb-4">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 rounded-lg bg-accent-secondary/15 border border-accent-secondary/40 text-accent-secondary">
+                  <Timer size={20} />
+                </div>
+                <div>
+                  <h3 className="font-heading text-lg uppercase tracking-wider text-text-primary m-0">
+                    Activity Release Timer
+                  </h3>
+                  <p className="text-xs text-text-secondary m-0 mt-0.5">
+                    Release countdown for all drafts in{" "}
+                    <span className="text-accent-tertiary font-bold">
+                      {selectedActivity.title}
+                    </span>
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setActivityTimerModalOpen(false)}
+                className="text-text-secondary hover:text-text-primary p-1 rounded hover:bg-white/5 transition-colors"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Mode selection tabs */}
+            <div className="grid grid-cols-2 gap-2 p-1 bg-surface-color-light/50 border border-border-color rounded-lg">
+              <button
+                type="button"
+                onClick={() => setActivityTimerMode("countdown")}
+                className={`py-2 px-3 rounded text-xs font-bold uppercase tracking-wider transition-all ${
+                  activityTimerMode === "countdown"
+                    ? "bg-accent-secondary text-black shadow-md"
+                    : "text-text-secondary hover:text-text-primary"
+                }`}
+              >
+                Countdown Duration
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setActivityTimerMode("datetime");
+                  if (!activityTimerDate) {
+                    const d = new Date(Date.now() + 60 * 60 * 1000);
+                    setActivityTimerDate(d.toISOString().slice(0, 16));
+                  }
+                }}
+                className={`py-2 px-3 rounded text-xs font-bold uppercase tracking-wider transition-all ${
+                  activityTimerMode === "datetime"
+                    ? "bg-accent-secondary text-black shadow-md"
+                    : "text-text-secondary hover:text-text-primary"
+                }`}
+              >
+                Date & Time
+              </button>
+            </div>
+
+            {/* Countdown Mode Form */}
+            {activityTimerMode === "countdown" ? (
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-[10px] uppercase tracking-wider text-text-secondary mb-2 font-bold">
+                    Select Preset Duration
+                  </label>
+                  <div className="grid grid-cols-4 gap-2">
+                    {[5, 15, 30, 45, 60, 90, 120, 180].map((mins) => (
+                      <button
+                        key={mins}
+                        type="button"
+                        onClick={() => setActivityTimerMinutes(mins)}
+                        className={`py-2 px-2 text-xs font-bold rounded border transition-all ${
+                          activityTimerMinutes === mins
+                            ? "border-accent-secondary bg-accent-secondary/20 text-accent-secondary shadow-[0_0_10px_rgba(255,0,127,0.2)]"
+                            : "border-border-color bg-surface-color text-text-secondary hover:text-text-primary hover:border-text-secondary"
+                        }`}
+                      >
+                        {mins >= 60 ? `${mins / 60}h` : `${mins}m`}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-[10px] uppercase tracking-wider text-text-secondary mb-1.5 font-bold">
+                    Or Custom Minutes
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="number"
+                      min="1"
+                      max="10080"
+                      value={activityTimerMinutes}
+                      onChange={(e) =>
+                        setActivityTimerMinutes(
+                          Math.max(1, parseInt(e.target.value) || 1)
+                        )
+                      }
+                      className="w-full px-3 py-2.5 bg-surface-color-light border border-border-color rounded text-sm text-text-primary focus:border-accent-secondary outline-none font-mono"
+                      placeholder="30"
+                    />
+                    <span className="absolute right-3 top-2.5 text-xs text-text-secondary">
+                      minutes
+                    </span>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              /* Date & Time Mode Form */
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-[10px] uppercase tracking-wider text-text-secondary mb-1.5 font-bold">
+                    Scheduled Date & Time
+                  </label>
+                  <input
+                    type="datetime-local"
+                    value={activityTimerDate}
+                    onChange={(e) => setActivityTimerDate(e.target.value)}
+                    className="w-full px-3 py-2.5 bg-surface-color-light border border-border-color rounded text-xs text-text-primary focus:border-accent-secondary outline-none font-mono"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[10px] uppercase tracking-wider text-text-secondary mb-1.5 font-bold">
+                    Timezone
+                  </label>
+                  <input
+                    type="text"
+                    value={activityTimerTimezone}
+                    onChange={(e) => setActivityTimerTimezone(e.target.value)}
+                    placeholder="e.g. UTC, Asia/Kolkata"
+                    className="w-full px-3 py-2.5 bg-surface-color-light border border-border-color rounded text-xs text-text-primary focus:border-accent-secondary outline-none"
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Auto-publish checkbox */}
+            <div className="flex items-start gap-3 p-3 rounded-lg border border-border-color/60 bg-surface-color-light/30">
+              <input
+                type="checkbox"
+                id="activityAutoPublishToggle"
+                checked={activityTimerAutoPublish}
+                onChange={(e) => setActivityTimerAutoPublish(e.target.checked)}
+                className="mt-0.5 h-4 w-4 rounded border border-border-color accent-accent-secondary cursor-pointer"
+              />
+              <label
+                htmlFor="activityAutoPublishToggle"
+                className="text-xs text-text-primary cursor-pointer select-none"
+              >
+                <span className="font-bold block">
+                  Auto-publish when timer reaches zero
+                </span>
+                <span className="text-[11px] text-text-secondary block mt-0.5">
+                  Automatically publish all {draftForms} draft item(s) in this activity upon completion.
+                </span>
+              </label>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex items-center justify-between pt-3 border-t border-border-color">
+              {readingTimerEnd ? (
+                <button
+                  type="button"
+                  onClick={handleCancelActivityTimer}
+                  className="px-3 py-2 border border-status-error/40 text-status-error hover:bg-status-error/15 text-xs uppercase font-bold rounded transition-colors"
+                >
+                  Cancel Active Timer
+                </button>
+              ) : null}
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setActivityTimerModalOpen(false)}
+                  className="px-4 py-2 border border-border-color text-text-secondary text-xs uppercase font-bold rounded hover:text-text-primary transition-colors"
+                >
+                  Close
+                </button>
+                <button
+                  type="button"
+                  disabled={schedulingActivity}
+                  onClick={() => handleStartActivityTimer("reading")}
+                  className="inline-flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-accent-secondary to-accent-primary text-black text-xs uppercase font-bold rounded hover:opacity-90 transition-all shadow-[0_0_15px_rgba(255,0,127,0.3)] disabled:opacity-50"
+                >
+                  {schedulingActivity ? (
+                    <>
+                      <Loader2 size={14} className="animate-spin" />
+                      <span>Saving...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Timer size={14} />
+                      <span>PUBLISH FOR READING</span>
+                    </>
+                  )}
+                </button>
+                <button
+                  type="button"
+                  disabled={schedulingActivity}
+                  onClick={() => handleStartActivityTimer("selection")}
+                  className="inline-flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-accent-primary to-accent-secondary text-black text-xs uppercase font-bold rounded hover:opacity-90 transition-all shadow-[0_0_15px_rgba(0,240,255,0.3)] disabled:opacity-50"
+                >
+                  {schedulingActivity ? (
+                    <>
+                      <Loader2 size={14} className="animate-spin" />
+                      <span>Saving...</span>
+                    </>
+                  ) : (
+                    <>
+                      <CalendarClock size={14} />
+                      <span>PUBLISH FOR SELECTION</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {deleteTarget && (
         <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/85 backdrop-blur-sm p-4">
           <div className="bg-surface-color border border-status-error/40 rounded-lg w-full max-w-sm p-6 space-y-4 shadow-2xl">
@@ -3179,7 +3833,7 @@ export default function ContentHubClientView({
           </div>
         </div>
       )}
-
+      
       {pdfImportOpen && (
         <PdfImportDialog
           activityId={selectedActivity?.id || ""}

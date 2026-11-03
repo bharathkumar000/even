@@ -27,7 +27,6 @@ interface Criterion {
   title: string;
   description?: string | null;
   max_marks: number;
-  weightage?: number | null;
   is_required?: boolean | null;
 }
 
@@ -41,8 +40,8 @@ const statusConfig: Record<string, { label: string; icon: React.ReactNode; cls: 
   reopened: {
     label: "Reopened",
     icon: <Unlock size={13} />,
-    cls: "bg-status-success/10 text-status-success border-status-success/50",
-    dot: "bg-status-success animate-pulse",
+    cls: "bg-accent-tertiary/15 text-accent-tertiary border-accent-tertiary/50",
+    dot: "bg-accent-tertiary animate-pulse",
   },
   draft: {
     label: "Draft",
@@ -65,29 +64,54 @@ const statusConfig: Record<string, { label: string; icon: React.ReactNode; cls: 
 };
 
 export default async function JudgeRubricsPage() {
-  // Require judge auth
   try {
     await requireJudge();
   } catch {
     // layout handles redirect, this is a safety fallback
   }
 
+  let judgeUserId: string | null = null;
+  try {
+    const { data: { user } } = await supabaseAdmin.auth.getUser();
+    judgeUserId = user?.id || null;
+  } catch {
+    // Silently fail - page will show empty state
+  }
+
   let rounds: Round[] = [];
   let criteria: Criterion[] = [];
 
   try {
-    const [roundsRes, criteriaRes] = await Promise.all([
+    const [roundsRes, criteriaRes, assignmentsRes] = await Promise.all([
       supabaseAdmin
         .from("evaluation_rounds")
         .select("id, title, sequence_order, status")
         .order("sequence_order", { ascending: true }),
       supabaseAdmin
         .from("evaluation_criteria")
-        .select("id, round_id, title, description, max_marks, weightage, is_required"),
+        .select("id, round_id, title, description, max_marks, is_required"),
+      judgeUserId
+        ? supabaseAdmin
+            .from("judge_assignments")
+            .select("round_id")
+            .eq("judge_id", judgeUserId)
+        : Promise.resolve({ data: [] }),
     ]);
 
     if (roundsRes.data) rounds = roundsRes.data;
     if (criteriaRes.data) criteria = criteriaRes.data;
+
+    const assignedRoundIds = new Set(
+      (assignmentsRes.data || []).map((a: any) => a.round_id)
+    );
+
+    if (judgeUserId && assignedRoundIds.size > 0) {
+      rounds = rounds.filter((r) => assignedRoundIds.has(r.id));
+      criteria = criteria.filter((c) => assignedRoundIds.has(c.round_id));
+    } else {
+      rounds = [];
+      criteria = [];
+    }
   } catch (err) {
     console.error("Failed to load rubrics:", err);
   }
@@ -114,7 +138,8 @@ export default async function JudgeRubricsPage() {
           Judging Rubrics
         </h1>
         <p className="text-text-secondary text-sm mt-2 max-w-2xl">
-          All evaluation rounds, scoring criteria, and maximum mark allocations for this ideathon. This is a read-only reference — grading is done on each team&apos;s evaluation page.
+          All evaluation rounds, scoring criteria, and maximum mark allocations for this ideathon.
+          This is a read-only reference — grading is done on each team&apos;s evaluation page.
         </p>
       </div>
 
@@ -138,7 +163,8 @@ export default async function JudgeRubricsPage() {
         <div className="p-4 bg-status-warning/10 border border-status-warning/40 flex items-center gap-3">
           <AlertCircle size={18} className="text-status-warning" />
           <p className="text-xs text-status-warning font-bold uppercase tracking-wider m-0">
-            No active evaluation round at this time. Check back when a round is opened by the administrator.
+            No active evaluation round at this time. Check back when a round is opened by the
+            administrator.
           </p>
         </div>
       )}
@@ -147,7 +173,15 @@ export default async function JudgeRubricsPage() {
       {rounds.length === 0 ? (
         <div className="glass-panel p-12 border border-border-color text-center">
           <Layers size={40} className="mx-auto mb-3 text-text-secondary/40" />
-          <p className="text-text-secondary text-sm">No evaluation rounds have been configured yet.</p>
+          <p className="text-text-secondary text-sm">
+            No evaluation rounds have been assigned to you yet.
+          </p>
+          {judgeUserId ? (
+            <p className="text-xs text-text-secondary/60 mt-2">
+              You are not currently assigned as a judge to any evaluation round. Please contact an
+              administrator to be assigned.
+            </p>
+          ) : null}
         </div>
       ) : (
         <div className="space-y-6">
@@ -164,15 +198,17 @@ export default async function JudgeRubricsPage() {
                   isActive
                     ? "border-accent-primary/40 shadow-[0_0_20px_rgba(251,200,21,0.06)]"
                     : "border-border-color"
-                }`}
+                } rounded-xl flex flex-col justify-between gap-4`}
               >
                 {/* Round Header */}
                 <div
                   className={`p-5 border-b flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
-                    isActive ? "border-accent-primary/20" : "border-border-color"
+                    isActive
+                      ? "border-accent-primary/20"
+                      : "border-border-color"
                   }`}
                 >
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-2 mb-1">
                     <div
                       className={`p-2.5 rounded border ${
                         isActive
@@ -236,7 +272,6 @@ export default async function JudgeRubricsPage() {
                           <th className="p-3">Criterion</th>
                           <th className="p-3">Description</th>
                           <th className="p-3 text-center">Max Score</th>
-                          <th className="p-3 text-center">Weightage</th>
                           <th className="p-3 text-center">Required</th>
                         </tr>
                       </thead>
@@ -257,7 +292,9 @@ export default async function JudgeRubricsPage() {
                             <td className="p-3 max-w-xs">
                               <p className="text-text-secondary m-0 leading-relaxed">
                                 {c.description || (
-                                  <span className="italic text-text-secondary/50">No description</span>
+                                  <span className="italic text-text-secondary/50">
+                                    No description
+                                  </span>
                                 )}
                               </p>
                             </td>
@@ -265,16 +302,9 @@ export default async function JudgeRubricsPage() {
                               <span className="font-mono font-bold text-accent-primary text-sm">
                                 {c.max_marks}
                               </span>
-                              <span className="text-text-secondary text-[10px] ml-0.5">pts</span>
-                            </td>
-                            <td className="p-3 text-center">
-                              {c.weightage != null ? (
-                                <span className="font-mono text-accent-secondary font-bold">
-                                  {c.weightage}%
-                                </span>
-                              ) : (
-                                <span className="text-text-secondary/50 italic text-[11px]">—</span>
-                              )}
+                              <span className="text-text-secondary text-[10px] ml-0.5">
+                                pts
+                              </span>
                             </td>
                             <td className="p-3 text-center">
                               {c.is_required ? (
@@ -291,26 +321,22 @@ export default async function JudgeRubricsPage() {
                       </tbody>
                       {/* Totals Footer */}
                       <tfoot>
-                        <tr className="border-t border-border-color bg-surface-color/60 text-text-secondary uppercase tracking-wider text-[11px]">
-                          <td colSpan={3} className="p-3 pl-5 text-right font-bold text-text-primary">
-                            Total
-                          </td>
-                          <td className="p-3 text-center font-mono font-bold text-accent-primary text-sm">
-                            {totalMarks}
-                            <span className="text-text-secondary text-[10px] ml-0.5">pts</span>
-                          </td>
-                          <td className="p-3 text-center font-mono text-accent-secondary font-bold">
-                            {roundCriteria.reduce((s, c) => s + (c.weightage || 0), 0) > 0
-                              ? `${roundCriteria.reduce((s, c) => s + (c.weightage || 0), 0)}%`
-                              : "—"}
-                          </td>
-                          <td className="p-3 text-center">
-                            <span className="text-status-success font-bold text-[10px]">
-                              {roundCriteria.filter((c) => c.is_required).length} Required
-                            </span>
-                          </td>
-                        </tr>
-                      </tfoot>
+                          <tr className="border-t border-border-color bg-surface-color/60 text-text-secondary uppercase tracking-wider text-[11px]">
+                            <td colSpan={3} className="p-3 pl-5 text-right font-bold text-text-primary">
+                              Total
+                            </td>
+                            <td className="p-3 text-center font-mono font-bold text-accent-primary text-sm">
+                              {totalMarks}
+                              <span className="text-text-secondary text-[10px] ml-0.5">pts</span>
+                            </td>
+                            <td className="p-3 text-center">
+                              <span className="inline-flex items-center gap-1 text-status-success text-[10px] font-bold uppercase">
+                                <CheckCircle2 size={13} />
+                                {roundCriteria.filter((c) => c.is_required).length} Required
+                              </span>
+                            </td>
+                          </tr>
+                        </tfoot>
                     </table>
                   </div>
                 )}

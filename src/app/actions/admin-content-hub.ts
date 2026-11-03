@@ -92,7 +92,10 @@ export interface ContentHubData {
   error?: string;
 }
 
-interface ProblemStatementRow {
+export interface ProblemStatementRow {
+  timer_end_time?: string | null;
+  timer_auto_publish?: boolean | null;
+  timer_timezone?: string | null;
   id: string;
   reference_number: string | null;
   title: string;
@@ -377,7 +380,7 @@ function buildItem(
     };
 }
 
-async function getActivityRow(
+export async function getActivityRow(
   activityId: string
 ): Promise<{ row: ProblemStatementRow; activity: ContentActivity }> {
   const { data, error } = await supabaseAdmin
@@ -421,7 +424,7 @@ async function findProblemStatementActivity(): Promise<ContentActivity | null> {
   return row ? buildActivity(row) : null;
 }
 
-async function resolveItemActivity(
+export async function resolveItemActivity(
   row: ProblemStatementRow
 ): Promise<{ activity: ContentActivity; marker: HubItemMarker | null }> {
   const marker = getItemMarker(row.resource_links);
@@ -440,7 +443,7 @@ async function resolveItemActivity(
   return { activity: fallback, marker: null };
 }
 
-async function getItemRow(itemId: string): Promise<ProblemStatementRow> {
+export async function getItemRow(itemId: string): Promise<ProblemStatementRow> {
   const { data, error } = await supabaseAdmin
     .from("problem_statements")
     .select("*")

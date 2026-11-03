@@ -36,6 +36,7 @@ export default function ScannerDesk({
             Live Camera Scanner
           </h2>
           <button
+            type="button"
             onClick={scanning ? onStopScanner : onStartScanner}
             className={`px-3 py-1.5 font-tech font-bold uppercase text-xs transition-colors shrink-0 ${
               scanning

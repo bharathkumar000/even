@@ -47,6 +47,7 @@ export interface EnrichedActivityLog {
   scanned_by?: string | null;
   scanner_name?: string;
   scanner_email?: string;
+  result?: string;
 }
 
 export interface TeamScanData {
@@ -241,9 +242,14 @@ export async function recordMemberAction(data: ScanActionInput & {
       ? (profile as { full_name?: string | null }).full_name ?? user.email ?? "Operations"
       : user.email ?? "Operations";
 
+  // SPOC users have read-only scanner access — mutations are rejected.
+  if (operatorRole === "spoc") {
+    throw new Error("Forbidden: SPOC scanner access is read-only. Mutations are not permitted.");
+  }
+
   // 1. Duplicate check in event_activity_logs with scanner attribution.
   //    Existing behaviour preserved: lunch/snacks allow up to 3 claims;
-     // registration/goodies/certificates allow one claim.
+  //    registration/goodies/certificates allow one claim.
   const { data: existingRecords, error: checkError } = await supabaseAdmin
     .from("event_activity_logs")
     .select("id, created_at, scanned_by, result")
@@ -393,6 +399,11 @@ export async function recordTeamBulkAction(teamId: string, actionType: ActionTyp
     typeof profile === "object" && profile !== null && "full_name" in profile
       ? (profile as { full_name?: string | null }).full_name ?? user.email ?? "Operations"
       : user.email ?? "Operations";
+
+  // SPOC users have read-only scanner access — mutations are rejected.
+  if (operatorRole === "spoc") {
+    throw new Error("Forbidden: SPOC scanner access is read-only. Mutations are not permitted.");
+  }
 
   // Fetch team members
   const { data: members, error: membersError } = await supabaseAdmin
@@ -669,6 +680,72 @@ export async function getLiveScanActivityStream(limit = 40): Promise<LiveActivit
 }
 
 /**
+ * Recently Scanned Teams: Fetch the latest successful scans performed by the
+ * currently authenticated staff member, joined with team details.
+ * Returns at most `limit` records (default 3), newest first.
+ * Only records with result = 'success' are included (failed/invalid scans excluded).
+ */
+export interface RecentlyScannedTeam {
+  id: string;
+  team_id: string;
+  team_name: string;
+  team_code: string | null;
+  team_track: string | null;
+  action_type: string;
+  created_at: string;
+  operator_id: string;
+  operator_name: string;
+}
+
+export async function getRecentlyScannedTeams(limit = 3): Promise<{
+  scans: RecentlyScannedTeam[];
+  error?: string;
+}> {
+  const { user } = await requireOperationsRole();
+  const operatorId = user.id;
+
+  const { data, error } = await supabaseAdmin
+    .from("event_activity_logs")
+    .select(
+      `
+      id,
+      team_id,
+      action_type,
+      result,
+      created_at,
+      operator_id,
+      operator_name,
+      teams (id, name, code, track)
+    `
+    )
+    .eq("operator_id", operatorId)
+    .eq("result", "success")
+    .order("created_at", { ascending: false })
+    .limit(limit);
+
+  if (error) {
+    return { scans: [], error: error.message };
+  }
+
+  const scans: RecentlyScannedTeam[] = (data || []).map((row: any) => {
+    const team = row.teams || {};
+    return {
+      id: row.id,
+      team_id: row.team_id,
+      team_name: team.name || "Unknown Team",
+      team_code: team.code || null,
+      team_track: team.track || null,
+      action_type: row.action_type,
+      created_at: row.created_at,
+      operator_id: row.operator_id || operatorId,
+      operator_name: row.operator_name || user.email || "Staff Member",
+    };
+  });
+
+  return { scans };
+}
+
+/**
  * Get the live claim status for a team. Used by /team/qr to auto-update and rotate the QR code.
  */
 export async function getTeamScanStatus(teamId: string) {
@@ -727,5 +804,237 @@ export async function getTeamScanStatus(teamId: string) {
     logs: enriched,
     lastUpdated: team?.last_scanned_at || new Date().toISOString(),
     qrToken: dynamicToken,
+  };
+}
+
+/**
+ * Search teams by ID prefix or name substring.
+ * Staff can search all teams (not just assigned ones).
+ * Read-only: does not modify any records.
+ */
+export interface TeamSearchResult {
+  id: string;
+  name: string;
+  code: string | null;
+  track: string | null;
+  status: string | null;
+  leader_name: string | null;
+  member_count: number;
+  last_scanned_at: string | null;
+}
+
+export async function searchTeams(
+  query: string,
+  limit = 20
+): Promise<{ teams: TeamSearchResult[]; error?: string }> {
+  await requireOperationsRole();
+
+  if (!query || query.trim().length === 0) {
+    return { teams: [], error: "" };
+  }
+
+  const searchTerm = query.trim();
+  const isUuid = UUID_REGEX.test(searchTerm);
+
+  let queryBuilder = supabaseAdmin
+    .from("teams")
+    .select("id, name, code, track, status, leader_name, last_scanned_at")
+    .order("name", { ascending: true })
+    .limit(limit);
+
+  if (isUuid) {
+    queryBuilder = queryBuilder.eq("id", searchTerm);
+  } else {
+    queryBuilder = queryBuilder.or(
+      `name.ilike.%${searchTerm}%,code.ilike.%${searchTerm}%`
+    );
+  }
+
+  const { data, error } = await queryBuilder;
+
+  if (error) {
+    return { teams: [], error: error.message };
+  }
+
+  // Get member counts for each team
+  const teamIds = (data || []).map((t) => t.id);
+  let memberCounts: Record<string, number> = {};
+
+  if (teamIds.length > 0) {
+    const { data: memberData } = await supabaseAdmin
+      .from("team_members")
+      .select("team_id")
+      .in("team_id", teamIds);
+
+    if (memberData) {
+      for (const m of memberData) {
+        memberCounts[m.team_id] = (memberCounts[m.team_id] || 0) + 1;
+      }
+    }
+  }
+
+  const teams: TeamSearchResult[] = (data || []).map((t) => ({
+    id: t.id,
+    name: t.name,
+    code: t.code || null,
+    track: t.track || null,
+    status: t.status || null,
+    leader_name: t.leader_name || null,
+    member_count: memberCounts[t.id] || 0,
+    last_scanned_at: t.last_scanned_at || null,
+  }));
+
+  return { teams };
+}
+
+/**
+ * Get complete team details for Team Lookup workspace.
+ * Returns team info, members, activity history, and submissions.
+ * Read-only: does not modify any records.
+ */
+export interface TeamLookupTeam {
+  id: string;
+  name: string;
+  code: string | null;
+  track: string | null;
+  status: string | null;
+  leader_name: string | null;
+  created_at: string;
+  qr_token: string | null;
+  last_scanned_at: string | null;
+  last_scanned_by: string | null;
+}
+
+export interface TeamLookupMember {
+  id: string;
+  user_id: string;
+  role: string;
+  name: string | null;
+  email: string | null;
+  joined_at: string;
+}
+
+export interface TeamLookupActivity {
+  id: string;
+  action_type: string;
+  method: string | null;
+  result: string | null;
+  created_at: string;
+  operator_name: string | null;
+  operator_role: string | null;
+  item_name: string | null;
+}
+
+export interface TeamLookupSubmission {
+  id: string;
+  round_id: string;
+  ppt_url: string;
+  github_url: string | null;
+  pitch_deck_url: string | null;
+  prototype_url: string | null;
+  additional_material_url: string | null;
+  demo_url: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface TeamLookupResult {
+  team: TeamLookupTeam | null;
+  members: TeamLookupMember[];
+  activity: TeamLookupActivity[];
+  submissions: TeamLookupSubmission[];
+  error?: string;
+}
+
+export async function getTeamLookupDetails(teamId: string): Promise<TeamLookupResult> {
+  await requireOperationsRole();
+
+  // Fetch team details
+  const { data: team, error: teamError } = await supabaseAdmin
+    .from("teams")
+    .select("id, name, code, track, status, leader_name, created_at, qr_token, last_scanned_at, last_scanned_by")
+    .eq("id", teamId)
+    .maybeSingle();
+
+  if (teamError || !team) {
+    return { team: null, members: [], activity: [], submissions: [], error: "Team not found" };
+  }
+
+  // Fetch team members with profile info
+  const { data: members, error: membersError } = await supabaseAdmin
+    .from("team_members")
+    .select("id, user_id, role, name, email, joined_at")
+    .eq("team_id", teamId)
+    .order("role", { ascending: true });
+
+  if (membersError) {
+    console.error("Failed to load team members:", membersError.message);
+  }
+
+  // Fetch activity logs for this team
+  const { data: activity, error: activityError } = await supabaseAdmin
+    .from("event_activity_logs")
+    .select("id, action_type, method, result, created_at, operator_name, operator_role, item_name")
+    .eq("team_id", teamId)
+    .order("created_at", { ascending: false });
+
+  if (activityError) {
+    console.error("Failed to load activity logs:", activityError.message);
+  }
+
+  // Fetch team submissions
+  const { data: submissions, error: submissionsError } = await supabaseAdmin
+    .from("team_submissions")
+    .select("id, round_id, ppt_url, github_url, pitch_deck_url, prototype_url, additional_material_url, demo_url, created_at, updated_at")
+    .eq("team_id", teamId)
+    .order("created_at", { ascending: false });
+
+  if (submissionsError) {
+    console.error("Failed to load submissions:", submissionsError.message);
+  }
+
+  return {
+    team: {
+      id: team.id,
+      name: team.name,
+      code: team.code || null,
+      track: team.track || null,
+      status: team.status || null,
+      leader_name: team.leader_name || null,
+      created_at: team.created_at,
+      qr_token: team.qr_token || null,
+      last_scanned_at: team.last_scanned_at || null,
+      last_scanned_by: team.last_scanned_by || null,
+    },
+    members: (members || []).map((m: any) => ({
+      id: m.id,
+      user_id: m.user_id,
+      role: m.role,
+      name: m.name || null,
+      email: m.email || null,
+      joined_at: m.joined_at,
+    })),
+    activity: (activity || []).map((a: any) => ({
+      id: a.id,
+      action_type: a.action_type,
+      method: a.method || null,
+      result: a.result || null,
+      created_at: a.created_at,
+      operator_name: a.operator_name || null,
+      operator_role: a.operator_role || null,
+      item_name: a.item_name || null,
+    })),
+    submissions: (submissions || []).map((s: any) => ({
+      id: s.id,
+      round_id: s.round_id,
+      ppt_url: s.ppt_url,
+      github_url: s.github_url || null,
+      pitch_deck_url: s.pitch_deck_url || null,
+      prototype_url: s.prototype_url || null,
+      additional_material_url: s.additional_material_url || null,
+      demo_url: s.demo_url || null,
+      created_at: s.created_at,
+      updated_at: s.updated_at,
+    })),
   };
 }
