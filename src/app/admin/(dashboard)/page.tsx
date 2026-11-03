@@ -133,7 +133,7 @@ export default async function AdminDashboardPage() {
       icon: Clock,
       color: "text-status-warning",
       borderColor: "border-status-warning/30",
-      link: "/admin/evaluations",
+      link: "/admin/evaluation",
     },
     {
       label: "Results Engine",

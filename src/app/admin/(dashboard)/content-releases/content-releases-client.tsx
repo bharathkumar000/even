@@ -33,6 +33,7 @@ import {
   Plus,
   Search,
   Send,
+  Table,
   Timer,
   Trash2,
   Upload,
@@ -69,6 +70,8 @@ import {
 } from "@/app/actions/project-submission-forms";
 import { PublishConfirmationModal } from "@/components/admin/PublishConfirmationModal";
 import {
+  getTeamProblemStatementSelections,
+  exportTeamProblemStatementSelections,
   unpublishProblemStatement,
   bulkPublishProblemStatements,
   bulkUnpublishProblemStatements,
@@ -83,13 +86,6 @@ import {
   closeSelection,
   getPhaseStatus,
 } from "@/app/actions/admin-problem-statements";
-import {
-  importPdfExtract,
-  importPdfContentWithoutStorage,
-} from "@/app/actions/pdf-import";
-import PdfImportDialog from "@/components/admin/PdfImportDialog";
-import SIHImportDialog from "@/components/admin/SIHImportDialog";
-import { importSIHProblemStatements } from "@/app/actions/import-sih-problem-statements";
 import type {
   ActivityType,
   ContentActivity,
@@ -429,6 +425,10 @@ export default function ContentHubClientView({
   }>>([]);
   const [publishConfirmLoading, setPublishConfirmLoading] = useState(false);
 
+  // UNPUBLISH ALL confirmation modal state
+  const [unpublishAllConfirmOpen, setUnpublishAllConfirmOpen] = useState(false);
+  const [unpublishAllConfirmLoading, setUnpublishAllConfirmLoading] = useState(false);
+
   // Form publish confirmation modal state
   const [formPublishConfirmOpen, setFormPublishConfirmOpen] = useState(false);
   const [formPublishConfirmItem, setFormPublishConfirmItem] = useState<{
@@ -446,6 +446,20 @@ export default function ContentHubClientView({
     action: "publish" | "unpublish" | "allow-selection" | "disable-selection" | "close-selection";
   } | null>(null);
   const [bulkActionConfirmLoading, setBulkActionConfirmLoading] = useState(false);
+
+  // View Submissions (team PS assignments) modal state
+  const [viewSubmissionsOpen, setViewSubmissionsOpen] = useState(false);
+  const [submissions, setSubmissions] = useState<Array<{
+    assigned_at: string;
+    team_id: string;
+    team_name: string;
+    team_code: string | null;
+    ps_reference_number: string | null;
+    ps_title: string;
+  }>>([]);
+  const [submissionsLoading, setSubmissionsLoading] = useState(false);
+  const [submissionsError, setSubmissionsError] = useState<string | null>(null);
+  const [submissionsExporting, setSubmissionsExporting] = useState(false);
 
   // Selection timer state
   const [selectionTimerOpening, setSelectionTimerOpening] = useState<string>("");
@@ -482,9 +496,10 @@ export default function ContentHubClientView({
     loading: false,
   });
 
-  // PDF Import dialog state
-  const [pdfImportOpen, setPdfImportOpen] = useState(false);
-  const [importingPdf, setImportingPdf] = useState(false);
+  // Filter states
+  const [departmentFilter, setDepartmentFilter] = useState<string>("all");
+  const [categoryFilter, setCategoryFilter] = useState<string>("all");
+  const [sihYearFilter, setSihYearFilter] = useState<string>("all");
 
   // SIH Import dialog state
   const [sihImportOpen, setSihImportOpen] = useState(false);
@@ -522,9 +537,6 @@ export default function ContentHubClientView({
           return false;
         }
         if (categoryFilter !== "all" && (item.metadata?.category as string) !== categoryFilter) {
-          return false;
-        }
-        if (sihYearFilter !== "all" && String(item.metadata?.sih_year ?? "") !== sihYearFilter) {
           return false;
         }
         if (!query) return true;
@@ -703,21 +715,41 @@ export default function ContentHubClientView({
         localStorage.removeItem(timerKey);
         setActivityTimerEnd(null);
 
+        // Determine the timer mode from localStorage
+        let timerMode: "reading" | "selection" = "reading";
+        try {
+          const stored = localStorage.getItem(timerKey);
+          if (stored) {
+            const parsed = JSON.parse(stored);
+            if (parsed.mode === "selection") timerMode = "selection";
+          }
+        } catch {
+          // ignore parse errors, default to reading
+        }
+
         if (activityTimerAutoPublish) {
           startTransition(async () => {
             try {
-              const res = await publishAllContentItems(selectedActivityId);
-              setNotification({
-                type: "success",
-                message: `Activity timer finished! ${res.publishedCount ?? 0} draft(s) published automatically.`,
-              });
+              if (timerMode === "selection") {
+                const res = await publishForSelection(selectedActivityId);
+                setNotification({
+                  type: "success",
+                  message: res.message || `Selection phase activated for ${res.activatedCount ?? 0} item(s).`,
+                });
+              } else {
+                const res = await startReadingPhase(selectedActivityId);
+                setNotification({
+                  type: "success",
+                  message: res.message || `Reading phase started for ${res.startedCount ?? 0} item(s).`,
+                });
+              }
               setTimeout(() => {
                 window.location.reload();
               }, 1200);
             } catch (err) {
               setNotification({
                 type: "error",
-                message: err instanceof Error ? err.message : "Auto-publish failed on timer completion.",
+                message: err instanceof Error ? err.message : "Phase activation failed on timer completion.",
               });
             }
           });
@@ -754,8 +786,7 @@ export default function ContentHubClientView({
       }
 
       const iso = targetDate.toISOString();
-       const enableSelection = mode === "selection";
-       await scheduleContentActivity(selectedActivity.id, iso, activityTimerTimezone || "UTC", enableSelection);
+       await scheduleContentActivity(selectedActivity.id, iso, activityTimerTimezone || "UTC", mode);
 
       const diff = Math.max(0, Math.floor((targetDate.getTime() - Date.now()) / 1000));
       setActivityTimerEnd(iso);
@@ -769,6 +800,7 @@ export default function ContentHubClientView({
             endTime: iso,
             timezone: activityTimerTimezone,
             autoPublish: activityTimerAutoPublish,
+            mode,
           })
         );
       } catch {
@@ -778,7 +810,7 @@ export default function ContentHubClientView({
       setActivityTimerModalOpen(false);
       setNotification({
         type: "success",
-        message: `Activity timer set for “${selectedActivity.title}”! Scheduled release for ${targetDate.toLocaleTimeString()} (${targetDate.toLocaleDateString()}).`,
+        message: `Activity timer set for “${selectedActivity.title}”! Scheduled ${mode} phase for ${targetDate.toLocaleTimeString()} (${targetDate.toLocaleDateString()}).`,
       });
     } catch (err: unknown) {
       setNotification({
@@ -849,6 +881,52 @@ export default function ContentHubClientView({
     fetchPhaseStatus();
   }, [fetchPhaseStatus]);
 
+  // Server-side expiry check: process any expired schedules on load
+  // Handles browser refresh, tab suspension, server restart, and
+  // timer expiry while no admin browser is open.
+  useEffect(() => {
+    if (!selectedActivityId) return;
+    const timerKey = `activity_timer_${selectedActivityId}`;
+    const processExpired = async () => {
+      try {
+        const res = await fetch(`/api/admin/timer/${selectedActivityId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "processExpiredSchedules", [CSRF_CONSTANTS.HEADER_NAME]: "" }),
+        });
+        if (res.ok) {
+          const result = await res.json();
+          if (result.processed && result.processed > 0) {
+            setNotification({
+              type: "success",
+              message: result.message || "Expired timer(s) processed.",
+            });
+            await fetchPhaseStatus();
+          }
+        }
+      } catch {
+        // Silent fail - expiry is best-effort on load
+      }
+    };
+    void processExpired();
+
+    // Also check localStorage for expired timers
+    try {
+      const stored = localStorage.getItem(timerKey);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        const end = new Date(parsed.endTime).getTime();
+        if (end <= Date.now()) {
+          localStorage.removeItem(timerKey);
+          setActivityTimerEnd(null);
+          setActivityTimerRemaining(0);
+        }
+      }
+    } catch {
+      // ignore
+    }
+  }, [selectedActivityId, fetchPhaseStatus]);
+
   const handleStartReadingPhase = async () => {
     if (!selectedActivity) return;
     if (
@@ -896,6 +974,39 @@ export default function ContentHubClientView({
         type: "error",
         message: err instanceof Error ? err.message : "Failed to publish for selection.",
       });
+    }
+  };
+
+  const handleUnpublishAll = async () => {
+    if (!selectedActivityId) return;
+    setUnpublishAllConfirmOpen(true);
+  };
+
+  const handleExecuteUnpublishAll = async () => {
+    if (!selectedActivityId) return;
+    setUnpublishAllConfirmLoading(true);
+    try {
+      const res = await fetch(`/api/admin/problem-statements/bulk/unpublish`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ activityId: selectedActivityId, [CSRF_CONSTANTS.HEADER_NAME]: "" }),
+      });
+      if (!res.ok) throw new Error("Bulk unpublish failed");
+      const result = await res.json();
+      setNotification({
+        type: "success",
+        message: result.message || "All published problem statements have been unpublished and saved as drafts.",
+      });
+      // Refresh activity state
+      await fetchPhaseStatus();
+    } catch (err: unknown) {
+      setNotification({
+        type: "error",
+        message: err instanceof Error ? err.message : "Failed to unpublish assignments.",
+      });
+    } finally {
+      setUnpublishAllConfirmOpen(false);
+      setUnpublishAllConfirmLoading(false);
     }
   };
 
@@ -1166,6 +1277,69 @@ export default function ContentHubClientView({
       setBulkActionConfirmLoading(false);
       setBulkActionConfirmOpen(false);
       setBulkActionConfirmItem(null);
+    }
+  };
+
+  const fetchSubmissions = useCallback(async () => {
+    setSubmissionsLoading(true);
+    setSubmissionsError(null);
+    try {
+      const res = await getTeamProblemStatementSelections();
+      if (res.error) {
+        setSubmissionsError(res.error);
+        setSubmissions([]);
+      } else {
+        setSubmissions(
+          (res.selections || []).map((s) => ({
+            assigned_at: s.assigned_at,
+            team_id: s.team_id,
+            team_name: s.team_name,
+            team_code: s.team_code,
+            ps_reference_number: s.ps_reference_number,
+            ps_title: s.ps_title,
+          }))
+        );
+      }
+    } catch (err: unknown) {
+      setSubmissionsError(err instanceof Error ? err.message : "Failed to load submissions.");
+      setSubmissions([]);
+    } finally {
+      setSubmissionsLoading(false);
+    }
+  }, []);
+
+  const exportSubmissionsCsv = async () => {
+    setSubmissionsExporting(true);
+    try {
+      const res = await exportTeamProblemStatementSelections();
+      if (res.error) {
+        setNotification({
+          type: "error",
+          message: res.error || "CSV export failed.",
+        });
+        return;
+      }
+      const csv = res.csv || "";
+      const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = "EVENTRA_PS_Selections.csv";
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      setNotification({
+        type: "success",
+        message: "Selections exported to EVENTRA_PS_Selections.csv",
+      });
+    } catch (err: unknown) {
+      setNotification({
+        type: "error",
+        message: err instanceof Error ? err.message : "CSV export failed.",
+      });
+    } finally {
+      setSubmissionsExporting(false);
     }
   };
 
@@ -1919,27 +2093,8 @@ export default function ContentHubClientView({
               <span>New Content</span>
             </button>
 
-            {selectedActivity.type === "problem_statements" && (
-              <>
-                <button
-                  onClick={() => setPdfImportOpen(true)}
-                  className="inline-flex items-center justify-center gap-2 px-4 py-2.5 border border-accent-secondary/40 bg-accent-secondary/5 text-accent-secondary font-tech font-bold uppercase tracking-wider text-xs rounded transition-all hover:bg-accent-secondary/10"
-                >
-                  <Import size={15} />
-                  <span>Import from PDF</span>
-                </button>
-                <button
-                  onClick={() => setSihImportOpen(true)}
-                  className="inline-flex items-center justify-center gap-2 px-4 py-2.5 border border-accent-tertiary/40 bg-accent-tertiary/5 text-accent-tertiary font-tech font-bold uppercase tracking-wider text-xs rounded transition-all hover:bg-accent-tertiary/10"
-                >
-                  <BarChart2 size={15} />
-                  <span>Import SIH 2025</span>
-                </button>
-              </>
-            )}
-
             {/* Bulk publish button – publishes all draft items in the current activity */}
-            <button
+              <button
               onClick={async () => {
                 startTransition(async () => {
                   try {
@@ -1958,6 +2113,16 @@ export default function ContentHubClientView({
             >
               <Send size={15} />
               <span>Publish All Drafts</span>
+            </button>
+            {/* UNPUBLISH ALL button */}
+            <button
+              type="button"
+              onClick={handleUnpublishAll}
+              disabled={unpublishAllConfirmOpen}
+              className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-status-error to-status-error-dark text-white font-tech font-bold uppercase tracking-wider text-xs rounded transition-all hover:opacity-90 shadow-[0_0_18px_rgba(255,0,127,0.28)] disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <Trash2 size={15} />
+              <span>Unpublish All</span>
             </button>
           </div>
         </div>
@@ -2413,6 +2578,17 @@ export default function ContentHubClientView({
                   <span>Allow Selection</span>
                 </button>
                 <button
+                  onClick={() => {
+                    setViewSubmissionsOpen(true);
+                    void fetchSubmissions();
+                  }}
+                  disabled={schedulingActivity}
+                  className="px-3 py-2 border border-accent-secondary/40 text-accent-secondary rounded text-[10px] font-bold uppercase tracking-wider hover:bg-accent-secondary/10 disabled:opacity-50"
+                >
+                  <Table size={12} />
+                  <span>View Submissions</span>
+                </button>
+                <button
                   onClick={() => handleBulkAction("disable-selection")}
                   disabled={schedulingActivity}
                   className="px-3 py-2 border border-accent-primary/40 text-accent-primary rounded text-[10px] font-bold uppercase tracking-wider hover:bg-accent-primary/10 disabled:opacity-50"
@@ -2671,18 +2847,6 @@ export default function ContentHubClientView({
         )}
       </div>
     );
-  };
-
-  const handlePdfImportComplete = (newItemId: string) => {
-    setPdfImportOpen(false);
-    setImportingPdf(false);
-    // The new item will appear after page reload via revalidation
-    // Optionally, we could fetch and add it directly, but revalidation
-    // via revalidatePath in the server action handles it.
-    setNotification({
-      type: "success",
-      message: "PDF content imported as a draft.",
-    });
   };
 
   return (
@@ -3935,6 +4099,132 @@ export default function ContentHubClientView({
         </div>
       )}
 
+      {/* View Submissions Modal */}
+      {viewSubmissionsOpen && (
+        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/85 backdrop-blur-sm p-4">
+          <div className="bg-surface-color border border-border-color rounded-xl w-full max-w-4xl p-0 shadow-2xl flex flex-col h-[85vh] max-h-[700px]">
+            <div className="flex items-start justify-between border-b border-border-color pb-4 px-6 pt-6">
+              <div>
+                <h3 className="font-heading text-lg text-text-primary uppercase m-0 font-bold tracking-wide">
+                  Team Problem Statement Selections
+                </h3>
+                <p className="text-[10px] text-text-secondary/60 mt-1 font-mono">
+                  All successful team selections with selection time, team, and problem statement details.
+                </p>
+              </div>
+              <button
+                onClick={() => setViewSubmissionsOpen(false)}
+                className="text-text-secondary hover:text-text-primary"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="px-6 pb-6 flex items-center justify-between gap-4">
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] uppercase tracking-wider text-text-secondary font-bold">
+                  {submissions.length} selection{submissions.length !== 1 ? "s" : ""} found
+                </span>
+                {submissionsError && (
+                  <span className="text-[10px] text-status-error font-mono">
+                    {submissionsError}
+                  </span>
+                )}
+              </div>
+              <button
+                onClick={exportSubmissionsCsv}
+                disabled={submissionsExporting}
+                className="inline-flex items-center gap-2 px-4 py-2.5 border border-accent-secondary/40 text-accent-secondary rounded text-[10px] font-bold uppercase tracking-wider hover:bg-accent-secondary/10 disabled:opacity-50"
+              >
+                <Download size={12} />
+                <span>Export CSV</span>
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-auto px-6 pb-6">
+              {submissionsLoading && submissions.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-20">
+                  <Loader2 className="w-8 h-8 animate-spin text-accent-secondary mb-3" />
+                  <p className="text-[11px] text-text-secondary font-mono">Loading selections…</p>
+                </div>
+              ) : submissions.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-20 text-center">
+                  <FileText className="w-12 h-12 text-text-secondary/30 mb-4" />
+                  <p className="text-[11px] text-text-secondary/60 font-mono">
+                    No team problem statement selections found.
+                  </p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="border-b border-border-color">
+                        <th className="px-4 py-3 text-[10px] uppercase tracking-wider text-text-secondary font-bold font-mono">
+                          Selection Time
+                        </th>
+                        <th className="px-4 py-3 text-[10px] uppercase tracking-wider text-text-secondary font-bold font-mono">
+                          Team ID
+                        </th>
+                        <th className="px-4 py-3 text-[10px] uppercase tracking-wider text-text-secondary font-bold font-mono">
+                          Team Name
+                        </th>
+                        <th className="px-4 py-3 text-[10px] uppercase tracking-wider text-text-secondary font-bold font-mono">
+                          PS Code
+                        </th>
+                        <th className="px-4 py-3 text-[10px] uppercase tracking-wider text-text-secondary font-bold font-mono">
+                          PS Title
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border-color/40">
+                      {submissions.map((s) => (
+                        <tr key={`${s.team_id}-${s.ps_reference_number}`} className="hover:bg-surface-color/30 transition-colors">
+                          <td className="px-4 py-3 text-xs text-text-primary font-mono">
+                            {new Date(s.assigned_at).toLocaleString("en-GB", {
+                              timeZone: "Asia/Kolkata",
+                              day: "2-digit",
+                              month: "short",
+                              year: "numeric",
+                              hour: "2-digit",
+                              minute: "2-digit",
+                              hour12: false,
+                            })}
+                          </td>
+                          <td className="px-4 py-3 text-xs text-text-primary font-mono">
+                            {s.team_code || s.team_id.slice(0, 8)}
+                          </td>
+                          <td className="px-4 py-3 text-xs text-text-primary truncate max-w-[200px]">
+                            {s.team_name}
+                          </td>
+                          <td className="px-4 py-3 text-xs text-accent-primary font-mono font-bold">
+                            {s.ps_reference_number || "N/A"}
+                          </td>
+                          <td className="px-4 py-3 text-xs text-text-primary truncate max-w-[260px]">
+                            {s.ps_title}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+
+            <div className="border-t border-border-color px-6 py-4 flex items-center justify-between">
+              <span className="text-[10px] text-text-secondary/50 font-mono">
+                Timestamp in Asia/Kolkata timezone
+              </span>
+              <button
+                onClick={() => setViewSubmissionsOpen(false)}
+                className="px-4 py-2 border border-border-color text-text-secondary text-xs uppercase font-bold rounded hover:text-text-primary hover:bg-surface-color/30"
+              >
+                Done
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {formPublishConfirmOpen && formPublishConfirmItem && (
         <PublishConfirmationModal
           open={formPublishConfirmOpen}
@@ -4209,25 +4499,84 @@ export default function ContentHubClientView({
           </div>
         </div>
       )}
-      
-      {pdfImportOpen && (
-        <PdfImportDialog
-          activityId={selectedActivity?.id || ""}
-          onImportComplete={handlePdfImportComplete}
-          onClose={() => setPdfImportOpen(false)}
-        />
-      )}
 
-      {sihImportOpen && (
-        <SIHImportDialog
-          onImportComplete={() => {
-            setSihImportOpen(false);
-            window.location.reload();
+      {formPublishConfirmOpen && formPublishConfirmItem && (
+        <PublishConfirmationModal
+          open={formPublishConfirmOpen}
+          onClose={() => setFormPublishConfirmOpen(false)}
+          onConfirm={confirmPublishForm}
+          content={{
+            id: formPublishConfirmItem.id,
+            title: formPublishConfirmItem.title,
+            type: "Submission Form",
+            currentStatus:
+              formPublishConfirmItem.action === "publish" ? "Draft" : "Published",
+            visibility: "All Teams",
           }}
-          onClose={() => setSihImportOpen(false)}
+          loading={formPublishConfirmLoading}
         />
       )}
-
+      {/* UNPUBLISH ALL confirmation modal */}
+      {unpublishAllConfirmOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-sm p-4">
+          <div className="bg-surface-color border border-border-color rounded-lg w-full max-w-sm p-6 space-y-4 shadow-2xl">
+            <div className="flex items-start justify-between border-b border-border-color pb-3">
+              <div>
+                <h3 className="font-heading text-lg text-status-error uppercase m-0">
+                  Unpublish All Problem Statements?
+                </h3>
+                <p className="text-xs text-text-secondary m-0 mt-0.5">
+                  All currently published problem statements will be removed from the Team Portal
+                  and returned to Draft status. Their content and existing records will be preserved.
+                </p>
+              </div>
+              <button
+                onClick={() => setUnpublishAllConfirmOpen(false)}
+                className="text-text-secondary hover:text-text-primary cursor-pointer"
+              >
+                <X size={18} />
+              </button>
+            </div>
+            <div className="space-y-2 mt-4">
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] uppercase tracking-wider text-text-secondary font-bold">
+                  Published statements affected:
+                </span>
+                <span className="font-mono text-text-primary font-bold">
+                  {selectedActivity?.item_count ?? 0}
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] uppercase tracking-wider text-text-secondary font-bold">
+                  New status:
+                </span>
+                <span className="font-mono text-status-error font-bold">Draft</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] uppercase tracking-wider text-text-secondary font-bold">
+                  Team visibility:
+                </span>
+                <span className="font-mono text-status-error font-bold">Hidden</span>
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 pt-4">
+              <button
+                onClick={() => setUnpublishAllConfirmOpen(false)}
+                className="px-4 py-2 border border-border-color text-text-secondary text-xs uppercase font-bold rounded hover:text-text-primary cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleExecuteUnpublishAll}
+                disabled={unpublishAllConfirmLoading}
+                className="px-4 py-2 bg-status-error text-white text-xs uppercase font-bold rounded hover:bg-status-error/90 disabled:opacity-50 cursor-pointer"
+              >
+                {unpublishAllConfirmLoading ? "Unpublishing…" : "Unpublish All"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       {formPublishConfirmOpen && formPublishConfirmItem && (
         <PublishConfirmationModal
           open={formPublishConfirmOpen}

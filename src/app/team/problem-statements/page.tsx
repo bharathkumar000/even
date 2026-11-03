@@ -18,31 +18,26 @@ const DEPARTMENTS: Array<{
 ];
 
 export default async function TeamProblemStatementsPage() {
-  const { user, teamId, role } = await requireAuthenticatedTeamUser();
+  const { user, teamId } = await requireAuthenticatedTeamUser();
 
-  // Fetch all published statements server-side
-  const allStatements = await getPublishedProblemStatements();
+  // Default to CSE/AIML as initial domain
+  const defaultDepartment = "cse-aiml";
+
+  // Fetch all published statements for default domain
+  const allStatements = await getPublishedProblemStatements(defaultDepartment);
 
   // Resolve current assignment counts
   const counts = await getAssignmentCounts(allStatements.map((s) => s.id));
 
-  // Determine user's department from team track
-  let userDepartment: Department | null = null;
+  // Fetch this team's existing selection
+  let teamSelection: string | null = null;
   if (teamId) {
-    const { data: team } = await supabaseAdmin
-      .from("teams")
-      .select("track")
-      .eq("id", teamId)
+    const { data: assignment } = await supabaseAdmin
+      .from("team_problem_statement_assignments")
+      .select("problem_statement_id")
+      .eq("team_id", teamId)
       .maybeSingle();
-    const track = team?.track || "";
-    const t = track.toLowerCase();
-    if (t.includes("cse") || t.includes("aiml") || t.includes("computer")) {
-      userDepartment = "cse-aiml";
-    } else if (t.includes("ece") || t.includes("eee") || t.includes("electronics") || t.includes("electrical")) {
-      userDepartment = "ece-eee";
-    } else if (t.includes("me") || t.includes("cv") || t.includes("mechanical") || t.includes("civil")) {
-      userDepartment = "me-cv";
-    }
+    teamSelection = assignment?.problem_statement_id ?? null;
   }
 
   return (
@@ -68,7 +63,8 @@ export default async function TeamProblemStatementsPage() {
       <DepartmentProblemStatements
         initialStatements={allStatements}
         initialCounts={counts}
-        defaultDepartment={userDepartment}
+        defaultDepartment={defaultDepartment}
+        teamSelection={teamSelection}
       />
     </div>
   );

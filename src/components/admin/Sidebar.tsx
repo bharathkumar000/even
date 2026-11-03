@@ -49,7 +49,7 @@ export default function AdminSidebar() {
     { href: "/admin/assignments", icon: UserCheck, label: "Judge Assignments" },
     { href: "/admin/spoc", icon: Contact2, label: "SPOC Management" },
     { href: "/admin/rounds", icon: Layers, label: "Rounds & Criteria" },
-    { href: "/admin/evaluations", icon: FileCheck2, label: "Evaluations & Overrides" },
+    { href: "/admin/evaluation", icon: FileCheck2, label: "Evaluation Matrix" },
     { href: "/admin/results", icon: Award, label: "Results Engine" },
     { href: "/admin/audit-logs", icon: ScrollText, label: "Audit Logs" },
   ];

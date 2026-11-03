@@ -69,20 +69,42 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Problem statement is manually locked and cannot be selected' }, { status: 400 });
     }
 
-    // Attempt to allocate – use insert to enforce unique team assignment.
+    // Check if team already has a selection
+    const { data: existingAssignment, error: existingError } = await supabaseAdmin
+      .from('team_problem_statement_assignments')
+      .select('problem_statement_id')
+      .eq('team_id', teamId)
+      .maybeSingle();
+
+    if (existingError) {
+      return NextResponse.json({ error: 'Failed to check existing selection' }, { status: 500 });
+    }
+
+    if (existingAssignment) {
+      return NextResponse.json(
+        { error: 'Your team has already selected a Problem Statement. This selection is final and cannot be changed.' },
+        { status: 400 }
+      );
+    }
+
+    // Attempt to allocate – use INSERT to enforce unique team assignment.
     const { error: insertError } = await supabaseAdmin
       .from('team_problem_statement_assignments')
-      .upsert(
-        {
-          team_id: teamId,
-          problem_statement_id: stmt.id,
-          assigned_at: new Date().toISOString(),
-        },
-        { onConflict: 'team_id' }
-      );
+      .insert({
+        team_id: teamId,
+        problem_statement_id: stmt.id,
+        assigned_at: new Date().toISOString(),
+      });
 
     if (insertError) {
-      // Likely capacity‑limit violation or duplicate assignment.
+      // Check if it's a unique constraint violation (team already selected)
+      if (insertError.code === '23505' || insertError.message?.includes('duplicate')) {
+        return NextResponse.json(
+          { error: 'Your team has already selected a Problem Statement. This selection is final and cannot be changed.' },
+          { status: 400 }
+        );
+      }
+      // Likely capacity‑limit violation or other error.
       return NextResponse.json({ error: insertError.message }, { status: 400 });
     }
 

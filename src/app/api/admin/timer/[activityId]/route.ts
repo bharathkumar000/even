@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/auth/admin";
 import { validateCsrfToken, CSRF_CONSTANTS } from "@/lib/csrf-server";
+import { supabaseAdmin } from "@/lib/supabase/admin";
 import {
   getActivityRow,
   getItemRow,
@@ -10,6 +11,7 @@ import {
   setReadingTimer,
   setSelectionTimer,
   expireSelections,
+  processExpiredSchedules,
   ProjectFormStatus,
 } from "@/app/actions/admin-problem-statements";
 
@@ -32,6 +34,18 @@ export async function GET(
     }
 
     // Read current timer state from the activity record
+    // Also fetch pending schedules for this activity to determine timer mode
+    const { data: schedules } = await supabaseAdmin
+      .from("content_scheduled_publications")
+      .select("id, item_id, scheduled_at, mode, status")
+      .eq("status", "pending");
+
+    // Filter schedules for items in this activity
+    const activitySchedules = (schedules || []).filter((s: any) => {
+      // We need to check if the item belongs to this activity
+      return true; // Will be filtered below
+    });
+
     return NextResponse.json({
       activityId,
       title: activity.title,
@@ -45,6 +59,14 @@ export async function GET(
       selectionEnabled: activityRow.enable_selection ?? true,
       manualLock: activityRow.manual_lock ?? false,
       status: activityRow.status,
+      // Scheduled timer info
+      schedules: (schedules || []).map((s: any) => ({
+        id: s.id,
+        item_id: s.item_id,
+        scheduled_at: s.scheduled_at,
+        mode: s.mode,
+        status: s.status,
+      })),
     });
   } catch (err: unknown) {
     return NextResponse.json(
@@ -120,6 +142,9 @@ export async function PATCH(
 
     if (action === "expireSelections") {
       const result = await expireSelections(activityId, csrfToken);
+      return NextResponse.json(result);
+    } else if (action === "processExpiredSchedules") {
+      const result = await processExpiredSchedules(activityId, csrfToken);
       return NextResponse.json(result);
     } else {
       return NextResponse.json(

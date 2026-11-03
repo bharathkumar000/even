@@ -10,12 +10,14 @@ interface SelectStatementButtonProps {
   statementId: string;
   statementTitle: string;
   disabled?: boolean;
+  isSelected?: boolean;
 }
 
 export default function SelectStatementButton({
   statementId,
   statementTitle,
   disabled = false,
+  isSelected = false,
 }: SelectStatementButtonProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -41,6 +43,22 @@ export default function SelectStatementButton({
       }
     });
   };
+
+  if (isSelected) {
+    return (
+      <div>
+        <button
+          type="button"
+          disabled
+          className="inline-flex items-center justify-center gap-2 px-4 py-2 text-xs font-tech font-bold uppercase tracking-wider bg-status-success text-black rounded cursor-default shadow-md w-full sm:w-auto"
+        >
+          <Check size={13} />
+          Selected
+        </button>
+        <p className="text-xs text-text-secondary mt-1.5 m-0 font-mono">Your team has already selected this problem statement.</p>
+      </div>
+    );
+  }
 
   return (
     <div>
