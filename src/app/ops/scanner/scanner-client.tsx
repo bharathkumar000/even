@@ -12,6 +12,11 @@ import {
   Users,
   Sparkles,
   Award,
+  Wifi,
+  WifiOff,
+  Clock,
+  Loader2,
+  RefreshCw,
 } from "lucide-react";
 import {
   fetchTeamMembersForScan,
@@ -19,13 +24,15 @@ import {
   recordTeamBulkAction,
   manualTeamLookup,
   getLiveScanActivityStream,
+  getRecentlyScannedTeams,
   type LiveActivityFeedItem,
   type EnrichedActivityLog,
 } from "@/app/actions/operations";
 import type { ActionType } from "@/lib/validations/operations";
-import ScannerDesk from "@/components/ops/ScannerDesk";
-
 import { CSRF_CONSTANTS } from "@/lib/csrf-constants";
+import ScannerDesk from "@/components/ops/ScannerDesk";
+import RecentlyScannedTeams from "@/components/ops/RecentlyScannedTeams";
+
 import { createClient } from "@/lib/supabase/client";
 import { playScanSuccess, playScanError } from "@/lib/feedback-sound";
 
@@ -89,35 +96,168 @@ export interface TeamScanData {
   activityLogs: EnrichedActivityLog[];
 }
 
+// Scan purposes mapped to existing action types (verification only).
+export interface ScanPurposeOption {
+  value: string;
+  label: string;
+  description: string;
+  icon: React.ComponentType<{ className?: string }>;
+}
+
+const SCAN_PURPOSES: ScanPurposeOption[] = [
+  {
+    value: "registration",
+    label: "Registration / Check-In",
+    description: "Verify registration and check-in status (read-only)",
+    icon: UserCheck,
+  },
+  {
+    value: "verification",
+    label: "Team QR Pass Verification",
+    description: "Verify team QR pass validity (read-only)",
+    icon: ShieldAlert,
+  },
+  {
+    value: "goodies",
+    label: "Kit Distribution Status",
+    description: "Verify existing kit distribution status (read-only)",
+    icon: Gift,
+  },
+  {
+    value: "lunch",
+    label: "Lunch Status",
+    description: "Verify existing lunch claim status (read-only)",
+    icon: Utensils,
+  },
+  {
+    value: "snacks",
+    label: "Snacks Status",
+    description: "Verify existing snack claim status (read-only)",
+    icon: Coffee,
+  },
+] as const;
+
+export interface OfflineScanQueueItem {
+  id: string;
+  team_id: string;
+  team_name?: string;
+  participant_id?: string;
+  participant_name?: string;
+  action_type: ActionType;
+  method: "qr" | "manual";
+  is_bulk: boolean;
+  correlationId: string;
+  timestamp: number;
+  scanned_at: string;
+  crypto_hash: string;
+  retryCount: number;
+}
+
+const OFFLINE_QUEUE_KEY = "ivc_eventra_scanner_offline_queue";
+
+function getOfflineQueue(): OfflineScanQueueItem[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = localStorage.getItem(OFFLINE_QUEUE_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveOfflineQueue(queue: OfflineScanQueueItem[]): void {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(OFFLINE_QUEUE_KEY, JSON.stringify(queue));
+  } catch (err) {
+    console.warn("Failed to persist offline scan queue:", err);
+  }
+}
+
+function enqueueOfflineScan(item: OfflineScanQueueItem): void {
+  const current = getOfflineQueue();
+  const next = [...current, item];
+  saveOfflineQueue(next);
+}
+
+async function generateCryptoScanHash(
+  teamId: string,
+  participantId: string | undefined,
+  actionType: string,
+  timestamp: number,
+  correlationId: string
+): Promise<string> {
+  const message = `${teamId}:${participantId || "bulk"}:${actionType}:${timestamp}:${correlationId}:IVC_EVENTRA_OFFLINE_SIG`;
+  try {
+    if (typeof window !== "undefined" && window.crypto?.subtle) {
+      const msgBuffer = new TextEncoder().encode(message);
+      const hashBuffer = await window.crypto.subtle.digest("SHA-256", msgBuffer);
+      const hashArray = Array.from(new Uint8Array(hashBuffer));
+      return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
+    }
+  } catch {}
+  let h = 0;
+  for (let i = 0; i < message.length; i++) {
+    h = (Math.imul(31, h) + message.charCodeAt(i)) | 0;
+  }
+  return `fallback-${Math.abs(h).toString(16)}-${timestamp}`;
+}
+
+function isNetworkError(err: unknown): boolean {
+  if (typeof navigator !== "undefined" && !navigator.onLine) return true;
+  if (err instanceof TypeError && err.message.toLowerCase().includes("fetch")) return true;
+  const msg = (err instanceof Error ? err.message : String(err || "")).toLowerCase();
+  return (
+    msg.includes("failed to fetch") ||
+    msg.includes("network") ||
+    msg.includes("offline") ||
+    msg.includes("abort") ||
+    msg.includes("timeout") ||
+    msg.includes("load failed") ||
+    msg.includes("connection")
+  );
+}
+
 export default function ScannerClientView() {
   const [scanning, setScanning] = useState(false);
   const [manualId, setManualId] = useState("");
   const [teamData, setTeamData] = useState<TeamScanData | null>(null);
   const [loading, setLoading] = useState(false);
-  const [actionLoading, setActionLoading] = useState<string | null>(null);
-  const [selectedOperation, setSelectedOperation] = useState<string>("registration");
+  const [scanPurpose, setScanPurpose] = useState<string>("registration");
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [liveStreamLogs, setLiveStreamLogs] = useState<LiveActivityFeedItem[]>([]);
-   const [streamLoading, setStreamLoading] = useState(false);
-   const [recentScans, setRecentScans] = useState<string[]>([]);
+  const [streamLoading, setStreamLoading] = useState(false);
+  const [recentScans, setRecentScans] = useState<string[]>([]);
 
-   const [lastSyncTime, setLastSyncTime] = useState<Date | null>(null);
-   const [csrfToken, setCsrfToken] = useState<string | undefined>(undefined);
-useEffect(() => {
-  setLastSyncTime(new Date());
-  // Fetch CSRF token from server
-  void fetch("/api/csrf/init")
-    .then((res) => res.json())
-    .then((data) => {
-      if (data?.token) {
-        setCsrfToken(data.token);
-      }
-    })
-    .catch((err) => {
-      console.warn("CSRF init fetch failed:", err);
-    });
-}, []);
+  const [lastSyncTime, setLastSyncTime] = useState<Date | null>(null);
+  const [csrfToken, setCsrfToken] = useState<string | undefined>(undefined);
+
+  // Network resilience and offline scan queue state
+  const [isOnline, setIsOnline] = useState<boolean>(true);
+  const [offlineQueueCount, setOfflineQueueCount] = useState<number>(0);
+  const [isSyncingQueue, setIsSyncingQueue] = useState<boolean>(false);
+  const isSyncingQueueRef = useRef(false);
+
+  useEffect(() => {
+    setLastSyncTime(new Date());
+    if (typeof navigator !== "undefined") {
+      setIsOnline(navigator.onLine);
+    }
+    setOfflineQueueCount(getOfflineQueue().length);
+
+    // Fetch CSRF token from server
+    void fetch("/api/csrf/init")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data?.token) {
+          setCsrfToken(data.token);
+        }
+      })
+      .catch((err) => {
+        console.warn("CSRF init fetch failed:", err);
+      });
+  }, []);
   const html5QrCodeRef = useRef<any>(null);
 
   // Fetch live activity audit stream across all club members
@@ -133,6 +273,104 @@ useEffect(() => {
       setStreamLoading(false);
     }
   }, []);
+
+  const flushOfflineQueue = useCallback(async () => {
+    if (isSyncingQueueRef.current) return;
+    if (typeof navigator !== "undefined" && !navigator.onLine) return;
+
+    const queue = getOfflineQueue();
+    if (queue.length === 0) {
+      setOfflineQueueCount(0);
+      return;
+    }
+
+    isSyncingQueueRef.current = true;
+    setIsSyncingQueue(true);
+
+    let syncedCount = 0;
+    const remainingQueue: OfflineScanQueueItem[] = [];
+
+    for (const item of queue) {
+      try {
+        if (item.is_bulk) {
+          await recordTeamBulkAction(item.team_id, item.action_type, csrfToken, {
+            method: item.method,
+            correlationId: item.correlationId,
+          });
+        } else if (item.participant_id) {
+          await recordMemberAction({
+            team_id: item.team_id,
+            participant_id: item.participant_id,
+            action_type: item.action_type,
+            [CSRF_CONSTANTS.HEADER_NAME]: csrfToken,
+            method: item.method,
+            correlationId: item.correlationId,
+          });
+        }
+        syncedCount++;
+      } catch (err: unknown) {
+        if (isNetworkError(err)) {
+          // Still offline / network dropped, keep current item and remaining
+          remainingQueue.push(item);
+          const currentIndex = queue.indexOf(item);
+          remainingQueue.push(...queue.slice(currentIndex + 1));
+          break;
+        }
+        console.warn(`[OfflineSync] Item ${item.id} resolved or invalid:`, err);
+        syncedCount++;
+      }
+    }
+
+    saveOfflineQueue(remainingQueue);
+    setOfflineQueueCount(remainingQueue.length);
+    setIsSyncingQueue(false);
+    isSyncingQueueRef.current = false;
+
+    if (syncedCount > 0) {
+      playScanSuccess();
+      setSuccessMsg(`📶 Flushed ${syncedCount} cached offline scan(s) to cloud database successfully!`);
+      fetchLiveStream();
+      setTeamData((current) => {
+        if (current?.team?.id) {
+          fetchTeamMembersForScan(current.team.id)
+            .then((updated) => setTeamData(updated))
+            .catch(() => {});
+        }
+        return current;
+      });
+    }
+  }, [csrfToken, fetchLiveStream]);
+
+  // Network online/offline event handlers and background sync interval
+  useEffect(() => {
+    const handleOnline = () => {
+      setIsOnline(true);
+      void flushOfflineQueue();
+    };
+
+    const handleOffline = () => {
+      setIsOnline(false);
+    };
+
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
+
+    const syncInterval = setInterval(() => {
+      if (typeof navigator !== "undefined" && navigator.onLine) {
+        const count = getOfflineQueue().length;
+        setOfflineQueueCount(count);
+        if (count > 0 && !isSyncingQueueRef.current) {
+          void flushOfflineQueue();
+        }
+      }
+    }, 8000);
+
+    return () => {
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
+      clearInterval(syncInterval);
+    };
+  }, [flushOfflineQueue]);
 
   // Real-time synchronization subscription for all club members
   useEffect(() => {
@@ -286,39 +524,9 @@ useEffect(() => {
       return;
     }
 
-    // If an operation is selected, attempt bulk claim; otherwise just load team data
-    const op = selectedOperation;
-    const supportedOps = ["registration", "goodies", "lunch", "snacks", "certificates"];
-    if (supportedOps.includes(op)) {
-      // Bulk claim for the selected operation
-      setActionLoading(`bulk-${op}`);
-      setErrorMsg(null);
-      const correlationId = crypto.randomUUID();
-      try {
-        const res = await recordTeamBulkAction(teamId, op as ActionType, csrfToken, {
-          method: "qr",
-          correlationId,
-        });
-        playScanSuccess();
-        setSuccessMsg(
-          `Bulk Claim Complete: Distributed "${op.toUpperCase()}" to ${res.claimedCount} members.`
-        );
-        broadcastScanEvent(teamId, undefined, op as ActionType);
-        fetchLiveStream();
-        loadTeamData(teamId);
-      } catch (err: unknown) {
-        playScanError();
-        setErrorMsg(err instanceof Error ? err.message : `Bulk ${op} claim failed`);
-      } finally {
-        setActionLoading(null);
-      }
-    } else if (op === "feedback") {
-      playScanError();
-      setErrorMsg("Feedback operation is not supported in Ops scanner.");
-    } else {
-      // No operation selected or unsupported, just load team roster
-      loadTeamData(teamId);
-    }
+    // SPOC scanner is read-only: load team data for verification only.
+    // No claims, distributions, check-ins, or certificate records are created.
+    loadTeamData(teamId);
   };
 
   const loadTeamData = async (teamId: string) => {
@@ -329,17 +537,19 @@ useEffect(() => {
     try {
       const res = await fetchTeamMembersForScan(teamId);
       playScanSuccess();
-        setTeamData(res);
-        setSuccessMsg(`Loaded roster for team "${res.team.name}"`);
-        // Update recent scans (keep up to 3 items: current + two previous)
-        setRecentScans(prev => {
-          const filtered = prev.filter(id => id !== res.team.id);
-          const newList = [res.team.id, ...filtered];
-          return newList.slice(0, 3);
-        });
+      setTeamData(res);
+      setSuccessMsg(
+        `Team Verified: "${res.team.name}" (${teamId.slice(0, 8)}...)`
+      );
+      // Update recent scans (keep up to 3 items: current + two previous)
+      setRecentScans((prev) => {
+        const filtered = prev.filter((id) => id !== res.team.id);
+        const newList = [res.team.id, ...filtered];
+        return newList.slice(0, 3);
+      });
     } catch (err: unknown) {
       playScanError();
-      setErrorMsg(err instanceof Error ? err.message : "Failed to fetch team details");
+      setErrorMsg(err instanceof Error ? err.message : "Team verification failed");
       setTeamData(null);
     } finally {
       setLoading(false);
@@ -372,123 +582,10 @@ useEffect(() => {
     }
   };
 
-  const broadcastScanEvent = (teamId: string, participantId?: string, actionType?: ActionType) => {
-    try {
-      const supabase = createClient();
-      const channel = supabase.channel("ops-realtime-activity");
-      channel.send({
-        type: "broadcast",
-        event: "scan_action_recorded",
-        payload: {
-          team_id: teamId,
-          participant_id: participantId,
-          action_type: actionType,
-        },
-      });
-    } catch {}
-  };
-
-  const handleActionClick = async (participantId: string, actionType: ActionType) => {
-    if (!teamData?.team?.id) return;
-    const actionKey = `${participantId}-${actionType}`;
-    setErrorMsg(null);
-    setActionLoading(actionKey);
-    const correlationId = crypto.randomUUID();
-
-    // Optimistic update
-    const optimisticLog: EnrichedActivityLog = {
-      id: `temp-${Date.now()}`,
-      participant_id: participantId,
-      action_type: actionType,
-      created_at: new Date().toISOString(),
-      scanner_name: "You (Just now)",
-      scanner_email: "",
-    };
-
-    setTeamData((prev) =>
-      !prev
-        ? null
-        : {
-            ...prev,
-            activityLogs: [...prev.activityLogs, optimisticLog],
-          }
-    );
-
-    try {
-      const res = await recordMemberAction({
-        team_id: teamData.team.id,
-        participant_id: participantId,
-        action_type: actionType,
-        [CSRF_CONSTANTS.HEADER_NAME]: csrfToken,
-        method: "qr",
-        correlationId,
-      });
-
-      playScanSuccess();
-      setSuccessMsg(
-        `Recorded "${actionType.toUpperCase()}"! Distributed by ${res.record.scanner_name}.`
-      );
-
-      // Broadcast to other club members
-      broadcastScanEvent(teamData.team.id, participantId, actionType);
-
-      // Refresh live stream & team
-      fetchLiveStream();
-      loadTeamData(teamData.team.id);
-    } catch (err: unknown) {
-      playScanError();
-      // Revert optimistic update on failure
-      setTeamData((prev) =>
-        !prev
-          ? null
-          : {
-              ...prev,
-              activityLogs: prev.activityLogs.filter(
-                (log) => !(log.participant_id === participantId && log.action_type === actionType)
-              ),
-            }
-      );
-      setErrorMsg(err instanceof Error ? err.message : "Action claim failed");
-      setSuccessMsg(null);
-    } finally {
-      setActionLoading(null);
-    }
-  };
-
-  const handleBulkActionClick = async (actionType: ActionType) => {
-    if (!teamData?.team?.id) return;
-    setActionLoading(`bulk-${actionType}`);
-    setErrorMsg(null);
-    const correlationId = crypto.randomUUID();
-
-    try {
-      const res = await recordTeamBulkAction(teamData.team.id, actionType, csrfToken, {
-        method: "qr",
-        correlationId,
-      });
-      playScanSuccess();
-      setSuccessMsg(
-        `Bulk Claim Complete: Distributed "${actionType.toUpperCase()}" to ${res.claimedCount} members.`
-      );
-      broadcastScanEvent(teamData.team.id, undefined, actionType);
-      fetchLiveStream();
-      loadTeamData(teamData.team.id);
-    } catch (err: unknown) {
-      playScanError();
-      setErrorMsg(err instanceof Error ? err.message : `Bulk ${actionType} claim failed`);
-    } finally {
-      setActionLoading(null);
-    }
-  };
-
   const getLogForAction = (participantId: string, actionType: string) => {
     return teamData?.activityLogs?.find(
       (log) => log.participant_id === participantId && log.action_type === actionType
     );
-  };
-
-  const isClaimed = (participantId: string, actionType: string) => {
-    return Boolean(getLogForAction(participantId, actionType));
   };
 
   // Anti-fraud summary for the active team
@@ -544,31 +641,75 @@ useEffect(() => {
         </div>
       )}
 
-      {/* Link to Live Activity Feed (opens in a separate tab/window) */}
-      <a
-        href="/ops/scanner/live-activity"
-        target="_blank"
-        rel="noopener noreferrer"
-        className="text-accent-primary hover:underline text-sm font-bold"
-      >
-        Live Activity Feed
-      </a>
-      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 mb-4 bg-surface-color/60 border border-border-color p-3 rounded">
-        <label htmlFor="operation-select" className="font-bold uppercase text-xs text-text-secondary shrink-0">Select Active Desk / Operation</label>
-        <select
-          id="operation-select"
-          value={selectedOperation}
-          onChange={(e) => setSelectedOperation(e.target.value)}
-          className="bg-surface-color border border-border-color p-2 text-xs font-tech text-text-primary outline-none focus:border-accent-secondary rounded w-full sm:w-auto"
+      {/* Scan Purpose Selector & Wi-Fi Diagnostic Bar */}
+      <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 mb-4 bg-surface-color/60 border border-border-color p-3 rounded">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+          <label
+            htmlFor="scan-purpose-select"
+            className="font-bold uppercase text-xs text-text-secondary shrink-0"
+          >
+            Select Scan Purpose
+          </label>
+          <select
+            id="scan-purpose-select"
+            value={scanPurpose}
+            onChange={(e) => setScanPurpose(e.target.value)}
+            className="bg-surface-color border border-border-color p-2 text-xs font-tech text-text-primary outline-none focus:border-accent-secondary rounded w-full sm:w-auto"
+          >
+            {SCAN_PURPOSES.map((p) => (
+              <option key={p.value} value={p.value}>
+                {p.label}
+              </option>
+            ))}
+          </select>
+          <span
+            className={`text-[10px] text-text-secondary/70 font-mono shrink-0 ${scanPurpose === "verification" ? "text-accent-tertiary" : ""}`}
+          >
+            {scanPurpose === "verification"
+              ? "Read-only verification — no records modified"
+              : `Verification: ${SCAN_PURPOSES.find((p) => p.value === scanPurpose)?.label} (read-only)`
+            }
+          </span>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2.5">
+          {/* Venue Wi-Fi Status Pill */}
+          <div
+            className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-mono font-bold border transition-colors ${
+              isOnline
+                ? "bg-status-success/10 border-status-success/30 text-status-success"
+                : "bg-status-warning/15 border-status-warning/40 text-status-warning animate-pulse"
+            }`}
+            title={isOnline ? "Venue network connected" : "Venue network congested. Read-only verification active."}
+          >
+            {isOnline ? <Wifi size={13} /> : <WifiOff size={13} />}
+            <span>{isOnline ? "Venue Wi-Fi Online" : "Wi-Fi Congested (Offline Mode)"}</span>
+          </div>
+
+          <a
+            href="/ops/scanner/live-activity"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-accent-primary hover:underline text-xs font-bold font-tech ml-1"
+          >
+            Live Activity Feed ↗
+          </a>
+        </div>      </div>
+      
+      {/* Scan Next Team - resets scanner for next verification */}
+      {teamData && (
+        <button
+          onClick={() => {
+            setTeamData(null);
+            setSuccessMsg(null);
+            setErrorMsg(null);
+          }}
+          className="px-5 py-2.5 border border-accent-tertiary rounded text-accent-tertiary font-tech font-bold uppercase text-xs transition-all hover:bg-accent-tertiary/10 flex items-center gap-2"
         >
-          <option value="registration">Registration / Check‑In Desk</option>
-          <option value="goodies">Goodies / Swag Kit Desk</option>
-          <option value="lunch">Lunch Token Desk</option>
-          <option value="snacks">Snacks / Refreshments Desk</option>
-          <option value="certificates">Certificates Desk</option>
-          <option value="feedback">Feedback Desk</option>
-        </select>
-      </div>
+          <RefreshCw size={14} />
+          <span>Scan Next Team</span>
+        </button>
+      )}
       
 {/* Scanner & Manual Lookup Controls */}
          <div>
@@ -636,49 +777,17 @@ useEffect(() => {
                 <span className="font-mono text-text-primary">{teamData.team.id}</span>
               </p>
             </div>
-
-            {/* Quick Bulk Distribution Actions */}
-            <div className="flex flex-wrap items-center gap-2">
-              <button
-                onClick={() => handleBulkActionClick("goodies")}
-                disabled={actionLoading === "bulk-goodies" || teamData.members.every((m) => isClaimed(m.id, "goodies"))}
-                className="px-3 py-1.5 bg-accent-primary/20 hover:bg-accent-primary hover:text-black border border-accent-primary text-accent-primary font-bold text-xs uppercase flex items-center gap-1.5 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                title="Claim goodies for all members in one click"
-              >
-                <Gift size={13} />
-                <span>Distribute All Goodies</span>
-              </button>
-
-              <button
-                onClick={() => handleBulkActionClick("registration")}
-                disabled={actionLoading === "bulk-registration" || teamData.members.every((m) => isClaimed(m.id, "registration"))}
-                className="px-3 py-1.5 bg-accent-tertiary/20 hover:bg-accent-tertiary hover:text-black border border-accent-tertiary text-accent-tertiary font-bold text-xs uppercase flex items-center gap-1.5 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <UserCheck size={13} />
-                <span>Check-In All</span>
-              </button>
-
-              <button
-                onClick={() => handleBulkActionClick("certificates")}
-                disabled={actionLoading === "bulk-certificates" || teamData.members.every((m) => isClaimed(m.id, "certificates"))}
-                className="px-3 py-1.5 bg-purple-500/20 hover:bg-purple-500 hover:text-white border border-purple-500 text-purple-400 font-bold text-xs uppercase flex items-center gap-1.5 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                title="Issue certificates for all members in one click"
-              >
-                <Award size={13} />
-                <span>Issue All Certificates</span>
-              </button>
-            </div>
           </div>
 
           {/* Members Table */}
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse text-xs">
-              <thead>
-                <tr className="border-b border-border-color bg-surface-color-light/40 text-text-secondary uppercase tracking-wider">
+              <thead className="border-b border-border-color bg-surface-color-light/40 text-text-secondary uppercase tracking-wider">
+                <tr>
                   <th className="p-3">Participant</th>
                   <th className="p-3">Role</th>
                   <th className="p-3 text-center">Registration</th>
-                  <th className="p-3 text-center">Goodies / Kit</th>
+                  <th className="p-3 text-center">Kit / Goodies</th>
                   <th className="p-3 text-center">Lunch</th>
                   <th className="p-3 text-center">Snacks</th>
                   <th className="p-3 text-center">Certificates</th>
@@ -695,9 +804,24 @@ useEffect(() => {
                   teamData.members.map((m: TeamScanMember) => {
                     const regLog = getLogForAction(m.id, "registration");
                     const goodiesLog = getLogForAction(m.id, "goodies");
-                    const lunchLog = getLogForAction(m.id, "lunch");
-                    const snacksLog = getLogForAction(m.id, "snacks");
+                    const lunchLogs = teamData.activityLogs.filter(
+                      (l) => l.participant_id === m.id && l.action_type === "lunch" && l.result === "success"
+                    );
+                    const snacksLogs = teamData.activityLogs.filter(
+                      (l) => l.participant_id === m.id && l.action_type === "snacks" && l.result === "success"
+                    );
                     const certLog = getLogForAction(m.id, "certificates");
+
+                    const statusBadge = (claimed: boolean, label: string, color: "status-success" | "text-text-secondary") => (
+                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase border ${
+                        claimed
+                          ? "bg-status-success/10 text-status-success border-status-success/40"
+                          : "bg-surface-color text-text-secondary border-border-color"
+                      }`}>
+                        {claimed ? <CheckCircle2 size={11} className={`text-${color === "status-success" ? "status-success" : "text-text-secondary"}`} /> : ""}
+                        {label}
+                      </span>
+                    );
 
                     return (
                       <tr key={m.id} className="hover:bg-surface-color-light/20 transition-colors">
@@ -722,23 +846,11 @@ useEffect(() => {
                           </span>
                         </td>
 
-                        {/* Registration Button & Audit info */}
+                        {/* Registration Status (read-only) */}
                         <td className="p-3 text-center">
-                          <button
-                            onClick={() => handleActionClick(m.id, "registration")}
-                            disabled={Boolean(regLog) || actionLoading === `${m.id}-registration`}
-                            className={`px-3 py-1 text-[11px] font-bold uppercase transition-all flex items-center justify-center gap-1 mx-auto ${
-                              regLog
-                                ? "bg-status-success/15 text-status-success border border-status-success cursor-default"
-                                : "bg-surface-color hover:bg-accent-tertiary hover:text-black border border-border-color"
-                            }`}
-                          >
-                            <UserCheck size={13} />
-                            {regLog ? "Checked-In" : "Check In"}
-                          </button>
+                          {statusBadge(Boolean(regLog), regLog ? "Checked-In" : "Pending", "status-success")}
                           {regLog && (
                             <p className="text-[9px] text-text-secondary font-mono m-0 mt-1">
-                              By {regLog.scanner_name?.split(" ")[0]} •{" "}
                               {new Date(regLog.created_at).toLocaleTimeString([], {
                                 hour: "2-digit",
                                 minute: "2-digit",
@@ -747,23 +859,11 @@ useEffect(() => {
                           )}
                         </td>
 
-                        {/* Goodies Button & Audit info */}
+                        {/* Goodies Status (read-only) */}
                         <td className="p-3 text-center">
-                          <button
-                            onClick={() => handleActionClick(m.id, "goodies")}
-                            disabled={Boolean(goodiesLog) || actionLoading === `${m.id}-goodies`}
-                            className={`px-3 py-1 text-[11px] font-bold uppercase transition-all flex items-center justify-center gap-1 mx-auto ${
-                              goodiesLog
-                                ? "bg-status-success/15 text-status-success border border-status-success cursor-default"
-                                : "bg-surface-color hover:bg-accent-primary hover:text-black border border-border-color"
-                            }`}
-                          >
-                            <Gift size={13} />
-                            {goodiesLog ? "Claimed" : "Distribute"}
-                          </button>
+                          {statusBadge(Boolean(goodiesLog), goodiesLog ? "Distributed" : "Pending", "status-success")}
                           {goodiesLog && (
                             <p className="text-[9px] text-text-secondary font-mono m-0 mt-1">
-                              By {goodiesLog.scanner_name?.split(" ")[0]} •{" "}
                               {new Date(goodiesLog.created_at).toLocaleTimeString([], {
                                 hour: "2-digit",
                                 minute: "2-digit",
@@ -772,73 +872,21 @@ useEffect(() => {
                           )}
                         </td>
 
-                        {/* Lunch Button & Audit info */}
+                        {/* Lunch Status (read-only) */}
                         <td className="p-3 text-center">
-                          <button
-                            onClick={() => handleActionClick(m.id, "lunch")}
-                            disabled={((teamData.activityLogs?.filter(l => l.participant_id === m.id && l.action_type === "lunch").length) || 0) >= 3 || actionLoading === `${m.id}-lunch`}
-                            className={`px-3 py-1 text-[11px] font-bold uppercase transition-all flex items-center justify-center gap-1 mx-auto ${
-                              lunchLog
-                                ? "bg-status-success/15 text-status-success border border-status-success cursor-default"
-                                : "bg-surface-color hover:bg-accent-secondary hover:text-white border border-border-color"
-                            }`}
-                          >
-                            <Utensils size={13} />
-                            {lunchLog ? "Claimed" : "Claim"}
-                          </button>
-                          {lunchLog && (
-                            <p className="text-[9px] text-text-secondary font-mono m-0 mt-1">
-                              By {lunchLog.scanner_name?.split(" ")[0]} •{" "}
-                              {new Date(lunchLog.created_at).toLocaleTimeString([], {
-                                hour: "2-digit",
-                                minute: "2-digit",
-                              })}
-                            </p>
-                          )}
+                          {statusBadge(lunchLogs.length > 0, `${lunchLogs.length}/3`, "status-success")}
                         </td>
 
-                        {/* Snacks Button & Audit info */}
+                        {/* Snacks Status (read-only) */}
                         <td className="p-3 text-center">
-                          <button
-                            onClick={() => handleActionClick(m.id, "snacks")}
-                            disabled={((teamData.activityLogs?.filter(l => l.participant_id === m.id && l.action_type === "snacks").length) || 0) >= 3 || actionLoading === `${m.id}-snacks`}
-                            className={`px-3 py-1 text-[11px] font-bold uppercase transition-all flex items-center justify-center gap-1 mx-auto ${
-                              snacksLog
-                                ? "bg-status-success/15 text-status-success border border-status-success cursor-default"
-                                : "bg-surface-color hover:bg-yellow-400 hover:text-black border border-border-color"
-                            }`}
-                          >
-                            <Coffee size={13} />
-                            {snacksLog ? "Claimed" : "Claim"}
-                          </button>
-                          {snacksLog && (
-                            <p className="text-[9px] text-text-secondary font-mono m-0 mt-1">
-                              By {snacksLog.scanner_name?.split(" ")[0]} •{" "}
-                              {new Date(snacksLog.created_at).toLocaleTimeString([], {
-                                hour: "2-digit",
-                                minute: "2-digit",
-                              })}
-                            </p>
-                          )}
+                          {statusBadge(snacksLogs.length > 0, `${snacksLogs.length}/3`, "status-success")}
                         </td>
 
-                        {/* Certificates Button & Audit info */}
+                        {/* Certificates Status (read-only) */}
                         <td className="p-3 text-center">
-                          <button
-                            onClick={() => handleActionClick(m.id, "certificates")}
-                            disabled={Boolean(certLog) || actionLoading === `${m.id}-certificates`}
-                            className={`px-3 py-1 text-[11px] font-bold uppercase transition-all flex items-center justify-center gap-1 mx-auto ${
-                              certLog
-                                ? "bg-status-success/15 text-status-success border border-status-success cursor-default"
-                                : "bg-surface-color hover:bg-purple-500 hover:text-white border border-border-color"
-                            }`}
-                          >
-                            <Award size={13} />
-                            {certLog ? "Issued" : "Issue"}
-                          </button>
+                          {statusBadge(Boolean(certLog), certLog ? "Issued" : "Pending", "status-success")}
                           {certLog && (
                             <p className="text-[9px] text-text-secondary font-mono m-0 mt-1">
-                              By {certLog.scanner_name?.split(" ")[0]} •{" "}
                               {new Date(certLog.created_at).toLocaleTimeString([], {
                                 hour: "2-digit",
                                 minute: "2-digit",
@@ -856,6 +904,8 @@ useEffect(() => {
         </div>
       )}
 
+      {/* Recently Scanned Teams - at the bottom of the ops overview */}
+      <RecentlyScannedTeams limit={3} />
 
     </div>
   );

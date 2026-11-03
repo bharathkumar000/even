@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import React, { useState, useEffect, useCallback, useRef, useSyncExternalStore, startTransition } from "react";
 import { usePathname } from "next/navigation";
 import {
   Radio,
@@ -67,13 +67,9 @@ function formatRelativeTime(isoString?: string | null) {
   if (!isoString) return "Just now";
   try {
     const d = new Date(isoString);
-    const diffSec = Math.floor((Date.now() - d.getTime()) / 1000);
-    if (diffSec < 60) return "Just now";
-    const diffMin = Math.floor(diffSec / 60);
-    if (diffMin < 60) return `${diffMin}m ago`;
-    const diffHr = Math.floor(diffMin / 60);
-    if (diffHr < 24) return `${diffHr}h ago`;
-    return d.toLocaleDateString([], { month: "short", day: "numeric" });
+    // Always render absolute date/time for deterministic SSR/client output
+    // Avoids hydration mismatch from Date.now() during render
+    return d.toLocaleDateString([], { month: "short", day: "numeric" }) + " " + d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
   } catch {
     return "Recent";
   }
@@ -88,7 +84,7 @@ export default function FloatingBroadcastNotification() {
   const [dismissedIds, setDismissedIds] = useState<string[]>([]);
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [hasNewAlert, setHasNewAlert] = useState(false);
-  const [mounted, setMounted] = useState(false);
+  const mounted = useSyncExternalStore(() => () => {}, () => true, () => false);
   const knownIdsRef = useRef<Set<string>>(new Set());
 
   // Determine current audience target from pathname
@@ -101,15 +97,32 @@ export default function FloatingBroadcastNotification() {
     return "all";
   }, [pathname]);
 
-  // Load dismissed IDs from sessionStorage
+  // Load dismissed IDs from sessionStorage and sound preferences from localStorage
   useEffect(() => {
-    setMounted(true);
     try {
       const stored = sessionStorage.getItem("eventra_dismissed_broadcasts");
       if (stored) {
-        setDismissedIds(JSON.parse(stored));
+        startTransition(() => {
+          setDismissedIds(JSON.parse(stored));
+        });
+      }
+      const soundPref = localStorage.getItem("eventra_broadcast_sound_enabled");
+      if (soundPref !== null) {
+        startTransition(() => {
+          setSoundEnabled(soundPref === "true");
+        });
       }
     } catch {}
+  }, []);
+
+  const toggleSound = useCallback(() => {
+    setSoundEnabled((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem("eventra_broadcast_sound_enabled", String(next));
+      } catch {}
+      return next;
+    });
   }, []);
 
   const audience = getAudienceForPortal();
@@ -146,13 +159,18 @@ export default function FloatingBroadcastNotification() {
   // Initial load and periodic refresh
   useEffect(() => {
     if (!mounted) return;
-    void fetchAnnouncements(false);
+    const initialTimer = setTimeout(() => {
+      void fetchAnnouncements(false);
+    }, 0);
 
     const interval = setInterval(() => {
       void fetchAnnouncements(false);
     }, 25000);
 
-    return () => clearInterval(interval);
+    return () => {
+      clearTimeout(initialTimer);
+      clearInterval(interval);
+    };
   }, [mounted, fetchAnnouncements]);
 
   // Supabase Realtime subscription for instant pop-up
@@ -374,7 +392,7 @@ export default function FloatingBroadcastNotification() {
             <div className="flex items-center gap-1.5 shrink-0 ml-2">
               <button
                 type="button"
-                onClick={() => setSoundEnabled((v) => !v)}
+                onClick={toggleSound}
                 className="p-1.5 rounded text-text-secondary hover:text-text-primary hover:bg-surface-color/50 transition-colors"
                 title={soundEnabled ? "Mute alert chimes" : "Unmute alert chimes"}
               >

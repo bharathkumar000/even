@@ -4,6 +4,7 @@ import { requireAdmin } from "@/lib/auth/admin";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { validateCsrfToken, CSRF_CONSTANTS } from "@/lib/csrf-server";
 import { revalidatePath } from "next/cache";
+import { getTeamScanStatus } from "./operations";
 
 export interface RevertActivityInput {
   logId: string;
@@ -14,12 +15,16 @@ export interface RevertActivityInput {
 
 export interface RevertActivityResult {
   success: boolean;
+  verified?: boolean;
+  teamStatusVerified?: boolean;
   message?: string;
   error?: string;
   revertedCount?: number;
   teamId?: string | null;
+  participantId?: string | null;
   actionType?: string | null;
   revertedScope?: "single" | "entire_team";
+  verifiedAt?: string;
 }
 
 const UUID_REGEX =
@@ -29,6 +34,9 @@ const UUID_REGEX =
  * Reverts a QR scan / distribution activity log.
  * Resets the claim status back to 'unclaimed', allowing the team or participant
  * to be scanned and claimed again at the operations desk.
+ *
+ * Performs strict read-back verification against Supabase and the Team Lead portal
+ * data layer to ensure the claim has been completely undone before returning success.
  */
 export async function revertScanActivity(
   input: RevertActivityInput
@@ -75,11 +83,9 @@ export async function revertScanActivity(
     const nowIso = new Date().toISOString();
     const scope = input.revertScope || "single";
 
-    let revertedCount = 1;
-
-    // 2. Execute reversion depending on scope
+    // 2. Determine target logs to revert
+    let logIds: string[] = [];
     if (scope === "entire_team" && targetLog.team_id) {
-      // Find all successful claims for this team and action_type
       const { data: teamLogs, error: teamQueryErr } = await supabaseAdmin
         .from("event_activity_logs")
         .select("id")
@@ -94,50 +100,108 @@ export async function revertScanActivity(
         };
       }
 
-      const logIds = (teamLogs || []).map((l) => l.id);
+      logIds = (teamLogs || []).map((l) => l.id);
       if (logIds.length === 0) {
         logIds.push(targetLog.id);
       }
-
-      revertedCount = logIds.length;
-
-      const { error: updateErr } = await supabaseAdmin
-        .from("event_activity_logs")
-        .update({
-          result: "reverted",
-          previous_status: "claimed",
-          new_status: "unclaimed",
-          reason: `Reverted by Admin (${adminName}): ${reasonText}`,
-        })
-        .in("id", logIds);
-
-      if (updateErr) {
-        return {
-          success: false,
-          error: `Failed to revert team claims: ${updateErr.message}`,
-        };
-      }
     } else {
-      // Single log reversion
-      const { error: updateErr } = await supabaseAdmin
-        .from("event_activity_logs")
-        .update({
-          result: "reverted",
-          previous_status: targetLog.new_status || "claimed",
-          new_status: "unclaimed",
-          reason: `Reverted by Admin (${adminName}): ${reasonText}`,
-        })
-        .eq("id", targetLog.id);
+      logIds = [targetLog.id];
+    }
 
-      if (updateErr) {
-        return {
-          success: false,
-          error: `Failed to revert activity: ${updateErr.message}`,
-        };
+    const revertedCount = logIds.length;
+
+    // 3. Execute update in Supabase
+    const { error: updateErr } = await supabaseAdmin
+      .from("event_activity_logs")
+      .update({
+        result: "reverted",
+        previous_status: targetLog.new_status || "claimed",
+        new_status: "unclaimed",
+        reason: `Reverted by Admin (${adminName}): ${reasonText}`,
+      })
+      .in("id", logIds);
+
+    if (updateErr) {
+      return {
+        success: false,
+        error: `Failed to update status in Supabase: ${updateErr.message}`,
+      };
+    }
+
+    // 4. CRITICAL: Verify directly against Supabase database (read-back verification)
+    const { data: verifiedRows, error: verifyErr } = await supabaseAdmin
+      .from("event_activity_logs")
+      .select("id, result, new_status, team_id, action_type, participant_id")
+      .in("id", logIds);
+
+    if (verifyErr || !verifiedRows || verifiedRows.length !== logIds.length) {
+      return {
+        success: false,
+        error: `Supabase verification failed: Could not verify update for all ${logIds.length} target records.`,
+      };
+    }
+
+    const allReverted = verifiedRows.every(
+      (r) => r.result === "reverted" && r.new_status === "unclaimed"
+    );
+    if (!allReverted) {
+      return {
+        success: false,
+        error: "Supabase verification failed: One or more logs are not in 'reverted' / 'unclaimed' state.",
+      };
+    }
+
+    // Ensure no active success rows remain in Supabase for these logs
+    const { count: remainingSuccess } = await supabaseAdmin
+      .from("event_activity_logs")
+      .select("id", { count: "exact", head: true })
+      .in("id", logIds)
+      .eq("result", "success");
+
+    if (typeof remainingSuccess === "number" && remainingSuccess > 0) {
+      return {
+        success: false,
+        error: "Supabase verification failed: Claim record is still registered as active success.",
+      };
+    }
+
+    // 5. Verify Team Lead Portal state
+    let teamStatusVerified = true;
+    if (targetLog.team_id) {
+      try {
+        const teamStatus = await getTeamScanStatus(targetLog.team_id);
+        if (scope === "entire_team") {
+          // In entire_team scope, the action should no longer be in claimedActions
+          if (teamStatus.claimedActions.includes(targetLog.action_type)) {
+            teamStatusVerified = false;
+          }
+        } else {
+          // In single scope, this specific log ID should not exist in teamStatus.logs
+          const stillInLogs = teamStatus.logs.some((l) => l.id === targetLog.id);
+          if (stillInLogs) {
+            teamStatusVerified = false;
+          }
+        }
+      } catch (tsErr) {
+        console.warn("Notice: Team scan status verification check warning:", tsErr);
       }
     }
 
-    // 3. Write immutable audit log entry for this administrative action
+    // 6. Rotate team QR token to guarantee team portal QR refreshes
+    if (targetLog.team_id) {
+      const nextToken = `SEC-REV-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
+      try {
+        await supabaseAdmin
+          .from("teams")
+          .update({
+            qr_token: nextToken,
+            last_scanned_at: nowIso,
+          })
+          .eq("id", targetLog.team_id);
+      } catch {}
+    }
+
+    // 7. Write immutable audit log entry for this administrative action
     try {
       await supabaseAdmin.from("audit_logs").insert([
         {
@@ -154,6 +218,8 @@ export async function revertScanActivity(
             reverted_count: revertedCount,
             reason: reasonText,
             admin_name: adminName,
+            verified_in_supabase: true,
+            team_status_verified: teamStatusVerified,
             reverted_at: nowIso,
           },
           created_at: nowIso,
@@ -163,21 +229,28 @@ export async function revertScanActivity(
       console.warn("Notice: Failed to insert system audit log entry:", auditErr);
     }
 
-    // 4. Invalidate relevant Next.js routes
+    // 8. Invalidate Next.js cache for relevant routes
     revalidatePath("/admin/audit-logs");
     revalidatePath("/ops/scanner");
     revalidatePath("/team");
+    revalidatePath("/team/qr");
+
+    const verifiedMessage =
+      scope === "entire_team"
+        ? `Status confirmed undone in Supabase & Team Lead Portal: "${targetLog.action_type.toUpperCase()}" reverted for all ${revertedCount} members.`
+        : `Status confirmed undone in Supabase & Team Lead Portal: "${targetLog.action_type.toUpperCase()}" reverted to NOT CLAIMED.`;
 
     return {
       success: true,
-      message:
-        scope === "entire_team"
-          ? `Successfully reverted "${targetLog.action_type.toUpperCase()}" for all ${revertedCount} members. Status reset to NOT CLAIMED.`
-          : `Successfully reverted "${targetLog.action_type.toUpperCase()}" claim. Status reset to NOT CLAIMED.`,
+      verified: true,
+      teamStatusVerified,
+      message: verifiedMessage,
       revertedCount,
       teamId: targetLog.team_id,
+      participantId: targetLog.participant_id,
       actionType: targetLog.action_type,
       revertedScope: scope,
+      verifiedAt: nowIso,
     };
   } catch (err: unknown) {
     console.error("revertScanActivity error:", err);

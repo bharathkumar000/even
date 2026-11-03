@@ -12,6 +12,7 @@ import {
   Sparkles,
   MessageCircle,
   ExternalLink,
+  Trash2,
 } from "lucide-react";
 import Image from "next/image";
 import {
@@ -19,6 +20,7 @@ import {
   SpocTeamOption,
   updateSpocTeams,
   autoBalanceSpocAssignments,
+  deleteAllSpocAssignments,
   getSpocPortalData,
 } from "@/app/actions/admin-spoc";
 import { withCsrfToken } from "@/lib/csrf-client";
@@ -54,6 +56,7 @@ export default function SpocClientView({
   const [assignSearch, setAssignSearch] = useState("");
 
   const [isPending, startTransition] = useTransition();
+  const [deletingAllSpoc, setDeletingAllSpoc] = useState(false);
   const [notification, setNotification] = useState<{
     type: "success" | "error";
     message: string;
@@ -356,6 +359,57 @@ export default function SpocClientView({
     });
   };
 
+  /* ------------------------------------------------------------- DELETE ALL */
+  const handleDeleteAllSpocAssignments = async () => {
+    if (!activeSpoc) return;
+    if (activeSpoc.assigned_team_ids.length === 0) return;
+
+    if (
+      !window.confirm(
+        `Remove ALL team assignments from "${activeSpoc.name}"? This will unassign all ${activeSpoc.assigned_team_ids.length} team(s) from this SPOC. This action cannot be undone. Continue?`
+      )
+    ) {
+      return;
+    }
+
+    setDeletingAllSpoc(true);
+    try {
+      await deleteAllSpocAssignments({
+        spocId: activeSpoc.id,
+        ...withCsrfToken(),
+      });
+
+      // Optimistically clear staged map for this SPOC
+      setPendingAssignedMap((prev) => ({
+        ...prev,
+        [activeSpoc.id]: [],
+      }));
+
+      setNotification({
+        type: "success",
+        message: `All ${activeSpoc.assigned_team_ids.length} team assignment(s) removed from "${activeSpoc.name}".`,
+      });
+
+      // Reload fresh data
+      const fresh = await getSpocPortalData();
+      setSpocs(fresh.spocs);
+      setTeams(fresh.teams);
+      setPendingAssignedMap(
+        Object.fromEntries(
+          fresh.spocs.map((spoc) => [spoc.id, [...spoc.assigned_team_ids]])
+        )
+      );
+    } catch (err: unknown) {
+      setNotification({
+        type: "error",
+        message:
+          err instanceof Error ? err.message : "Failed to delete SPOC assignments.",
+      });
+    } finally {
+      setDeletingAllSpoc(false);
+    }
+  };
+
   return (
     <div className="space-y-6 animate-fade-in font-tech">
       {/* Toast Notification */}
@@ -645,9 +699,22 @@ export default function SpocClientView({
                   <button
                     onClick={handleClearAll}
                     disabled={isPending || stagedTeamIds.size === 0}
-                    className="px-3 py-1.5 bg-status-error/10 border border-status-error/40 hover:bg-status-error/20 text-status-error text-xs uppercase font-bold tracking-wider rounded transition-colors disabled:opacity-50 cursor-pointer"
+                    className="px-3 py-1.5 bg-status-error/10 border border-status-error/40 hover:bg-status-error/20 text-status-error text-xs font-bold uppercase tracking-wider rounded transition-colors disabled:opacity-50 cursor-pointer"
                   >
                     Clear Selected
+                  </button>
+                  <button
+                    onClick={handleDeleteAllSpocAssignments}
+                    disabled={
+                      isPending ||
+                      deletingAllSpoc ||
+                      !activeSpoc ||
+                      activeSpoc.assigned_team_ids.length === 0
+                    }
+                    className="px-3 py-1.5 bg-status-error/10 border border-status-error/40 hover:bg-status-error/20 text-status-error text-xs font-bold uppercase tracking-wider rounded transition-colors disabled:opacity-50 cursor-pointer flex items-center gap-1.5"
+                  >
+                    <Trash2 size={12} />
+                    <span>Delete All Assigned Teams</span>
                   </button>
                   {hasUnsavedChanges && (
                     <button

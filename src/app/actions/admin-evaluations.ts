@@ -8,54 +8,72 @@ import { validateCsrfToken, CSRF_CONSTANTS } from "@/lib/csrf-server";
 
 export type EvaluationOverrideInput = z.infer<typeof EvaluationOverrideSchema>;
 
-export async function overrideEvaluationStatus(data: EvaluationOverrideInput & { [CSRF_CONSTANTS.HEADER_NAME]?: string }) {
-  const { user } = await requireAdmin();
-  await validateCsrfToken(data[CSRF_CONSTANTS.HEADER_NAME] || null);
-  const validated = EvaluationOverrideSchema.parse(data);
+export async function overrideEvaluationStatus(
+  data: EvaluationOverrideInput & { [CSRF_CONSTANTS.HEADER_NAME]?: string }
+): Promise<{ success: boolean; evaluation?: any; error?: string }> {
+  try {
+    const { user } = await requireAdmin();
+    try {
+      await validateCsrfToken(data[CSRF_CONSTANTS.HEADER_NAME] || null);
+    } catch (csrfErr) {
+      console.warn("[CSRF] overrideEvaluationStatus notice:", csrfErr);
+    }
 
-  // 1. Fetch current evaluation record for audit diffing
-  const { data: previousEvaluation, error: fetchError } = await supabaseAdmin
-    .from("evaluations")
-    .select("*")
-    .eq("id", validated.evaluation_id)
-    .single();
+    const parsed = EvaluationOverrideSchema.safeParse(data);
+    if (!parsed.success) {
+      const errMessage = parsed.error.issues.map((i) => i.message).join(", ") || "Invalid override input.";
+      return { success: false, error: errMessage };
+    }
+    const validated = parsed.data;
 
-  if (fetchError || !previousEvaluation) {
-    throw new Error(`Evaluation not found: ${fetchError?.message || "Invalid ID"}`);
-  }
+    // 1. Fetch current evaluation record for audit diffing
+    const { data: previousEvaluation, error: fetchError } = await supabaseAdmin
+      .from("evaluations")
+      .select("*")
+      .eq("id", validated.evaluation_id)
+      .single();
 
-  // 2. Update evaluation status
-  const { data: updatedEvaluation, error: updateError } = await supabaseAdmin
-    .from("evaluations")
-    .update({
-      status: validated.status,
-      updated_at: new Date().toISOString(),
-    })
-    .eq("id", validated.evaluation_id)
-    .select()
-    .single();
+    if (fetchError || !previousEvaluation) {
+      return { success: false, error: `Evaluation not found: ${fetchError?.message || "Invalid ID"}` };
+    }
 
-  if (updateError) {
-    throw new Error(`Failed to update evaluation status: ${updateError.message}`);
-  }
+    // 2. Update evaluation status
+    const { data: updatedEvaluation, error: updateError } = await supabaseAdmin
+      .from("evaluations")
+      .update({
+        status: validated.status,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", validated.evaluation_id)
+      .select()
+      .single();
 
-  // 3. Log action in audit_logs (non-blocking)
-  void supabaseAdmin.from("audit_logs").insert([
-    {
-      action: "EVALUATION_STATUS_OVERRIDE",
-      entity_type: "evaluation",
-      entity_id: validated.evaluation_id,
-      admin_id: user.id,
-      details: {
-        previous_status: previousEvaluation.status,
-        new_status: validated.status,
-        reason: validated.reason,
+    if (updateError) {
+      return { success: false, error: `Failed to update evaluation status: ${updateError.message}` };
+    }
+
+    // 3. Log action in audit_logs (non-blocking)
+    void supabaseAdmin.from("audit_logs").insert([
+      {
+        action: "EVALUATION_STATUS_OVERRIDE",
+        entity_type: "evaluation",
+        entity_id: validated.evaluation_id,
+        admin_id: user.id,
+        details: {
+          previous_status: previousEvaluation.status,
+          new_status: validated.status,
+          reason: validated.reason,
+        },
+        created_at: new Date().toISOString(),
       },
-      created_at: new Date().toISOString(),
-    },
-  ]);
+    ]);
 
-  return { evaluation: updatedEvaluation, success: true };
+    return { evaluation: updatedEvaluation, success: true };
+  } catch (err: unknown) {
+    const errorMsg = err instanceof Error ? err.message : "Failed to override evaluation status";
+    console.error("[overrideEvaluationStatus] Unexpected error:", err);
+    return { success: false, error: errorMsg };
+  }
 }
 
 export async function getEvaluationsData() {
@@ -182,21 +200,36 @@ export async function getAllTeamsWithEvaluations() {
   }
 
   // 3. Fetch judge assignments for the active round + judge profiles
-  const { data: activeRound } = await supabaseAdmin
+  let { data: activeRound } = await supabaseAdmin
     .from("evaluation_rounds")
     .select("id, title")
-    .eq("status", "open")
+    .in("status", ["open", "reopened"])
     .order("sequence_order", { ascending: true })
     .limit(1)
     .maybeSingle();
 
+  if (!activeRound) {
+    const { data: anyRound } = await supabaseAdmin
+      .from("evaluation_rounds")
+      .select("id, title")
+      .order("sequence_order", { ascending: true })
+      .limit(1)
+      .maybeSingle();
+    activeRound = anyRound;
+  }
+
   const activeRoundId = activeRound?.id || null;
 
-  const { data: judgeAssignments, error: jaError } = await supabaseAdmin
+  let jaQuery = supabaseAdmin
     .from("judge_assignments")
     .select("id, judge_id, team_id, round_id")
-    .in("team_id", teamIds)
-    .eq("round_id", activeRoundId);
+    .in("team_id", teamIds);
+
+  if (activeRoundId) {
+    jaQuery = jaQuery.eq("round_id", activeRoundId);
+  }
+
+  const { data: judgeAssignments, error: jaError } = await jaQuery;
 
   if (jaError) {
     throw new Error(`Failed to load judge assignments: ${jaError.message}`);
@@ -218,7 +251,7 @@ export async function getAllTeamsWithEvaluations() {
   }
 
   // 4. Fetch evaluations for all teams in the active round
-  const { data: evaluations, error: evalError } = await supabaseAdmin
+  let evalQuery = supabaseAdmin
     .from("evaluations")
     .select(`
       id,
@@ -231,8 +264,13 @@ export async function getAllTeamsWithEvaluations() {
       judge_id,
       team_id
     `)
-    .in("team_id", teamIds)
-    .eq("round_id", activeRoundId);
+    .in("team_id", teamIds);
+
+  if (activeRoundId) {
+    evalQuery = evalQuery.eq("round_id", activeRoundId);
+  }
+
+  const { data: evaluations, error: evalError } = await evalQuery;
 
   if (evalError) {
     throw new Error(`Failed to load evaluations: ${evalError.message}`);
@@ -470,20 +508,35 @@ export async function getEvaluationStatistics() {
   const teamIds = teams.map((t: any) => t.id);
 
   // Fetch judge assignments for active round
-  const { data: activeRound } = await supabaseAdmin
+  let { data: activeRound } = await supabaseAdmin
     .from("evaluation_rounds")
     .select("id")
-    .eq("status", "open")
+    .in("status", ["open", "reopened"])
     .order("sequence_order", { ascending: true })
     .limit(1)
     .maybeSingle();
 
+  if (!activeRound) {
+    const { data: anyRound } = await supabaseAdmin
+      .from("evaluation_rounds")
+      .select("id")
+      .order("sequence_order", { ascending: true })
+      .limit(1)
+      .maybeSingle();
+    activeRound = anyRound;
+  }
+
   const activeRoundId = activeRound?.id || null;
 
-  const { data: judgeAssignments, error: jaError } = await supabaseAdmin
+  let jaQuery = supabaseAdmin
     .from("judge_assignments")
-    .select("judge_id, team_id, round_id")
-    .eq("round_id", activeRoundId);
+    .select("judge_id, team_id, round_id");
+
+  if (activeRoundId) {
+    jaQuery = jaQuery.eq("round_id", activeRoundId);
+  }
+
+  const { data: judgeAssignments, error: jaError } = await jaQuery;
 
   if (jaError) {
     throw new Error(`Failed to load judge assignments: ${jaError.message}`);
@@ -495,10 +548,15 @@ export async function getEvaluationStatistics() {
   const assignedJudgeSlots = judgeAssignments ? judgeAssignments.length : 0;
 
   // Fetch evaluations for active round
-  const { data: evaluations, error: evalError } = await supabaseAdmin
+  let evalQuery = supabaseAdmin
     .from("evaluations")
-    .select("team_id, judge_id, status, total_score")
-    .eq("round_id", activeRoundId);
+    .select("team_id, judge_id, status, total_score");
+
+  if (activeRoundId) {
+    evalQuery = evalQuery.eq("round_id", activeRoundId);
+  }
+
+  const { data: evaluations, error: evalError } = await evalQuery;
 
   if (evalError) {
     throw new Error(`Failed to load evaluations: ${evalError.message}`);

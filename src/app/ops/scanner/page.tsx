@@ -96,6 +96,9 @@ export default async function OpsScannerPage() {
         </div>
       </div>
 
+      {/* Scanner-first: Scanner interface immediately after header */}
+      <ScannerClientView />
+
       <AnnouncementBanner
         announcements={announcements}
         portalName="Ops Desk"
@@ -113,8 +116,6 @@ export default async function OpsScannerPage() {
         loadingMessage="Loading operational content..."
         errorMessage="Failed to load operational content."
       />
-
-      <ScannerClientView />
     </div>
   );
 }

@@ -60,12 +60,14 @@ export default function TeamQrClientView({
   const refreshStatus = useCallback(async () => {
     try {
       const status = await getTeamScanStatus(teamId);
-      // Detect if goodies or a new item was newly claimed
+      // Detect if goodies or a new item was newly claimed or reverted
       const prevGoodies = claimedActions.includes("goodies");
       const nextGoodies = status.claimedActions.includes("goodies");
 
       if (!prevGoodies && nextGoodies) {
         setJustClaimedAlert("Goodies & Welcome Kit successfully claimed from Operations Desk!");
+      } else if (prevGoodies && !nextGoodies) {
+        setJustClaimedAlert(null);
       }
 
       setClaimedActions(status.claimedActions);
@@ -77,7 +79,7 @@ export default function TeamQrClientView({
     }
   }, [teamId, claimedActions]);
 
-  // Realtime subscription for instant auto-update when scanned by any club member
+  // Realtime subscription for instant auto-update when scanned or reverted
   useEffect(() => {
     const supabase = createClient();
 
@@ -96,7 +98,21 @@ export default function TeamQrClientView({
         }
       )
       .on("broadcast", { event: "scan_action_recorded" }, (payload) => {
-        if (payload?.payload?.team_id === teamId) {
+        if (!payload?.payload?.team_id || payload.payload.team_id === teamId) {
+          refreshStatus();
+        }
+      })
+      .on("broadcast", { event: "scan_action_reverted" }, (payload) => {
+        if (!payload?.payload?.team_id || payload.payload.team_id === teamId) {
+          refreshStatus();
+        }
+      })
+      .subscribe();
+
+    const generalTeamChannel = supabase
+      .channel(`team-live-${teamId}`)
+      .on("broadcast", { event: "scan_action_reverted" }, (payload) => {
+        if (!payload?.payload?.team_id || payload.payload.team_id === teamId) {
           refreshStatus();
         }
       })
@@ -109,6 +125,7 @@ export default function TeamQrClientView({
 
     return () => {
       supabase.removeChannel(channel);
+      supabase.removeChannel(generalTeamChannel);
       clearInterval(interval);
     };
   }, [teamId, refreshStatus]);

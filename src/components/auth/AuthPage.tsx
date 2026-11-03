@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, startTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
@@ -47,8 +47,10 @@ export default function AuthPage({ isSignUp = false }: { isSignUp?: boolean }) {
     try {
       const saved = localStorage.getItem("eventra_remember_email");
       if (saved) {
-        setEmail(saved);
-        setRememberMe(true);
+        startTransition(() => {
+          setEmail(saved);
+          setRememberMe(true);
+        });
       }
     } catch {}
   }, []);
@@ -169,7 +171,11 @@ export default function AuthPage({ isSignUp = false }: { isSignUp?: boolean }) {
 
     try {
       if (isSignUp) {
-const normalizedEmail = email.includes("@") ? email.trim() : `${email.trim()}@ivc.pulse`;
+        const rawInput = email.trim();
+        const isEmailInput = rawInput.includes("@");
+        const normalizedEmail = isEmailInput ? rawInput : `${rawInput.toLowerCase()}@ivc.pulse`;
+        const username = isEmailInput ? null : rawInput.toLowerCase();
+
         if (role !== "participant" && accessCode !== "0987") {
           setErrorMsg("Invalid access code for selected role.");
           setLoading(false);
@@ -182,6 +188,7 @@ const normalizedEmail = email.includes("@") ? email.trim() : `${email.trim()}@iv
             data: {
               full_name: fullName,
               role: role,
+              ...(username ? { username } : {}),
             },
           },
         });
@@ -643,6 +650,65 @@ const normalizedEmail = email.includes("@") ? email.trim() : `${email.trim()}@iv
                       </span>
                       <ArrowRight size={13} />
                     </button>
+
+                    {/* Demo Quick Login Buttons */}
+                    {!isSignUp && (
+                      <div className="mt-4 pt-3 border-t border-white/10">
+                        <p className="text-[9px] text-[#71717a] font-mono uppercase tracking-wider mb-2">
+                          Demo Access
+                        </p>
+                        <div className="grid grid-cols-2 gap-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEmail("admin@ivc.pulse");
+                              setPassword("Password@123");
+                              void executeSignIn("admin@ivc.pulse", "Password@123");
+                            }}
+                            disabled={loading || (!isDev && rateLimitCooldown > 0)}
+                            className="w-full py-2 bg-white/5 border border-white/10 rounded-lg text-[#ff007f] font-bold text-[9px] uppercase tracking-wider hover:bg-[#ff007f]/10 hover:text-white transition-colors flex items-center justify-center gap-1"
+                          >
+                            <span className="w-2 h-2 rounded-full bg-[#ff007f]" /> Admin
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEmail("leader@ivc.pulse");
+                              setPassword("Password@123");
+                              void executeSignIn("leader@ivc.pulse", "Password@123");
+                            }}
+                            disabled={loading || (!isDev && rateLimitCooldown > 0)}
+                            className="w-full py-2 bg-white/5 border border-white/10 rounded-lg text-[#00F0FF] font-bold text-[9px] uppercase tracking-wider hover:bg-[#00F0FF]/10 hover:text-white transition-colors flex items-center justify-center gap-1"
+                          >
+                            <span className="w-2 h-2 rounded-full bg-[#00F0FF]" /> Team Leader
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEmail("judge@ivc.pulse");
+                              setPassword("Password@123");
+                              void executeSignIn("judge@ivc.pulse", "Password@123");
+                            }}
+                            disabled={loading || (!isDev && rateLimitCooldown > 0)}
+                            className="w-full py-2 bg-white/5 border border-white/10 rounded-lg text-[#FBC815] font-bold text-[9px] uppercase tracking-wider hover:bg-[#FBC815]/10 hover:text-white transition-colors flex items-center justify-center gap-1"
+                          >
+                            <span className="w-2 h-2 rounded-full bg-[#FBC815]" /> Judge
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEmail("staff@ivc.pulse");
+                              setPassword("Password@123");
+                              void executeSignIn("staff@ivc.pulse", "Password@123");
+                            }}
+                            disabled={loading || (!isDev && rateLimitCooldown > 0)}
+                            className="w-full py-2 bg-white/5 border border-white/10 rounded-lg text-[#a1a1aa] font-bold text-[9px] uppercase tracking-wider hover:bg-[#a1a1aa]/10 hover:text-white transition-colors flex items-center justify-center gap-1"
+                          >
+                            <span className="w-2 h-2 rounded-full bg-[#a1a1aa]" /> Staff
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </form>
                 )}
 

@@ -794,6 +794,58 @@ export async function removeJudgeFromTeam(data: {
  * Replace judge A with judge B for a team in a round.
  * Requires confirmation if judge A has an existing evaluation.
  */
+/**
+ * Delete ALL judge assignments for a given evaluation round.
+ * Removes every judge-team assignment row for that round. Existing evaluations
+ * are preserved (their judge_id is kept for history) but the assignments are
+ * gone, so teams return to unassigned status for that round.
+ */
+export async function deleteAllJudgeAssignments(data: {
+  roundId: string;
+  [CSRF_CONSTANTS.HEADER_NAME]?: string;
+}) {
+  const { user } = await requireAdmin();
+  await validateCsrfToken(data[CSRF_CONSTANTS.HEADER_NAME] || null);
+
+  const { roundId } = data;
+
+  // Validate round exists
+  const { data: round, error: roundErr } = await supabaseAdmin
+    .from("evaluation_rounds")
+    .select("id")
+    .eq("id", roundId)
+    .maybeSingle();
+  if (roundErr || !round) {
+    throw new Error("Evaluation round not found.");
+  }
+
+  // Delete all assignments for this round
+  const { error: deleteErr } = await supabaseAdmin
+    .from("judge_assignments")
+    .delete()
+    .eq("round_id", roundId);
+  if (deleteErr) {
+    throw new Error(`Failed to delete assignments: ${deleteErr.message}`);
+  }
+
+  // Audit log (non-blocking)
+  void supabaseAdmin.from("audit_logs").insert([
+    {
+      action: "DELETE_ALL_JUDGE_ASSIGNMENTS",
+      entity_type: "judge_assignments",
+      entity_id: roundId,
+      admin_id: user.id,
+      details: { round_id: roundId },
+      created_at: new Date().toISOString(),
+    },
+  ]);
+
+  revalidatePath("/admin/assignments");
+  revalidatePath("/admin/dashboard");
+
+  return { success: true, round_id: roundId };
+}
+
 export async function replaceJudgeAssignment(data: {
   roundId: string;
   teamId: string;

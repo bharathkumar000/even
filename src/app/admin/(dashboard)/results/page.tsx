@@ -11,27 +11,48 @@ export default async function AdminResultsPage() {
 
   try {
     const fetchResultsData = async () => {
-      const { data } = await supabaseAdmin
-        .from("event_results")
-        .select("*")
-        .order("total_score", { ascending: false });
-      return data || [];
+      const [resData, teamsData, eventData] = await Promise.all([
+        supabaseAdmin
+          .from("event_results")
+          .select("*")
+          .order("total_score", { ascending: false }),
+        supabaseAdmin
+          .from("teams")
+          .select("id, name, code"),
+        supabaseAdmin
+          .from("events")
+          .select("id")
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle(),
+      ]);
+
+      const teamMap = new Map((teamsData.data || []).map((t: any) => [t.id, t.name]));
+      const defaultEventId = eventData.data?.id || "11111111-1111-1111-1111-111111111111";
+
+      const mappedResults = (resData.data || []).map((r: any) => ({
+        ...r,
+        team_name: teamMap.get(r.team_id) || r.team_id,
+      }));
+
+      return {
+        results: mappedResults,
+        defaultEventId,
+      };
     };
 
-    const timeoutPromise = new Promise<ResultItem[]>((resolve) =>
-      setTimeout(() => resolve([]), 2500)
+    const timeoutPromise = new Promise<{ results: ResultItem[]; defaultEventId: string }>((resolve) =>
+      setTimeout(() => resolve({ results: [], defaultEventId: "11111111-1111-1111-1111-111111111111" }), 2500)
     );
 
     const data = await Promise.race([fetchResultsData(), timeoutPromise]);
-if (data && data.length > 0) {
-  results = data;
-  // Capture the event ID from the first result row (if available)
-  eventId = (data[0] as any).event_id || "";
-  isPublished = data.some((r) => r.is_published);
-  isLocked = data.some((r) => r.is_locked);
-}
+    results = data.results;
+    eventId = (data.results[0] as any)?.event_id || data.defaultEventId;
+    isPublished = data.results.some((r) => r.is_published);
+    isLocked = data.results.some((r) => r.is_locked);
   } catch (err) {
     console.error("Failed to load results data:", err);
+    eventId = "11111111-1111-1111-1111-111111111111";
   }
 
   return (

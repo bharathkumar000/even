@@ -1,3 +1,4 @@
+import { createClient } from "@/lib/supabase/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { slugify } from "@/lib/utils";
 import EvaluateClientView, { TeamDetail, SubmissionDetail, ActiveRoundDetail, CriterionDetail, ExistingEvaluationDetail } from "./evaluate-client";
@@ -31,14 +32,28 @@ export default async function EvaluateTeamPage({
     }
   }
 
-
   let team: TeamDetail | null = null;
   let submission: SubmissionDetail | null = null;
   let activeRound: ActiveRoundDetail | null = null;
   let criteria: CriterionDetail[] = [];
   let existingEvaluation: ExistingEvaluationDetail | null = null;
 
+  // Get the authenticated judge's user ID for evaluation isolation
+  let judgeUserId: string | null = null;
   try {
+    const supabase = await createClient();
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    if (!userError && user) {
+      judgeUserId = user.id;
+    }
+  } catch {
+    // Auth errors are non-fatal here; evaluation will be empty if unauthenticated
+  }
+
+  try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+
     const [teamRes, subRes, roundRes] = await Promise.all([
       supabaseAdmin.from("teams").select("*").eq("id", teamId).single(),
       supabaseAdmin.from("team_submissions").select("*").eq("team_id", teamId).maybeSingle(),
@@ -57,17 +72,22 @@ export default async function EvaluateTeamPage({
       const currentRound = roundRes.data;
       activeRound = currentRound;
 
+      let evalQuery = supabaseAdmin
+        .from("evaluations")
+        .select("*")
+        .eq("round_id", currentRound.id)
+        .eq("team_id", teamId);
+
+      if (user?.id) {
+        evalQuery = evalQuery.eq("judge_id", user.id);
+      }
+
       const [critRes, evalRes] = await Promise.all([
         supabaseAdmin
           .from("evaluation_criteria")
           .select("*")
           .eq("round_id", currentRound.id),
-        supabaseAdmin
-          .from("evaluations")
-          .select("*")
-          .eq("round_id", currentRound.id)
-          .eq("team_id", teamId)
-          .maybeSingle(),
+        evalQuery.maybeSingle(),
       ]);
 
       if (critRes.data) criteria = critRes.data;

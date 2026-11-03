@@ -177,8 +177,34 @@ export function PdfImportDialog({
   };
 
   const handleClose = () => {
+    setStage("upload");
+    setFile(null);
+    fileRef.current = null;
+    setFilename("");
+    setFileSize(0);
+    setError(null);
+    setExtractedText("");
+    setPageCount(0);
+    setProgress(0);
+    setReviewTitle("");
+    setReviewBody("");
+    setReviewSummary("");
+    setReviewDomain("");
+    setDragActive(false);
+    setStorageUploaded(false);
+    setItemId(null);
     onClose();
   };
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        handleClose();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [handleClose]);
 
   const formatBytes = (size: number): string => {
     if (!size) return "0 B";
@@ -219,6 +245,7 @@ export function PdfImportDialog({
             </div>
             <button
               onClick={handleClose}
+              type="button"
               className="text-text-secondary hover:text-text-primary p-1 rounded hover:bg-white/5 transition-colors"
             >
               <X size={18} />
@@ -309,6 +336,7 @@ export function PdfImportDialog({
           <div className="flex justify-end gap-2 mt-6">
             <button
               onClick={handleClose}
+              type="button"
               className="px-4 py-2 border border-border-color text-text-secondary text-xs uppercase font-bold rounded hover:text-text-primary"
             >
               Cancel
@@ -341,6 +369,7 @@ export function PdfImportDialog({
           <div className="flex justify-center">
             <button
               onClick={handleClose}
+              type="button"
               className="px-4 py-2 text-text-secondary text-xs uppercase font-bold hover:text-text-primary"
             >
               Cancel
@@ -371,6 +400,7 @@ export function PdfImportDialog({
             </div>
             <button
               onClick={handleBackToUpload}
+              type="button"
               className="text-text-secondary hover:text-text-primary p-1 rounded hover:bg-white/5 transition-colors"
             >
               <X size={18} />
@@ -473,6 +503,7 @@ export function PdfImportDialog({
               <div className="flex items-center gap-2">
                 <button
                   onClick={handleClose}
+                  type="button"
                   className="px-4 py-2 border border-border-color text-text-secondary text-xs uppercase font-bold rounded hover:text-text-primary"
                 >
                   Cancel

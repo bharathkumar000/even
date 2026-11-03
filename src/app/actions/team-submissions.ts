@@ -90,61 +90,66 @@ export async function getActiveSubmissionForm(teamId: string): Promise<{
   questions: any[];
   options: Record<string, any[]>;
   error?: string;
+  errorType?: "auth" | "no_team" | "no_event" | "no_form" | "db_error" | "access_denied";
 }> {
   // Get user's team membership to find team_id if not provided
   const supabase = await createClient();
   const { data: { user }, error: authError } = await supabase.auth.getUser();
 
   if (authError || !user) {
-    return { form: null, sections: [], questions: [], options: {}, error: "Authentication required" };
+    return { form: null, sections: [], questions: [], options: {}, error: "Authentication required", errorType: "auth" };
   }
 
   // Find team membership
-  const { data: membership } = await supabaseAdmin
+  const { data: membership, error: membershipError } = await supabaseAdmin
     .from("team_members")
-    .select("team_id, role")
+    .select("team_id, role, teams!inner(id, name, event_id, track, leader_name, status)")
     .eq("user_id", user.id)
     .maybeSingle();
+
+  if (membershipError) {
+    return { form: null, sections: [], questions: [], options: {}, error: "Failed to load team membership", errorType: "db_error" };
+  }
 
   const effectiveTeamId = teamId || membership?.team_id || null;
 
   if (!effectiveTeamId) {
-    return { form: null, sections: [], questions: [], options: {}, error: "No team membership found" };
+    return { form: null, sections: [], questions: [], options: {}, error: "No team membership found. Please contact your team leader.", errorType: "no_team" };
   }
 
-  // Get active round
-  const { data: activeRound } = await supabaseAdmin
-    .from("evaluation_rounds")
-    .select("id")
-    .order("sequence_order", { ascending: true })
-    .eq("status", "open")
-    .maybeSingle();
+  const teamEventId = membership?.teams?.[0]?.event_id || null;
 
-  if (!activeRound) {
-    return { form: null, sections: [], questions: [], options: {}, error: "No active evaluation round" };
+  if (!teamEventId) {
+    return { form: null, sections: [], questions: [], options: {}, error: "No active event configured for your team.", errorType: "no_event" };
   }
 
-  // Get the published project submission form (keyed to project_subjection_forms,
-  // not the legacy submission_forms table).
+  // Get the published project submission form for the team's event.
+  // Fixed: correct table name is project_submission_forms (not project_subjection_forms).
   const { data: forms, error: formsError } = await supabaseAdmin
-    .from("project_subjection_forms")
+    .from("project_submission_forms")
     .select("*")
-    .eq("status", "published")
+    .eq("event_id", teamEventId)
+    .eq("form_status", "published")
     .order("created_at", { ascending: false })
     .limit(1);
 
-  if (formsError || !forms || forms.length === 0) {
-    return { form: null, sections: [], questions: [], options: {}, error: "No published submission form" };
+  if (formsError) {
+    return { form: null, sections: [], questions: [], options: {}, error: "Database query failed.", errorType: "db_error" };
+  }
+
+  if (!forms || forms.length === 0) {
+    return { form: null, sections: [], questions: [], options: {}, error: "No published submission form is available for your event at this time.", errorType: "no_form" };
   }
 
   const row = forms[0] as any;
 
   // Check if submissions are open
+  // Fixed: correct column names are submission_open_at / submission_close_at (not opens_at / closes_at).
   const now = new Date();
-  const openAt = row.opens_at ? new Date(row.opens_at) : null;
-  const closeAt = row.closes_at ? new Date(row.closes_at) : null;
+  const openAt = row.submission_open_at ? new Date(row.submission_open_at) : null;
+  const closeAt = row.submission_close_at ? new Date(row.submission_close_at) : null;
 
-  let submissionState = row.status === "published" ? "open" : "not_open";
+  let submissionState = row.form_status === "published" ? "open" : "not_open";
   if (openAt && now < openAt) submissionState = "not_open";
   if (closeAt && now > closeAt && row.auto_lock_at_deadline) submissionState = "locked";
 
@@ -152,14 +157,16 @@ export async function getActiveSubmissionForm(teamId: string): Promise<{
     id: row.id,
     title: row.title,
     description: row.description ?? null,
-    form_status: row.status,
+    form_status: row.form_status,
     submission_state: submissionState,
-    submission_open_at: row.opens_at ?? null,
-    submission_close_at: row.closes_at ?? null,
-    timezone: "Asia/Kolkata",
-    allow_member_submit: false,
-    auto_lock_at_deadline: Boolean(row.allow_edit_after_submission),
-    max_marks: null,
+    submission_open_at: row.submission_open_at ?? null,
+    submission_close_at: row.submission_close_at ?? null,
+    timezone: row.timezone ?? "Asia/Kolkata",
+    allow_member_submit: Boolean(row.allow_member_submit),
+    auto_lock_at_deadline: Boolean(row.auto_lock_at_deadline ?? true),
+    max_marks: row.max_marks ?? null,
+    event_id: row.event_id ?? null,
+    round_id: row.round_id ?? null,
   };
 
   // Build sections/questions from the JSONB form_config.
@@ -206,8 +213,12 @@ export async function getActiveSubmissionForm(teamId: string): Promise<{
       : [],
   }));
 
+  if (sections.length === 0) {
+    return { form: null, sections: [], questions: [], options: {}, error: "The published form has no sections or questions configured.", errorType: "no_form" };
+  }
+
   return {
-    form: { ...form, submission_state: submissionState },
+    form,
     sections,
     questions: [],
     options: {},
@@ -389,7 +400,7 @@ export async function submitFinalSubmission(input: {
   // Check if form allows member submit or user is leader
   const { data: form } = await supabaseAdmin
     .from("project_subjection_forms")
-    .select("status, closes_at, allow_edit_after_submission")
+    .select("status, closes_at, allow_edit_after_submission, form_config")
     .eq("id", validated.form_id)
     .maybeSingle();
 
@@ -399,6 +410,42 @@ export async function submitFinalSubmission(input: {
 
   if (form.status !== "published") {
     throw new Error("Submissions are not open at this time");
+  }
+
+  // Server-side validation: required fields and URL validation
+  const formConfig = form.form_config || {};
+  const rawSections = Array.isArray(formConfig.sections) ? formConfig.sections : [];
+  const missingRequired: string[] = [];
+  const invalidUrls: string[] = [];
+
+  rawSections.forEach((section: any) => {
+    const fields = Array.isArray(section.fields) ? section.fields : [];
+    fields.forEach((f: any) => {
+      const value = validated.answers[f.id];
+      const strValue = value ? value.toString() : "";
+
+      // Check required fields
+      if (Boolean(f.required) && (!strValue || strValue.trim() === "")) {
+        missingRequired.push(f.label || f.title || "Untitled Question");
+      }
+
+      // URL validation for URL-type questions that have a value
+      if (value && f.question_type === "url") {
+        try {
+          new URL(String(value));
+        } catch {
+          invalidUrls.push(f.label || f.title || "Untitled Question");
+        }
+      }
+    });
+  });
+
+  if (missingRequired.length > 0) {
+    throw new Error(`Required fields missing: ${missingRequired.join(", ")}`);
+  }
+
+  if (invalidUrls.length > 0) {
+    throw new Error(`Invalid URL format for: ${invalidUrls.join(", ")}`);
   }
 
   if (!form.allow_edit_after_submission && membership.role !== "leader") {

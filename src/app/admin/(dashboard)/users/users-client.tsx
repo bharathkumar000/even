@@ -138,6 +138,7 @@ export default function UsersClientView({
   // Modals state
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [userToDelete, setUserToDelete] = useState<UserProfileItem | null>(null);
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
 
   React.useEffect(() => {
@@ -171,7 +172,6 @@ export default function UsersClientView({
   const [formLoading, setFormLoading] = useState(false);
 
   // Import / Export State
-  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [importFile, setImportFile] = useState<File | null>(null);
   const [importLoading, setImportLoading] = useState(false);
   const [importPreview, setImportPreview] = useState<BulkImportUserRecord[]>([]);
@@ -371,7 +371,7 @@ export default function UsersClientView({
            let roleRaw = (roleIdx !== -1 ? cols[roleIdx]?.trim().toLowerCase() : "participant") as AllowedUserRole;
             
            // Fencing: nobody can be assigned as admin through CSV import
-           if (roleRaw === "admin" || !["judge", "staff", "participant", "leader"].includes(roleRaw)) {
+           if (roleRaw === "admin" || !["judge", "staff", "spoc", "participant", "leader"].includes(roleRaw)) {
              roleRaw = "participant";
            }
  
