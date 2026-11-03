@@ -651,65 +651,7 @@ export default function AuthPage({ isSignUp = false }: { isSignUp?: boolean }) {
                       <ArrowRight size={13} />
                     </button>
 
-                    {/* Demo Quick Login Buttons */}
-                    {!isSignUp && (
-                      <div className="mt-4 pt-3 border-t border-white/10">
-                        <p className="text-[9px] text-[#71717a] font-mono uppercase tracking-wider mb-2">
-                          Demo Access
-                        </p>
-                        <div className="grid grid-cols-2 gap-2">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setEmail("admin@ivc.pulse");
-                              setPassword("Password@123");
-                              void executeSignIn("admin@ivc.pulse", "Password@123");
-                            }}
-                            disabled={loading || (!isDev && rateLimitCooldown > 0)}
-                            className="w-full py-2 bg-white/5 border border-white/10 rounded-lg text-[#ff007f] font-bold text-[9px] uppercase tracking-wider hover:bg-[#ff007f]/10 hover:text-white transition-colors flex items-center justify-center gap-1"
-                          >
-                            <span className="w-2 h-2 rounded-full bg-[#ff007f]" /> Admin
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setEmail("leader@ivc.pulse");
-                              setPassword("Password@123");
-                              void executeSignIn("leader@ivc.pulse", "Password@123");
-                            }}
-                            disabled={loading || (!isDev && rateLimitCooldown > 0)}
-                            className="w-full py-2 bg-white/5 border border-white/10 rounded-lg text-[#00F0FF] font-bold text-[9px] uppercase tracking-wider hover:bg-[#00F0FF]/10 hover:text-white transition-colors flex items-center justify-center gap-1"
-                          >
-                            <span className="w-2 h-2 rounded-full bg-[#00F0FF]" /> Team Leader
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setEmail("judge@ivc.pulse");
-                              setPassword("Password@123");
-                              void executeSignIn("judge@ivc.pulse", "Password@123");
-                            }}
-                            disabled={loading || (!isDev && rateLimitCooldown > 0)}
-                            className="w-full py-2 bg-white/5 border border-white/10 rounded-lg text-[#FBC815] font-bold text-[9px] uppercase tracking-wider hover:bg-[#FBC815]/10 hover:text-white transition-colors flex items-center justify-center gap-1"
-                          >
-                            <span className="w-2 h-2 rounded-full bg-[#FBC815]" /> Judge
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setEmail("staff@ivc.pulse");
-                              setPassword("Password@123");
-                              void executeSignIn("staff@ivc.pulse", "Password@123");
-                            }}
-                            disabled={loading || (!isDev && rateLimitCooldown > 0)}
-                            className="w-full py-2 bg-white/5 border border-white/10 rounded-lg text-[#a1a1aa] font-bold text-[9px] uppercase tracking-wider hover:bg-[#a1a1aa]/10 hover:text-white transition-colors flex items-center justify-center gap-1"
-                          >
-                            <span className="w-2 h-2 rounded-full bg-[#a1a1aa]" /> Staff
-                          </button>
-                        </div>
-                      </div>
-                    )}
-                  </form>
+                    </form>
                 )}
 
 
