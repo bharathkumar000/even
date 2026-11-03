@@ -32,6 +32,7 @@ import {
   Plus,
   Search,
   Send,
+  Table,
   Timer,
   Trash2,
   Upload,
@@ -68,6 +69,8 @@ import {
 } from "@/app/actions/project-submission-forms";
 import { PublishConfirmationModal } from "@/components/admin/PublishConfirmationModal";
 import {
+  getTeamProblemStatementSelections,
+  exportTeamProblemStatementSelections,
   unpublishProblemStatement,
   bulkPublishProblemStatements,
   bulkUnpublishProblemStatements,
@@ -442,6 +445,20 @@ export default function ContentHubClientView({
     action: "publish" | "unpublish" | "allow-selection" | "disable-selection" | "close-selection";
   } | null>(null);
   const [bulkActionConfirmLoading, setBulkActionConfirmLoading] = useState(false);
+
+  // View Submissions (team PS assignments) modal state
+  const [viewSubmissionsOpen, setViewSubmissionsOpen] = useState(false);
+  const [submissions, setSubmissions] = useState<Array<{
+    assigned_at: string;
+    team_id: string;
+    team_name: string;
+    team_code: string | null;
+    ps_reference_number: string | null;
+    ps_title: string;
+  }>>([]);
+  const [submissionsLoading, setSubmissionsLoading] = useState(false);
+  const [submissionsError, setSubmissionsError] = useState<string | null>(null);
+  const [submissionsExporting, setSubmissionsExporting] = useState(false);
 
   // Selection timer state
   const [selectionTimerOpening, setSelectionTimerOpening] = useState<string>("");
@@ -1251,6 +1268,69 @@ export default function ContentHubClientView({
       setBulkActionConfirmLoading(false);
       setBulkActionConfirmOpen(false);
       setBulkActionConfirmItem(null);
+    }
+  };
+
+  const fetchSubmissions = useCallback(async () => {
+    setSubmissionsLoading(true);
+    setSubmissionsError(null);
+    try {
+      const res = await getTeamProblemStatementSelections();
+      if (res.error) {
+        setSubmissionsError(res.error);
+        setSubmissions([]);
+      } else {
+        setSubmissions(
+          (res.selections || []).map((s) => ({
+            assigned_at: s.assigned_at,
+            team_id: s.team_id,
+            team_name: s.team_name,
+            team_code: s.team_code,
+            ps_reference_number: s.ps_reference_number,
+            ps_title: s.ps_title,
+          }))
+        );
+      }
+    } catch (err: unknown) {
+      setSubmissionsError(err instanceof Error ? err.message : "Failed to load submissions.");
+      setSubmissions([]);
+    } finally {
+      setSubmissionsLoading(false);
+    }
+  }, []);
+
+  const exportSubmissionsCsv = async () => {
+    setSubmissionsExporting(true);
+    try {
+      const res = await exportTeamProblemStatementSelections();
+      if (res.error) {
+        setNotification({
+          type: "error",
+          message: res.error || "CSV export failed.",
+        });
+        return;
+      }
+      const csv = res.csv || "";
+      const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = "EVENTRA_PS_Selections.csv";
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      setNotification({
+        type: "success",
+        message: "Selections exported to EVENTRA_PS_Selections.csv",
+      });
+    } catch (err: unknown) {
+      setNotification({
+        type: "error",
+        message: err instanceof Error ? err.message : "CSV export failed.",
+      });
+    } finally {
+      setSubmissionsExporting(false);
     }
   };
 
@@ -2487,6 +2567,17 @@ export default function ContentHubClientView({
                 >
                   <Check size={12} />
                   <span>Allow Selection</span>
+                </button>
+                <button
+                  onClick={() => {
+                    setViewSubmissionsOpen(true);
+                    void fetchSubmissions();
+                  }}
+                  disabled={schedulingActivity}
+                  className="px-3 py-2 border border-accent-secondary/40 text-accent-secondary rounded text-[10px] font-bold uppercase tracking-wider hover:bg-accent-secondary/10 disabled:opacity-50"
+                >
+                  <Table size={12} />
+                  <span>View Submissions</span>
                 </button>
                 <button
                   onClick={() => handleBulkAction("disable-selection")}
@@ -3994,6 +4085,132 @@ export default function ContentHubClientView({
                   {bulkActionConfirmLoading ? "Processing..." : "Confirm Action"}
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* View Submissions Modal */}
+      {viewSubmissionsOpen && (
+        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/85 backdrop-blur-sm p-4">
+          <div className="bg-surface-color border border-border-color rounded-xl w-full max-w-4xl p-0 shadow-2xl flex flex-col h-[85vh] max-h-[700px]">
+            <div className="flex items-start justify-between border-b border-border-color pb-4 px-6 pt-6">
+              <div>
+                <h3 className="font-heading text-lg text-text-primary uppercase m-0 font-bold tracking-wide">
+                  Team Problem Statement Selections
+                </h3>
+                <p className="text-[10px] text-text-secondary/60 mt-1 font-mono">
+                  All successful team selections with selection time, team, and problem statement details.
+                </p>
+              </div>
+              <button
+                onClick={() => setViewSubmissionsOpen(false)}
+                className="text-text-secondary hover:text-text-primary"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="px-6 pb-6 flex items-center justify-between gap-4">
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] uppercase tracking-wider text-text-secondary font-bold">
+                  {submissions.length} selection{submissions.length !== 1 ? "s" : ""} found
+                </span>
+                {submissionsError && (
+                  <span className="text-[10px] text-status-error font-mono">
+                    {submissionsError}
+                  </span>
+                )}
+              </div>
+              <button
+                onClick={exportSubmissionsCsv}
+                disabled={submissionsExporting}
+                className="inline-flex items-center gap-2 px-4 py-2.5 border border-accent-secondary/40 text-accent-secondary rounded text-[10px] font-bold uppercase tracking-wider hover:bg-accent-secondary/10 disabled:opacity-50"
+              >
+                <Download size={12} />
+                <span>Export CSV</span>
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-auto px-6 pb-6">
+              {submissionsLoading && submissions.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-20">
+                  <Loader2 className="w-8 h-8 animate-spin text-accent-secondary mb-3" />
+                  <p className="text-[11px] text-text-secondary font-mono">Loading selections…</p>
+                </div>
+              ) : submissions.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-20 text-center">
+                  <FileText className="w-12 h-12 text-text-secondary/30 mb-4" />
+                  <p className="text-[11px] text-text-secondary/60 font-mono">
+                    No team problem statement selections found.
+                  </p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="border-b border-border-color">
+                        <th className="px-4 py-3 text-[10px] uppercase tracking-wider text-text-secondary font-bold font-mono">
+                          Selection Time
+                        </th>
+                        <th className="px-4 py-3 text-[10px] uppercase tracking-wider text-text-secondary font-bold font-mono">
+                          Team ID
+                        </th>
+                        <th className="px-4 py-3 text-[10px] uppercase tracking-wider text-text-secondary font-bold font-mono">
+                          Team Name
+                        </th>
+                        <th className="px-4 py-3 text-[10px] uppercase tracking-wider text-text-secondary font-bold font-mono">
+                          PS Code
+                        </th>
+                        <th className="px-4 py-3 text-[10px] uppercase tracking-wider text-text-secondary font-bold font-mono">
+                          PS Title
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border-color/40">
+                      {submissions.map((s) => (
+                        <tr key={`${s.team_id}-${s.ps_reference_number}`} className="hover:bg-surface-color/30 transition-colors">
+                          <td className="px-4 py-3 text-xs text-text-primary font-mono">
+                            {new Date(s.assigned_at).toLocaleString("en-GB", {
+                              timeZone: "Asia/Kolkata",
+                              day: "2-digit",
+                              month: "short",
+                              year: "numeric",
+                              hour: "2-digit",
+                              minute: "2-digit",
+                              hour12: false,
+                            })}
+                          </td>
+                          <td className="px-4 py-3 text-xs text-text-primary font-mono">
+                            {s.team_code || s.team_id.slice(0, 8)}
+                          </td>
+                          <td className="px-4 py-3 text-xs text-text-primary truncate max-w-[200px]">
+                            {s.team_name}
+                          </td>
+                          <td className="px-4 py-3 text-xs text-accent-primary font-mono font-bold">
+                            {s.ps_reference_number || "N/A"}
+                          </td>
+                          <td className="px-4 py-3 text-xs text-text-primary truncate max-w-[260px]">
+                            {s.ps_title}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+
+            <div className="border-t border-border-color px-6 py-4 flex items-center justify-between">
+              <span className="text-[10px] text-text-secondary/50 font-mono">
+                Timestamp in Asia/Kolkata timezone
+              </span>
+              <button
+                onClick={() => setViewSubmissionsOpen(false)}
+                className="px-4 py-2 border border-border-color text-text-secondary text-xs uppercase font-bold rounded hover:text-text-primary hover:bg-surface-color/30"
+              >
+                Done
+              </button>
             </div>
           </div>
         </div>
