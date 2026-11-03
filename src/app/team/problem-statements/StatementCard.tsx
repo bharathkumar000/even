@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useSyncExternalStore } from "react";
-import { Clock, Users, AlertCircle, ChevronDown, ChevronUp } from "lucide-react";
+import { Clock, Users, AlertCircle, ChevronDown, ChevronUp, BookOpen, Cpu } from "lucide-react";
 import SelectStatementButton from "./select-statement-button";
 
 interface Statement {
@@ -16,6 +16,14 @@ interface Statement {
   manual_lock: boolean;
   selection_opening?: string | null;
   selection_closing?: string | null;
+  // SIH 2025 fields
+  sih_ps_number?: string | null;
+  organization?: string | null;
+  theme?: string | null;
+  category?: "Software" | "Hardware" | null;
+  department?: string | null;
+  internal_reference?: string | null;
+  sih_year?: number | null;
 }
 
 interface Props {
@@ -72,9 +80,28 @@ export default function StatementCard({ stmt, assignedCount }: Props) {
                 {stmt.reference_number}
               </span>
             )}
-            {stmt.domain && (
-              <span className="px-2 py-0.5 bg-accent-tertiary/10 border border-accent-tertiary/30 text-accent-tertiary font-tech text-[11px] uppercase tracking-wider font-bold rounded">
-                {stmt.domain}
+            {stmt.internal_reference && (
+              <span className="px-2 py-0.5 bg-accent-tertiary/10 border border-accent-tertiary/30 text-accent-tertiary font-mono text-[10px] font-bold rounded">
+                {stmt.internal_reference}
+              </span>
+            )}
+            {stmt.sih_ps_number && (
+              <span className="px-2 py-0.5 bg-accent-secondary/10 border border-accent-secondary/30 text-accent-secondary font-mono text-[10px] font-bold rounded">
+                {stmt.sih_ps_number}
+              </span>
+            )}
+            {stmt.department && (
+              <span className="px-2 py-0.5 bg-accent-secondary/10 border border-accent-secondary/30 text-accent-secondary font-tech text-[10px] uppercase tracking-wider font-bold rounded">
+                {stmt.department}
+              </span>
+            )}
+            {stmt.category && (
+              <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                stmt.category === "Software"
+                  ? "bg-status-success/10 text-status-success border-status-success/30"
+                  : "bg-accent-primary/10 text-accent-primary border-accent-primary/30"
+              }`}>
+                {stmt.category}
               </span>
             )}
           </div>

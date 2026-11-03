@@ -14,7 +14,7 @@ export async function GET(
   try {
     const { data, error } = await supabaseAdmin
       .from("problem_statements")
-      .select("timer_end_time, timer_auto_publish, timer_timezone")
+      .select("timer_end_time, timer_auto_publish, publication_timezone")
       .eq("id", activityId)
       .maybeSingle();
 
@@ -29,7 +29,7 @@ export async function GET(
     return NextResponse.json({
       endTime: data.timer_end_time,
       autoPublish: data.timer_auto_publish ?? true,
-      timezone: data.timer_timezone ?? "UTC",
+      timezone: data.publication_timezone ?? "Asia/Kolkata",
     });
   } catch (e) {
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });

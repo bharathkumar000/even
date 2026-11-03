@@ -10,6 +10,7 @@ import {
   AlertCircle,
   ArrowLeft,
   Award,
+  BarChart2,
   BookOpen,
   CalendarClock,
   Check,
@@ -77,12 +78,18 @@ import {
   setReadingTimer,
   setSelectionTimer,
   expireSelections,
+  startReadingPhase,
+  publishForSelection,
+  closeSelection,
+  getPhaseStatus,
 } from "@/app/actions/admin-problem-statements";
 import {
   importPdfExtract,
   importPdfContentWithoutStorage,
 } from "@/app/actions/pdf-import";
 import PdfImportDialog from "@/components/admin/PdfImportDialog";
+import SIHImportDialog from "@/components/admin/SIHImportDialog";
+import { importSIHProblemStatements } from "@/app/actions/import-sih-problem-statements";
 import type {
   ActivityType,
   ContentActivity,
@@ -447,9 +454,45 @@ export default function ContentHubClientView({
   const [selectionTimerRemaining, setSelectionTimerRemaining] = useState<number>(0);
   const [selectionTimerLoading, setSelectionTimerLoading] = useState(false);
 
+  // Two-Phase Workflow State
+  const [phaseStatus, setPhaseStatus] = useState<{
+    phase: "not_started" | "reading" | "selection" | "closed";
+    readingStartedAt: string | null;
+    readingEndedAt: string | null;
+    selectionActivatedAt: string | null;
+    selectionActivatedBy: string | null;
+    items: Array<{
+      id: string;
+      title: string;
+      domain: string | null;
+      status: string;
+      enable_selection: boolean;
+      manual_lock: boolean;
+      team_limit: number | null;
+      assigned_count: number;
+    }>;
+    loading: boolean;
+  }>({
+    phase: "not_started",
+    readingStartedAt: null,
+    readingEndedAt: null,
+    selectionActivatedAt: null,
+    selectionActivatedBy: null,
+    items: [],
+    loading: false,
+  });
+
   // PDF Import dialog state
   const [pdfImportOpen, setPdfImportOpen] = useState(false);
   const [importingPdf, setImportingPdf] = useState(false);
+
+  // SIH Import dialog state
+  const [sihImportOpen, setSihImportOpen] = useState(false);
+
+  // Filter states for SIH fields
+  const [departmentFilter, setDepartmentFilter] = useState<string>("all");
+  const [categoryFilter, setCategoryFilter] = useState<string>("all");
+  const [sihYearFilter, setSihYearFilter] = useState<string>("all");
 
 
   const selectedActivity = useMemo(
@@ -475,16 +518,27 @@ export default function ContentHubClientView({
         if (statusFilter === "draft" && item.status === "published") {
           return false;
         }
+        if (departmentFilter !== "all" && (item.metadata?.department as string) !== departmentFilter) {
+          return false;
+        }
+        if (categoryFilter !== "all" && (item.metadata?.category as string) !== categoryFilter) {
+          return false;
+        }
+        if (sihYearFilter !== "all" && String(item.metadata?.sih_year ?? "") !== sihYearFilter) {
+          return false;
+        }
         if (!query) return true;
-        return (
-          item.title.toLowerCase().includes(query) ||
-          (item.summary?.toLowerCase().includes(query) ?? false) ||
-          (item.reference_number?.toLowerCase().includes(query) ?? false) ||
-          item.body.toLowerCase().includes(query)
-        );
+        const titleMatch = item.title.toLowerCase().includes(query);
+        const summaryMatch = (item.summary?.toLowerCase().includes(query)) ?? false;
+        const refMatch = (item.reference_number?.toLowerCase().includes(query)) ?? false;
+        const bodyMatch = item.body.toLowerCase().includes(query);
+        const sihPsMatch = ((item.metadata?.sih_ps_number as string)?.toLowerCase().includes(query)) ?? false;
+        const orgMatch = ((item.metadata?.organization as string)?.toLowerCase().includes(query)) ?? false;
+        const internalRefMatch = ((item.metadata?.internal_reference as string)?.toLowerCase().includes(query)) ?? false;
+        return titleMatch || summaryMatch || refMatch || bodyMatch || sihPsMatch || orgMatch || internalRefMatch;
       })
       .sort((a, b) => b.updated_at.localeCompare(a.updated_at));
-  }, [items, selectedActivity, search, statusFilter]);
+  }, [items, selectedActivity, search, statusFilter, departmentFilter, categoryFilter, sihYearFilter]);
 
   const filteredActivities = useMemo(() => {
     const query = search.toLowerCase().trim();
@@ -755,6 +809,117 @@ export default function ContentHubClientView({
       setNotification({
         type: "error",
         message: err instanceof Error ? err.message : "Failed to cancel activity timer.",
+      });
+    }
+  };
+
+  // ================================================================================
+  // Two-Phase Workflow Handlers
+  // ================================================================================
+
+  const fetchPhaseStatus = useCallback(async () => {
+    if (!selectedActivity) return;
+    setPhaseStatus((prev) => ({ ...prev, loading: true }));
+    try {
+      const res = await getPhaseStatus(selectedActivity.id);
+      if (res.success) {
+        setPhaseStatus({
+          phase: res.phase,
+          readingStartedAt: res.readingStartedAt,
+          readingEndedAt: res.readingEndedAt,
+          selectionActivatedAt: res.selectionActivatedAt,
+          selectionActivatedBy: res.selectionActivatedBy,
+          items: res.items,
+          loading: false,
+        });
+      } else {
+        setPhaseStatus((prev) => ({ ...prev, loading: false }));
+        setNotification({ type: "error", message: res.error || "Failed to load phase status." });
+      }
+    } catch (err) {
+      setPhaseStatus((prev) => ({ ...prev, loading: false }));
+      setNotification({
+        type: "error",
+        message: err instanceof Error ? err.message : "Failed to load phase status.",
+      });
+    }
+  }, [selectedActivity]);
+
+  useEffect(() => {
+    fetchPhaseStatus();
+  }, [fetchPhaseStatus]);
+
+  const handleStartReadingPhase = async () => {
+    if (!selectedActivity) return;
+    if (
+      !window.confirm(
+        "Start Reading Phase? This will publish all draft problem statements in this activity and make them visible to teams for reading only. Selection will remain disabled until you explicitly activate it."
+      )
+    ) {
+      return;
+    }
+    try {
+      const res = await startReadingPhase(selectedActivity.id);
+      if (res.success) {
+        setNotification({ type: "success", message: res.message });
+        await fetchPhaseStatus();
+      } else {
+        setNotification({ type: "error", message: res.error || "Failed to start reading phase." });
+      }
+    } catch (err) {
+      setNotification({
+        type: "error",
+        message: err instanceof Error ? err.message : "Failed to start reading phase.",
+      });
+    }
+  };
+
+  const handlePublishForSelection = async () => {
+    if (!selectedActivity) return;
+    if (
+      !window.confirm(
+        "Publish for Selection? This will enable team selection for all problem statements in this activity. Teams will be able to select and reserve problem statements."
+      )
+    ) {
+      return;
+    }
+    try {
+      const res = await publishForSelection(selectedActivity.id);
+      if (res.success) {
+        setNotification({ type: "success", message: res.message });
+        await fetchPhaseStatus();
+      } else {
+        setNotification({ type: "error", message: res.error || "Failed to publish for selection." });
+      }
+    } catch (err) {
+      setNotification({
+        type: "error",
+        message: err instanceof Error ? err.message : "Failed to publish for selection.",
+      });
+    }
+  };
+
+  const handleCloseSelection = async () => {
+    if (!selectedActivity) return;
+    if (
+      !window.confirm(
+        "Close Selection? This will disable team selection for all problem statements. Existing selections will be preserved but no new selections can be made."
+      )
+    ) {
+      return;
+    }
+    try {
+      const res = await closeSelection(selectedActivity.id);
+      if (res.success) {
+        setNotification({ type: "success", message: res.message });
+        await fetchPhaseStatus();
+      } else {
+        setNotification({ type: "error", message: res.error || "Failed to close selection." });
+      }
+    } catch (err) {
+      setNotification({
+        type: "error",
+        message: err instanceof Error ? err.message : "Failed to close selection.",
       });
     }
   };
@@ -1755,13 +1920,22 @@ export default function ContentHubClientView({
             </button>
 
             {selectedActivity.type === "problem_statements" && (
-              <button
-                onClick={() => setPdfImportOpen(true)}
-                className="inline-flex items-center justify-center gap-2 px-4 py-2.5 border border-accent-secondary/40 bg-accent-secondary/5 text-accent-secondary font-tech font-bold uppercase tracking-wider text-xs rounded transition-all hover:bg-accent-secondary/10"
-              >
-                <Import size={15} />
-                <span>Import from PDF</span>
-              </button>
+              <>
+                <button
+                  onClick={() => setPdfImportOpen(true)}
+                  className="inline-flex items-center justify-center gap-2 px-4 py-2.5 border border-accent-secondary/40 bg-accent-secondary/5 text-accent-secondary font-tech font-bold uppercase tracking-wider text-xs rounded transition-all hover:bg-accent-secondary/10"
+                >
+                  <Import size={15} />
+                  <span>Import from PDF</span>
+                </button>
+                <button
+                  onClick={() => setSihImportOpen(true)}
+                  className="inline-flex items-center justify-center gap-2 px-4 py-2.5 border border-accent-tertiary/40 bg-accent-tertiary/5 text-accent-tertiary font-tech font-bold uppercase tracking-wider text-xs rounded transition-all hover:bg-accent-tertiary/10"
+                >
+                  <BarChart2 size={15} />
+                  <span>Import SIH 2025</span>
+                </button>
+              </>
             )}
 
             {/* Bulk publish button – publishes all draft items in the current activity */}
@@ -1892,6 +2066,38 @@ export default function ContentHubClientView({
             <option value="published">Published</option>
             <option value="draft">Drafts</option>
           </select>
+          {selectedActivity?.type === "problem_statements" && (
+            <>
+              <select
+                value={departmentFilter}
+                onChange={(event) => setDepartmentFilter(event.target.value)}
+                className="bg-surface-color border border-border-color rounded text-xs text-text-primary px-3 py-2.5 outline-none focus:border-accent-secondary uppercase"
+              >
+                <option value="all">All Departments</option>
+                <option value="CSE / AIML">CSE / AIML</option>
+                <option value="Electronics and Communication">Electronics and Communication</option>
+                <option value="Mechanical">Mechanical</option>
+                <option value="Civil">Civil</option>
+              </select>
+              <select
+                value={categoryFilter}
+                onChange={(event) => setCategoryFilter(event.target.value)}
+                className="bg-surface-color border border-border-color rounded text-xs text-text-primary px-3 py-2.5 outline-none focus:border-accent-secondary uppercase"
+              >
+                <option value="all">All Categories</option>
+                <option value="Software">Software</option>
+                <option value="Hardware">Hardware</option>
+              </select>
+              <select
+                value={sihYearFilter}
+                onChange={(event) => setSihYearFilter(event.target.value)}
+                className="bg-surface-color border border-border-color rounded text-xs text-text-primary px-3 py-2.5 outline-none focus:border-accent-secondary uppercase"
+              >
+                <option value="all">All Years</option>
+                <option value="2025">2025</option>
+              </select>
+            </>
+          )}
         </div>
 
         {activityItems.length === 0 ? (
@@ -1944,6 +2150,31 @@ export default function ContentHubClientView({
                     <div className="flex flex-wrap gap-3 text-[10px] text-text-secondary font-mono">
                       {item.reference_number && <span>{item.reference_number}</span>}
                       {item.domain && <span>Domain: {item.domain}</span>}
+                      {(item.metadata?.sih_ps_number as string) && (
+                        <span className="text-accent-secondary">SIH: {item.metadata?.sih_ps_number as string}</span>
+                      )}
+                      {(item.metadata?.internal_reference as string) && (
+                        <span className="text-accent-tertiary">{item.metadata?.internal_reference as string}</span>
+                      )}
+                      {(item.metadata?.department as string) && (
+                        <span className="px-1.5 py-0.5 bg-accent-secondary/10 border border-accent-secondary/30 rounded text-[9px]">
+                          {item.metadata?.department as string}
+                        </span>
+                      )}
+                      {(item.metadata?.category as string) && (
+                        <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
+                          (item.metadata?.category as string) === "Software"
+                            ? "bg-status-success/10 text-status-success border-status-success/30"
+                            : "bg-accent-primary/10 text-accent-primary border-accent-primary/30"
+                        }`}>
+                          {item.metadata?.category as string}
+                        </span>
+                      )}
+                      {(item.metadata?.organization as string) && (
+                        <span className="text-text-secondary/60 truncate max-w-[200px]">
+                          {item.metadata?.organization as string}
+                        </span>
+                      )}
                       <span>
                         <Paperclip size={10} className="inline mr-1" />
                         {item.files.length} file{item.files.length === 1 ? "" : "s"}
@@ -2478,6 +2709,151 @@ export default function ContentHubClientView({
           >
             Dismiss
           </button>
+        </div>
+      )}
+
+      {/* Two-Phase Workflow Status & Controls */}
+      {selectedActivity && (
+        <div className="border border-border-color rounded-lg bg-surface-color/40 p-4 mb-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
+            <div>
+              <p className="font-tech text-xs uppercase tracking-[2px] text-text-secondary font-bold mb-1">
+                Two-Phase Release Workflow
+              </p>
+              <h3 className="font-heading text-lg text-text-primary uppercase m-0">
+                Activity: {selectedActivity.title}
+              </h3>
+            </div>
+            <div className="flex items-center gap-3">
+              <span
+                className={`px-3 py-1 rounded text-[10px] font-bold uppercase tracking-wider ${
+                  phaseStatus.phase === "not_started"
+                    ? "bg-surface-color-light text-text-secondary border border-border-color"
+                    : phaseStatus.phase === "reading"
+                    ? "bg-accent-secondary/15 text-accent-secondary border border-accent-secondary/40"
+                    : phaseStatus.phase === "selection"
+                    ? "bg-status-success/15 text-status-success border border-status-success/40"
+                    : "bg-status-error/15 text-status-error border border-status-error/40"
+                }`}
+              >
+                {phaseStatus.phase.replace(/_/g, " ").toUpperCase()}
+              </span>
+              {phaseStatus.selectionActivatedAt && (
+                <span className="px-3 py-1 rounded text-[10px] font-mono text-text-secondary/60 border border-border-color/40">
+                  Activated: {new Date(phaseStatus.selectionActivatedAt).toLocaleString()}
+                </span>
+              )}
+            </div>
+          </div>
+
+          {/* Phase Controls */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            {phaseStatus.phase === "not_started" && (
+              <button
+                type="button"
+                onClick={handleStartReadingPhase}
+                disabled={phaseStatus.loading}
+                className="px-4 py-2.5 border border-accent-secondary/40 bg-accent-secondary/5 text-accent-secondary font-tech font-bold uppercase tracking-wider text-xs rounded hover:bg-accent-secondary/10 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                <Clock3 size={14} />
+                <span>Start Reading Phase</span>
+              </button>
+            )}
+            {phaseStatus.phase === "reading" && (
+              <button
+                type="button"
+                onClick={handlePublishForSelection}
+                disabled={phaseStatus.loading}
+                className="px-4 py-2.5 bg-gradient-to-r from-accent-secondary to-accent-primary text-black font-tech font-bold uppercase tracking-wider text-xs rounded hover:opacity-90 shadow-[0_0_15px_rgba(255,0,127,0.3)] transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                <Send size={14} />
+                <span>Publish for Selection</span>
+              </button>
+            )}
+            {phaseStatus.phase === "selection" && (
+              <button
+                type="button"
+                onClick={handleCloseSelection}
+                disabled={phaseStatus.loading}
+                className="px-4 py-2.5 border border-status-error/40 bg-status-error/5 text-status-error font-tech font-bold uppercase tracking-wider text-xs rounded hover:bg-status-error/10 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                <Lock size={14} />
+                <span>Close Selection</span>
+              </button>
+            )}
+            {phaseStatus.phase === "closed" && (
+              <button
+                type="button"
+                onClick={handlePublishForSelection}
+                disabled={phaseStatus.loading}
+                className="px-4 py-2.5 border border-accent-secondary/40 bg-accent-secondary/5 text-accent-secondary font-tech font-bold uppercase tracking-wider text-xs rounded hover:bg-accent-secondary/10 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                <Send size={14} />
+                <span>Re-open Selection</span>
+              </button>
+            )}
+          </div>
+
+          {/* Phase Details */}
+          {phaseStatus.items.length > 0 && (
+            <div className="mt-4">
+              <p className="font-tech text-xs uppercase tracking-[2px] text-text-secondary font-bold mb-2">
+                Problem Statements ({phaseStatus.items.length})
+              </p>
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs border-collapse">
+                  <thead>
+                    <tr className="border-b border-border-color bg-surface-color-light/40">
+                      <th className="p-2 text-text-secondary font-bold uppercase">Title</th>
+                      <th className="p-2 text-text-secondary font-bold uppercase">Domain</th>
+                      <th className="p-2 text-text-secondary font-bold uppercase">Status</th>
+                      <th className="p-2 text-text-secondary font-bold uppercase text-center">Selection</th>
+                      <th className="p-2 text-text-secondary font-bold uppercase text-center">Allocated</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border-color/50">
+                    {phaseStatus.items.map((item) => (
+                      <tr key={item.id} className="hover:bg-surface-color/30 transition-colors">
+                        <td className="p-2 text-text-primary font-mono">{item.title}</td>
+                        <td className="p-2 text-text-secondary">
+                          {item.domain || "—"}
+                        </td>
+                        <td className="p-2">
+                          <span
+                            className={`px-2 py-0.5 rounded text-[9px] font-bold uppercase ${
+                              item.enable_selection
+                                ? "bg-status-success/15 text-status-success border border-status-success/40"
+                                : item.manual_lock
+                                ? "bg-status-error/15 text-status-error border border-status-error/40"
+                                : "bg-surface-color-light text-text-secondary border border-border-color/40"
+                            }`}
+                          >
+                            {item.enable_selection ? "Open" : item.manual_lock ? "Locked" : "Closed"}
+                          </span>
+                        </td>
+                        <td className="p-2 text-center">
+                          <span
+                            className={`px-2 py-0.5 rounded text-[9px] font-bold uppercase ${
+                              item.enable_selection && !item.manual_lock
+                                ? "bg-status-success/10 text-status-success"
+                                : "bg-surface-color-light text-text-secondary"
+                            }`}
+                          >
+                            {item.enable_selection ? "Enabled" : "Disabled"}
+                          </span>
+                        </td>
+                        <td className="p-2 text-center">
+                          <span className="text-text-primary font-mono">
+                            {item.assigned_count} / {item.team_limit || "∞"}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -3839,6 +4215,16 @@ export default function ContentHubClientView({
           activityId={selectedActivity?.id || ""}
           onImportComplete={handlePdfImportComplete}
           onClose={() => setPdfImportOpen(false)}
+        />
+      )}
+
+      {sihImportOpen && (
+        <SIHImportDialog
+          onImportComplete={() => {
+            setSihImportOpen(false);
+            window.location.reload();
+          }}
+          onClose={() => setSihImportOpen(false)}
         />
       )}
 

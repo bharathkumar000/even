@@ -95,7 +95,7 @@ export interface ContentHubData {
 export interface ProblemStatementRow {
   timer_end_time?: string | null;
   timer_auto_publish?: boolean | null;
-  timer_timezone?: string | null;
+  publication_timezone?: string | null;
   id: string;
   reference_number: string | null;
   title: string;
@@ -108,6 +108,14 @@ export interface ProblemStatementRow {
   manual_lock?: boolean;
   selection_opening?: string | null;
   selection_closing?: string | null;
+  // SIH 2025 Problem Statement fields
+  sih_ps_number?: string | null;
+  organization?: string | null;
+  theme?: string | null;
+  category?: string | null;
+  department?: string | null;
+  internal_reference?: string | null;
+  sih_year?: number | null;
   resource_links: unknown;
   attachments: unknown;
   display_order: number | null;
@@ -368,7 +376,16 @@ function buildItem(
       selection_opening: row.selection_opening ?? null,
       selection_closing: row.selection_closing ?? null,
       status: normalizeStatus(row.status),
-      metadata: marker?.metadata || {},
+      metadata: {
+        ...(marker?.metadata || {}),
+        sih_ps_number: row.sih_ps_number,
+        organization: row.organization,
+        theme: row.theme,
+        category: row.category,
+        department: row.department,
+        internal_reference: row.internal_reference,
+        sih_year: row.sih_year,
+      },
       files: getHubFiles(row.attachments),
       created_at: row.created_at,
       updated_at: row.updated_at,

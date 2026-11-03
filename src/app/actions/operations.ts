@@ -1417,9 +1417,18 @@ export async function processAutomatedScan(params: {
     };
   }
 
-  // Record action for each unclaimed member
+  // For lunch and snacks, claim exactly ONE unclaimed member per scan so that
+  // the same team QR can be scanned up to 3 times per distribution type.
+  // For all other action types, claim all unclaimed members (existing behaviour).
+  const isSingleMemberDistribution =
+    params.actionType === "lunch" || params.actionType === "snacks";
+  const membersToClaim = isSingleMemberDistribution
+    ? unclaimedMembers.slice(0, 1)
+    : unclaimedMembers;
+
+  // Record action for each member to claim
   const baseCorrelationId = crypto.randomUUID();
-  const insertPayloads = unclaimedMembers.map((m) => ({
+  const insertPayloads = membersToClaim.map((m) => ({
     team_id: team.id,
     participant_id: m.user_id,
     action_type: params.actionType,
@@ -1472,11 +1481,12 @@ export async function processAutomatedScan(params: {
           team_id: team.id,
           team_name: team.name,
           action_type: params.actionType,
-          claimed_count: unclaimedMembers.length,
-          unclaimed_members: unclaimedMembers.map((m) => ({
+          claimed_count: membersToClaim.length,
+          unclaimed_members: membersToClaim.map((m) => ({
             id: m.user_id,
             name: m.name,
           })),
+          single_member_mode: isSingleMemberDistribution,
         },
         created_at: nowIso,
       },
@@ -1489,7 +1499,7 @@ export async function processAutomatedScan(params: {
     success: true,
     status: "success",
     action_type: params.actionType,
-    message: `SUCCESS: ${params.actionType.toUpperCase()} recorded for ${unclaimedMembers.length} member(s) of "${team.name}"!`,
+    message: `SUCCESS: ${params.actionType.toUpperCase()} recorded for ${membersToClaim.length} member(s) of "${team.name}"!`,
     team: {
       id: team.id,
       name: team.name,
@@ -1497,7 +1507,7 @@ export async function processAutomatedScan(params: {
       track: team.track,
       leader_name: team.leader_name,
     },
-    claimedCount: unclaimedMembers.length,
+    claimedCount: membersToClaim.length,
     totalMembers: members.length,
     teamData,
   };

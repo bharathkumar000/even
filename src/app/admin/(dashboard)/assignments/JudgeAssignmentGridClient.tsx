@@ -36,6 +36,8 @@ interface ConfirmDialog {
   title: string;
   message: string;
   onConfirm: () => void | Promise<void>;
+  judgeName?: string;
+  teamName?: string;
 }
 
 export default function JudgeAssignmentGridClient({
@@ -107,9 +109,11 @@ export default function JudgeAssignmentGridClient({
   const openConfirm = (
     title: string,
     message: string,
-    onConfirm: () => void | Promise<void>
+    onConfirm: () => void | Promise<void>,
+    judgeName?: string,
+    teamName?: string
   ) => {
-    setConfirm({ open: true, title, message, onConfirm });
+    setConfirm({ open: true, title, message, onConfirm, judgeName, teamName });
   };
 
   /* ---------------------------------------------------------------- ASSIGN */
@@ -144,15 +148,18 @@ export default function JudgeAssignmentGridClient({
   const handleRemove = async (teamId: string, slot: Slot, judgeId: string) => {
     const row = rows.find((r) => r.team_id === teamId);
     if (!row) return;
+    const judgeName = row.judge_1_id === judgeId ? row.judge_1_name : row.judge_2_name;
     const hasEval = slot === 1 ? Boolean(row.judge_1_evaluation_id) : Boolean(row.judge_2_evaluation_id);
     if (hasEval) {
       openConfirm(
         "Remove judge with existing evaluation?",
-        "This judge already has an evaluation on this team. Removing the assignment will preserve the evaluation history but the judge will no longer be assigned. Continue?",
+        `Removing "${judgeName || "Judge"}" from "${row.team_name}" will preserve the evaluation history. Continue?`,
         async () => {
           setConfirm(null);
           await performRemove(teamId, slot, judgeId);
-        }
+        },
+        judgeName || "Judge",
+        row.team_name
       );
       return;
     }
@@ -668,6 +675,15 @@ export default function JudgeAssignmentGridClient({
             <p className="text-text-secondary text-xs mb-6 font-mono leading-relaxed">
               {confirm.message}
             </p>
+            {confirm.judgeName && confirm.teamName && (
+              <div className="flex items-center gap-2 mb-4 p-3 bg-surface-color/30 border border-border-color rounded text-xs font-mono">
+                <span className="font-bold uppercase">Judge:</span>
+                <span>{confirm.judgeName}</span>
+                <span className="mx-1">•</span>
+                <span className="font-bold uppercase">Team:</span>
+                <span>{confirm.teamName}</span>
+              </div>
+            )}
             <div className="flex justify-end gap-2">
               <button
                 onClick={() => setConfirm(null)}
