@@ -242,7 +242,7 @@ export default function EvaluateClientView({
         throw new Error("Cannot submit evaluation without scoring criteria");
       }
 
-      await saveOrSubmitEvaluation({
+      const res = await saveOrSubmitEvaluation({
         round_id: activeRound.id,
         team_id: teamId,
         scores: scoreItems,
@@ -250,6 +250,11 @@ export default function EvaluateClientView({
         is_draft: isDraft,
         ...withCsrfToken(),
       });
+
+      if (!res.success) {
+        setErrorMsg(res.error || "Failed to process evaluation");
+        return;
+      }
 
       if (!isDraft) {
         await deleteOfflineDraft(draftKey);
@@ -262,7 +267,12 @@ export default function EvaluateClientView({
           : "Evaluation officially submitted and recorded!"
       );
     } catch (err: unknown) {
-      setErrorMsg(err instanceof Error ? err.message : "Failed to process evaluation");
+      const msg = err instanceof Error ? err.message : String(err || "");
+      if (msg.includes("441") || msg.includes("Server Components render")) {
+        setErrorMsg("Server error processing evaluation. Please verify your judge assignment and network connection.");
+      } else {
+        setErrorMsg(msg || "Failed to process evaluation");
+      }
     } finally {
       setLoading(false);
     }
