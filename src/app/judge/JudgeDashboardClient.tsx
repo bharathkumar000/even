@@ -209,7 +209,7 @@ export default function JudgeDashboardClient({
                     <FileCheck size={15} />
                     <span>Evaluation</span>
                   </div>
-                  <Link href={`/judge/evaluate/${team.name ? slugify(team.name) : team.id}`} className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-accent-primary hover:bg-accent-primary/80 text-black font-tech font-bold uppercase text-xs transition-colors">
+                  <Link href={`/judge/evaluate/${team.name ? slugify(team.name) : team.id}${selectedRound?.id ? `?round=${selectedRound.id}` : ""}`} className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-accent-primary hover:bg-accent-primary/80 text-black font-tech font-bold uppercase text-xs transition-colors">
                     <span>Evaluate</span>
                     <ArrowRight size={14} />
                   </Link>
