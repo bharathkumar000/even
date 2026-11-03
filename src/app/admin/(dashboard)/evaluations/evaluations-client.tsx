@@ -20,6 +20,7 @@ import {
   getEvaluationDetails,
   type TeamEvaluationRecord,
 } from "@/app/actions/admin-evaluations";
+import { withCsrfToken } from "@/lib/csrf-client";
 
 export interface RoundItem {
   id: string;
@@ -200,25 +201,24 @@ export default function EvaluationsClientView({
     setOverrideLoading(true);
     setFeedback(null);
     try {
-      const csrfToken = document.cookie
-        .split("; ")
-        .find((row) => row.startsWith("csrf_token="))
-        ?.split("=")[1];
-
       const evalId = overrideTarget.judge1_evaluation_id || overrideTarget.judge2_evaluation_id;
       if (!evalId) throw new Error("No evaluation to override");
 
-      await overrideEvaluationStatus({
+      const res = await overrideEvaluationStatus({
         evaluation_id: evalId,
         status: targetStatus,
         reason: overrideReason,
-        [csrfToken ? "x-csrf-token" : ""]: csrfToken || "",
+        ...withCsrfToken(),
       });
+
+      if (!res.success) {
+        throw new Error(res.error || "Failed to override evaluation");
+      }
 
       setTeams((prev) =>
         prev.map((t) =>
           t.team_id === overrideTarget!.team_id
-            ? { ...t, evaluation_status: targetStatus }
+            ? { ...t, overall_status: targetStatus === "submitted" ? "Fully Evaluated" : targetStatus }
             : t
         )
       );

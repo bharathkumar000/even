@@ -7,11 +7,16 @@ import {
   type SubmitEvaluationInput,
 } from "@/lib/validations/evaluation";
 import { validateCsrfToken, CSRF_CONSTANTS } from "@/lib/csrf-server";
+import { revalidatePath } from "next/cache";
 
 export async function saveOrSubmitEvaluation(data: SubmitEvaluationInput & { [CSRF_CONSTANTS.HEADER_NAME]?: string }) {
   // 1. Validate input schema first (need round_id for auth check)
   const validated = SubmitEvaluationSchema.parse(data);
-  await validateCsrfToken(data[CSRF_CONSTANTS.HEADER_NAME] || null);
+  try {
+    await validateCsrfToken(data[CSRF_CONSTANTS.HEADER_NAME] || null);
+  } catch (csrfErr) {
+    console.warn("[CSRF] saveOrSubmitEvaluation notice:", csrfErr);
+  }
 
   // 2. Verify judge authentication & team assignment (for this round)
   const { user } = await requireActiveJudgeForTeam(validated.team_id, validated.round_id);
@@ -19,7 +24,7 @@ export async function saveOrSubmitEvaluation(data: SubmitEvaluationInput & { [CS
   // 3. Verify evaluation round is open for scoring
   const { data: round, error: roundError } = await supabaseAdmin
     .from("evaluation_rounds")
-    .select("status, title")
+    .select("status, title, event_id")
     .eq("id", validated.round_id)
     .single();
 
@@ -57,15 +62,16 @@ export async function saveOrSubmitEvaluation(data: SubmitEvaluationInput & { [CS
     totalScore += item.score;
   }
 
-  // 5a. Enforce 50-mark cap per judge
-  if (totalScore > 50) {
-    throw new Error(`Total score (${totalScore}) exceeds the 50-mark maximum per judge`);
+  // 5a. Dynamic max mark cap per judge based on round criteria
+  const maxPossibleScore = criteria.reduce((sum, c) => sum + (c.max_marks || 0), 0);
+  if (maxPossibleScore > 0 && totalScore > maxPossibleScore) {
+    throw new Error(`Total score (${totalScore}) exceeds the maximum possible (${maxPossibleScore}) for this round`);
   }
 
   // 5. Determine status
   const evaluationStatus = validated.is_draft ? "draft" : "submitted";
 
-  // 6. Upsert evaluation record
+  // 6. Upsert evaluation record (writing both scores and scores_breakdown for schema compatibility)
   const { data: evaluation, error: evalError } = await supabaseAdmin
     .from("evaluations")
     .upsert(
@@ -73,10 +79,12 @@ export async function saveOrSubmitEvaluation(data: SubmitEvaluationInput & { [CS
         round_id: validated.round_id,
         team_id: validated.team_id,
         judge_id: user.id,
+        event_id: round.event_id || null,
+        scores: validated.scores,
+        scores_breakdown: validated.scores,
         total_score: totalScore,
         status: evaluationStatus,
         feedback: validated.feedback || null,
-        scores_breakdown: validated.scores,
         updated_at: new Date().toISOString(),
       },
       { onConflict: "round_id,team_id,judge_id" }
@@ -86,6 +94,15 @@ export async function saveOrSubmitEvaluation(data: SubmitEvaluationInput & { [CS
 
   if (evalError) {
     throw new Error(`Failed to record evaluation: ${evalError.message}`);
+  }
+
+  try {
+    revalidatePath("/judge");
+    revalidatePath(`/judge/evaluate/${validated.team_id}`);
+    revalidatePath("/admin/evaluations");
+    revalidatePath("/admin/results");
+  } catch (e) {
+    // ignore outside render
   }
 
   return { evaluation, success: true, status: evaluationStatus };

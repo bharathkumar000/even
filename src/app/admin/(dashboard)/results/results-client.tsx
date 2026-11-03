@@ -1,13 +1,15 @@
 "use client";
 
-import { useState } from "react";
-import { RefreshCw, Globe, Lock, ShieldCheck, CheckCircle2 } from "lucide-react";
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { RefreshCw, Globe, Lock, ShieldCheck, CheckCircle2, AlertCircle } from "lucide-react";
 import { triggerResultsEngine } from "@/app/actions/admin-results";
 import { withCsrfToken } from "@/lib/csrf-client";
 
 export interface ResultItem {
   id: string;
   team_id?: string;
+  team_name?: string | null;
   rank?: number | null;
   total_score?: number | null;
   evaluations_count?: number | null;
@@ -27,11 +29,19 @@ export default function ResultsClientView({
   initialIsPublished: boolean;
   initialIsLocked: boolean;
 }) {
-  const [results] = useState(initialResults);
+  const router = useRouter();
+  const [results, setResults] = useState(initialResults);
   const [isPublished, setIsPublished] = useState(initialIsPublished);
   const [isLocked, setIsLocked] = useState(initialIsLocked);
   const [loadingAction, setLoadingAction] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<string | null>(null);
+  const [feedbackType, setFeedbackType] = useState<"success" | "error">("success");
+
+  useEffect(() => {
+    setResults(initialResults);
+    setIsPublished(initialIsPublished);
+    setIsLocked(initialIsLocked);
+  }, [initialResults, initialIsPublished, initialIsLocked]);
 
   const [olympicMode, setOlympicMode] = useState(false);
   const [calibrationMode, setCalibrationMode] = useState(false);
@@ -115,13 +125,20 @@ export default function ResultsClientView({
     setLoadingAction(action);
     setFeedback(null);
     try {
-      await triggerResultsEngine({
+      const res = await triggerResultsEngine({
         event_id: eventId,
         action,
         olympic: action === "recalculate" ? olympicMode : undefined,
         ...withCsrfToken(),
       });
 
+      if (!res.success) {
+        setFeedback(res.error || "Failed to trigger results action.");
+        setFeedbackType("error");
+        return;
+      }
+
+      setFeedbackType("success");
       if (action === "publish") {
         setIsPublished(true);
         setFeedback("Official results published successfully.");
@@ -135,8 +152,10 @@ export default function ResultsClientView({
             : "Results recalculated across active evaluations."
         );
       }
+      router.refresh();
     } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : "Failed to trigger results action");
+      setFeedback(err instanceof Error ? err.message : "Failed to trigger results action");
+      setFeedbackType("error");
     } finally {
       setLoadingAction(null);
     }
@@ -145,8 +164,14 @@ export default function ResultsClientView({
   return (
     <div className="space-y-6">
       {feedback && (
-        <div className="p-3 bg-status-success/10 border border-status-success text-status-success text-xs font-tech flex items-center gap-2">
-          <CheckCircle2 size={16} />
+        <div
+          className={`p-3 border text-xs font-tech flex items-center gap-2 ${
+            feedbackType === "success"
+              ? "bg-status-success/10 border-status-success text-status-success"
+              : "bg-status-error/10 border-status-error text-status-error"
+          }`}
+        >
+          {feedbackType === "success" ? <CheckCircle2 size={16} /> : <AlertCircle size={16} />}
           <span>{feedback}</span>
         </div>
       )}
@@ -274,7 +299,7 @@ export default function ResultsClientView({
                       #{idx + 1}
                     </td>
                     <td className="p-3 text-text-primary font-medium">
-                      {r.team_id || "Team Alpha"}
+                      {r.team_name || r.team_id || "Team Alpha"}
                     </td>
                     <td className="p-3 text-text-secondary">
                       {r.evaluations_count || 1} submitted
