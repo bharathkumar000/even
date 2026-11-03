@@ -93,9 +93,11 @@ const statusBadgeStyles: Record<
 export default function RoundsClientView({
   initialRounds,
   initialCriteria,
+  initialEvents,
 }: {
   initialRounds: AdminRoundItem[];
   initialCriteria: AdminCriterionItem[];
+  initialEvents?: { id: string; title: string }[];
 }) {
   const [rounds, setRounds] = useState<AdminRoundItem[]>(
     [...initialRounds].sort((a, b) => a.sequence_order - b.sequence_order)
@@ -107,31 +109,38 @@ export default function RoundsClientView({
     rounds[0]?.id || ""
   );
 
+  const fallbackEventId = initialEvents?.[0]?.id || "11111111-1111-1111-1111-111111111111";
+
   // Modals
   const [isRoundModalOpen, setIsRoundModalOpen] = useState(false);
   const [editingRound, setEditingRound] = useState<AdminRoundItem | null>(null);
   const [roundTitle, setRoundTitle] = useState("");
   const [roundOrder, setRoundOrder] = useState<number>(rounds.length + 1);
   const [roundStatus, setRoundStatus] = useState<RoundStatus>("draft");
-  const [roundEventId, setRoundEventId] = useState("");
-  const [events, setEvents] = useState<{ id: string; title: string }[]>([]);
+  const [roundEventId, setRoundEventId] = useState(fallbackEventId);
+  const [events, setEvents] = useState<{ id: string; title: string }[]>(
+    initialEvents && initialEvents.length > 0
+      ? initialEvents
+      : [{ id: fallbackEventId, title: "IVC Hackathon 2026" }]
+  );
 
-  // Fetch events for dropdown
+  // Fallback fetch if initialEvents was empty
   useEffect(() => {
-    const fetchEvents = async () => {
-      try {
-        const eventsData = await getEventsForDropdown();
-        setEvents(eventsData);
-        if (eventsData.length > 0 && !roundEventId) {
-          setRoundEventId(eventsData[0].id);
+    if (!initialEvents || initialEvents.length === 0) {
+      const fetchEvents = async () => {
+        try {
+          const eventsData = await getEventsForDropdown();
+          if (eventsData.length > 0) {
+            setEvents(eventsData);
+            setRoundEventId((prev) => (!prev || prev === fallbackEventId ? eventsData[0].id : prev));
+          }
+        } catch (err) {
+          console.error("Failed to load events:", err);
         }
-      } catch (err) {
-        console.error("Failed to load events:", err);
-      }
-    };
-    fetchEvents();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+      };
+      void fetchEvents();
+    }
+  }, [initialEvents, fallbackEventId]);
 
   const [isCriterionModalOpen, setIsCriterionModalOpen] = useState(false);
   const [editingCriterion, setEditingCriterion] = useState<AdminCriterionItem | null>(null);
@@ -174,9 +183,8 @@ export default function RoundsClientView({
     setRoundTitle("");
     setRoundOrder(rounds.length + 1);
     setRoundStatus("draft");
-    if (events.length > 0 && !roundEventId) {
-      setRoundEventId(events[0].id);
-    }
+    const chosenEv = roundEventId || events[0]?.id || fallbackEventId;
+    setRoundEventId(chosenEv);
     setIsRoundModalOpen(true);
   };
 
@@ -213,19 +221,33 @@ export default function RoundsClientView({
           )
           .sort((a, b) => a.sequence_order - b.sequence_order)
       );
-      setNotification({
-        type: "success",
-        message: `Round "${titleToSave}" updated.`,
-      });
 
       try {
-        await updateRound(originalRound.id, {
+        const res = await updateRound(originalRound.id, {
           title: titleToSave,
           sequence_order: orderToSave,
           status: statusToSave,
           ...withCsrfToken(),
         });
+        if (res.success) {
+          setNotification({
+            type: "success",
+            message: `Round "${titleToSave}" updated.`,
+          });
+        } else {
+          // Revert optimistic update
+          setRounds((prev) =>
+            prev.map((r) => (r.id === originalRound.id ? originalRound : r))
+          );
+          setNotification({
+            type: "error",
+            message: res.error || "Failed to update round.",
+          });
+        }
       } catch (err: unknown) {
+        setRounds((prev) =>
+          prev.map((r) => (r.id === originalRound.id ? originalRound : r))
+        );
         setNotification({
           type: "error",
           message: err instanceof Error ? err.message : "Failed to save round.",
@@ -233,12 +255,13 @@ export default function RoundsClientView({
       }
     } else {
       const tempId = crypto.randomUUID();
+      const targetEvId = roundEventId || events[0]?.id || fallbackEventId;
       const newObj: AdminRoundItem = {
         id: tempId,
         title: titleToSave,
         sequence_order: orderToSave,
         status: statusToSave,
-        event_id: roundEventId,
+        event_id: targetEvId,
       };
 
       // Optimistic update
@@ -246,26 +269,40 @@ export default function RoundsClientView({
         [...prev, newObj].sort((a, b) => a.sequence_order - b.sequence_order)
       );
       setSelectedRoundId(tempId);
-      setNotification({
-        type: "success",
-        message: `Round "${titleToSave}" created.`,
-      });
 
       try {
-        const created = await createRound({
+        const res = await createRound({
           title: titleToSave,
           sequence_order: orderToSave,
           status: statusToSave,
-          event_id: roundEventId,
+          event_id: targetEvId,
           ...withCsrfToken(),
         });
-        if (created?.id) {
+
+        if (res.success && (res.round || res.id)) {
+          const createdRound = res.round || res;
+          const realId = createdRound.id;
           setRounds((prev) =>
-            prev.map((r) => (r.id === tempId ? { ...r, id: created.id } : r))
+            prev.map((r) => (r.id === tempId ? { ...r, id: realId, event_id: targetEvId } : r))
           );
-          setSelectedRoundId(created.id);
+          setSelectedRoundId(realId);
+          setNotification({
+            type: "success",
+            message: `Round "${titleToSave}" created successfully.`,
+          });
+        } else {
+          // Revert optimistic addition on failure!
+          setRounds((prev) => prev.filter((r) => r.id !== tempId));
+          setSelectedRoundId(rounds[0]?.id || "");
+          setNotification({
+            type: "error",
+            message: res.error || "Failed to create round.",
+          });
         }
       } catch (err: unknown) {
+        // Revert optimistic addition on failure!
+        setRounds((prev) => prev.filter((r) => r.id !== tempId));
+        setSelectedRoundId(rounds[0]?.id || "");
         setNotification({
           type: "error",
           message: err instanceof Error ? err.message : "Failed to create round.",
@@ -294,8 +331,22 @@ export default function RoundsClientView({
     });
 
     try {
-      await deleteRound(target.id, withCsrfToken()[CSRF_HEADER_NAME] || undefined);
+      const res = await deleteRound(target.id, withCsrfToken()[CSRF_HEADER_NAME] || undefined);
+      if (res.success) {
+        setNotification({
+          type: "success",
+          message: `Round "${target.title}" and its criteria deleted.`,
+        });
+      } else {
+        // Rollback
+        setRounds((prev) => [...prev, target].sort((a, b) => a.sequence_order - b.sequence_order));
+        setNotification({
+          type: "error",
+          message: res.error || "Failed to delete round.",
+        });
+      }
     } catch (err: unknown) {
+      setRounds((prev) => [...prev, target].sort((a, b) => a.sequence_order - b.sequence_order));
       setNotification({
         type: "error",
         message: err instanceof Error ? err.message : "Failed to delete round.",
@@ -304,17 +355,35 @@ export default function RoundsClientView({
   };
 
   const handleStatusChange = async (roundId: string, nextStatus: RoundStatus) => {
+    const originalRound = rounds.find((r) => r.id === roundId);
     setRounds((prev) =>
       prev.map((r) => (r.id === roundId ? { ...r, status: nextStatus } : r))
     );
 
     try {
-      await updateRoundStatus(roundId, nextStatus, withCsrfToken()[CSRF_HEADER_NAME] || undefined);
-      setNotification({
-        type: "success",
-        message: `Status updated to ${nextStatus.toUpperCase()}.`,
-      });
+      const res = await updateRoundStatus(roundId, nextStatus, withCsrfToken()[CSRF_HEADER_NAME] || undefined);
+      if (res.success) {
+        setNotification({
+          type: "success",
+          message: `Status updated to ${nextStatus.toUpperCase()}.`,
+        });
+      } else {
+        if (originalRound) {
+          setRounds((prev) =>
+            prev.map((r) => (r.id === roundId ? originalRound : r))
+          );
+        }
+        setNotification({
+          type: "error",
+          message: res.error || "Failed to update round status.",
+        });
+      }
     } catch (err: unknown) {
+      if (originalRound) {
+        setRounds((prev) =>
+          prev.map((r) => (r.id === roundId ? originalRound : r))
+        );
+      }
       setNotification({
         type: "error",
         message: err instanceof Error ? err.message : "Failed to update round status.",
@@ -356,6 +425,7 @@ export default function RoundsClientView({
 
     if (editingCriterion) {
       const origId = editingCriterion.id;
+      const origItem = editingCriterion;
       // Optimistic update
       setCriteria((prev) =>
         prev.map((c) =>
@@ -370,20 +440,29 @@ export default function RoundsClientView({
             : c
         )
       );
-      setNotification({
-        type: "success",
-        message: `Criterion "${titleToSave}" updated.`,
-      });
 
       try {
-        await updateCriterion(origId, {
+        const res = await updateCriterion(origId, {
           title: titleToSave,
           description: descToSave,
           max_marks: maxMarksToSave,
           is_required: requiredToSave,
           ...withCsrfToken(),
         });
+        if (res.success) {
+          setNotification({
+            type: "success",
+            message: `Criterion "${titleToSave}" updated.`,
+          });
+        } else {
+          setCriteria((prev) => prev.map((c) => (c.id === origId ? origItem : c)));
+          setNotification({
+            type: "error",
+            message: res.error || "Failed to update criterion.",
+          });
+        }
       } catch (err: unknown) {
+        setCriteria((prev) => prev.map((c) => (c.id === origId ? origItem : c)));
         setNotification({
           type: "error",
           message: err instanceof Error ? err.message : "Failed to save criterion.",
@@ -402,13 +481,9 @@ export default function RoundsClientView({
 
       // Optimistic add
       setCriteria((prev) => [...prev, newObj]);
-      setNotification({
-        type: "success",
-        message: `Criterion "${titleToSave}" added.`,
-      });
 
       try {
-        const created = await createCriterion({
+        const res = await createCriterion({
           round_id: selectedRoundId,
           title: titleToSave,
           description: descToSave,
@@ -416,12 +491,24 @@ export default function RoundsClientView({
           is_required: requiredToSave,
           ...withCsrfToken(),
         });
-        if (created?.id) {
+        if (res.success && (res.criterion || res.id)) {
+          const realId = res.criterion?.id || res.id;
           setCriteria((prev) =>
-            prev.map((c) => (c.id === tempId ? { ...c, id: created.id } : c))
+            prev.map((c) => (c.id === tempId ? { ...c, id: realId } : c))
           );
+          setNotification({
+            type: "success",
+            message: `Criterion "${titleToSave}" added.`,
+          });
+        } else {
+          setCriteria((prev) => prev.filter((c) => c.id !== tempId));
+          setNotification({
+            type: "error",
+            message: res.error || "Failed to add criterion.",
+          });
         }
       } catch (err: unknown) {
+        setCriteria((prev) => prev.filter((c) => c.id !== tempId));
         setNotification({
           type: "error",
           message: err instanceof Error ? err.message : "Failed to save criterion.",
@@ -443,8 +530,21 @@ export default function RoundsClientView({
     });
 
     try {
-      await deleteCriterion(target.id, withCsrfToken()[CSRF_HEADER_NAME] || undefined);
+      const res = await deleteCriterion(target.id, withCsrfToken()[CSRF_HEADER_NAME] || undefined);
+      if (res.success) {
+        setNotification({
+          type: "success",
+          message: `Criterion "${target.title}" deleted.`,
+        });
+      } else {
+        setCriteria((prev) => [...prev, target]);
+        setNotification({
+          type: "error",
+          message: res.error || "Failed to delete criterion.",
+        });
+      }
     } catch (err: unknown) {
+      setCriteria((prev) => [...prev, target]);
       setNotification({
         type: "error",
         message: err instanceof Error ? err.message : "Failed to delete criterion.",

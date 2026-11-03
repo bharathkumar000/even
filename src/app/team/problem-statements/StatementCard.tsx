@@ -1,7 +1,7 @@
 'use client';
 
-import { useEffect, useState } from "react";
-import { ScrollText, Clock, Users, CheckCircle2, AlertCircle, ChevronDown, ChevronUp } from "lucide-react";
+import { useState, useSyncExternalStore } from "react";
+import { Clock, Users, AlertCircle, ChevronDown, ChevronUp } from "lucide-react";
 import SelectStatementButton from "./select-statement-button";
 
 interface Statement {
@@ -34,26 +34,29 @@ function formatMs(ms: number): string {
   return `${hh}${mm}${ss}`;
 }
 
-export default function StatementCard({ stmt, assignedCount }: Props) {
-  const [now, setNow] = useState(Date.now());
-  const [expanded, setExpanded] = useState(false);
+const subscribeTime = (callback: () => void) => {
+  const interval = setInterval(callback, 1000);
+  return () => clearInterval(interval);
+};
+const getClientTime = () => Date.now();
+const getServerTime = () => 0;
 
-  useEffect(() => {
-    const interval = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(interval);
-  }, []);
+export default function StatementCard({ stmt, assignedCount }: Props) {
+  const now = useSyncExternalStore(subscribeTime, getClientTime, getServerTime);
+  const [expanded, setExpanded] = useState(false);
 
   const opening = stmt.selection_opening ? new Date(stmt.selection_opening).getTime() : null;
   const closing = stmt.selection_closing ? new Date(stmt.selection_closing).getTime() : null;
 
   const isOpen =
+    now !== null &&
     stmt.enable_selection &&
     opening !== null &&
     now >= opening &&
     (closing === null || now <= closing);
 
-  const isClosed = closing !== null && now > closing;
-  const remainingMs = opening && now < opening ? opening - now : 0;
+  const isClosed = now !== null && closing !== null && now > closing;
+  const remainingMs = now !== null && opening && now < opening ? opening - now : 0;
   const full = stmt.team_limit != null && assignedCount >= stmt.team_limit;
 
   const disableSelect = !isOpen || full || stmt.manual_lock;

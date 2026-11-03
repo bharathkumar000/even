@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Menu, X, LayoutDashboard, FileUp, QrCode, Trophy, ScrollText, ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
@@ -10,6 +10,11 @@ import SignOutButton from "@/components/SignOutButton";
 export default function TeamMobileNav() {
   const [open, setOpen] = useState(false);
   const pathname = usePathname();
+  const [prevPathname, setPrevPathname] = useState(pathname);
+  if (prevPathname !== pathname) {
+    setPrevPathname(pathname);
+    setOpen(false);
+  }
 
   const navItems = [
     { href: "/team", icon: LayoutDashboard, label: "Dashboard" },
@@ -28,10 +33,6 @@ export default function TeamMobileNav() {
   };
   const title = titleMap[pathname] ?? "Team Portal";
 
-  // Automatically close drawer when navigating to a new route
-  useEffect(() => {
-    setOpen(false);
-  }, [pathname]);
 
   return (
     <>

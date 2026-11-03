@@ -1131,7 +1131,7 @@ export async function getScheduledContent(activityId?: string): Promise<{
     return { schedules: [], error: `Failed to load schedules: ${error.message}` };
   }
 
-  let schedules = (data || []) as any[];
+  const schedules = (data || []) as any[];
 
   if (activityId) {
     // Filter by activity if needed - would need a join

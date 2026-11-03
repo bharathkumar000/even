@@ -33,7 +33,6 @@ export default function AnnouncementBanner({
   const [items, setItems] = useState<AnnouncementItem[]>(announcements);
   const [isExpanded, setIsExpanded] = useState(false);
   const [dismissedIds, setDismissedIds] = useState<string[]>([]);
-  const [lastRefreshed, setLastRefreshed] = useState<Date>(new Date());
   const [isMounted, setIsMounted] = useState(false);
 
   useEffect(() => {
@@ -62,7 +61,6 @@ export default function AnnouncementBanner({
     try {
       const fresh = await getActiveAnnouncements(audience);
       setItems(fresh);
-      setLastRefreshed(new Date());
     } catch (err) {
       console.warn("Failed to refresh announcements:", err);
     }
@@ -202,7 +200,7 @@ export default function AnnouncementBanner({
                 </span>
               )}
 
-              {isMounted && publishedDate && (
+              {publishedDate && (
                 <span className="text-[10px] text-text-secondary font-mono flex items-center gap-1">
                   <Clock size={10} />
                   {new Date(publishedDate).toLocaleDateString([], {

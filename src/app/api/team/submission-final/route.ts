@@ -28,8 +28,8 @@ export async function POST(req: Request) {
 
     // Check form state
     const { data: form } = await supabaseAdmin
-      .from("submission_forms")
-      .select("submission_state, submission_close_at, auto_lock_at_deadline, allow_member_submit, resubmission_policy")
+      .from("project_submission_forms")
+      .select("form_status, submission_state, submission_close_at, auto_lock_at_deadline, allow_member_submit, resubmission_policy")
       .eq("id", form_id)
       .maybeSingle();
 
@@ -37,7 +37,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Form not found" }, { status: 404 });
     }
 
-    if (form.submission_state !== "open") {
+    if (form.form_status !== "published") {
       return NextResponse.json({ error: "Submissions are not open" }, { status: 400 });
     }
 

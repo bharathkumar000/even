@@ -341,7 +341,7 @@ async function getFormQuestions(sectionId: string): Promise<FormQuestion[]> {
 
   const questionIds = (questions || []).map((q) => q.id);
 
-  let optionsMap: Record<string, FormQuestionOption[]> = {};
+  const optionsMap: Record<string, FormQuestionOption[]> = {};
   if (questionIds.length > 0) {
     const { data: options, error: optsError } = await supabaseAdmin
       .from("form_question_options")

@@ -237,7 +237,8 @@ export async function getAnnouncementsForPortal(
       .order("created_at", { ascending: false })
       .limit(limit);
 
-    let { data, error } = await query;
+    const { data: initialData, error } = await query;
+    let data = initialData;
     if (error) {
       console.warn("Retrying announcements query fallback:", error.message);
       const fallbackQuery = await supabaseAdmin

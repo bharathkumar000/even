@@ -498,6 +498,7 @@ export async function createUser(data: {
       email: data.email,
       full_name: data.fullName,
       role: data.role,
+      username: data.username ? data.username.trim().toLowerCase() : null,
     });
 
   if (profileError) {
@@ -643,9 +644,11 @@ export async function bulkImportUsers(records: BulkImportUserRecord[], csrfToken
        : null;
      const email = loginEmail;
      const fullName = item.full_name?.trim();
-    let rawRole = item.role?.toLowerCase();
-    // Security fencing: Nobody can be assigned as admin through CSV import
-    if (rawRole === "admin") {
+let rawRole = item.role?.toLowerCase();
+    // Security fencing: nobody can be assigned as admin through CSV import
+    // Also validate against allowed roles
+    const allowedRoles: AllowedUserRole[] = ["judge", "staff", "spoc", "participant", "leader"];
+    if (rawRole === "admin" || !allowedRoles.includes(rawRole as AllowedUserRole)) {
       rawRole = "participant";
     }
     const role: AllowedUserRole = (rawRole as AllowedUserRole) || "participant";
@@ -673,6 +676,7 @@ export async function bulkImportUsers(records: BulkImportUserRecord[], csrfToken
           .update({
             full_name: fullName,
             role: role,
+            username: username ? username.toLowerCase() : null,
           })
           .eq("id", userId);
 
@@ -712,6 +716,7 @@ export async function bulkImportUsers(records: BulkImportUserRecord[], csrfToken
             email,
             full_name: fullName,
             role,
+            username: username ? username.toLowerCase() : null,
           });
           results.created++;
         }
