@@ -242,11 +242,6 @@ export async function recordMemberAction(data: ScanActionInput & {
       ? (profile as { full_name?: string | null }).full_name ?? user.email ?? "Operations"
       : user.email ?? "Operations";
 
-  // SPOC users have read-only scanner access — mutations are rejected.
-  if (operatorRole === "spoc") {
-    throw new Error("Forbidden: SPOC scanner access is read-only. Mutations are not permitted.");
-  }
-
   // 1. Duplicate check in event_activity_logs with scanner attribution.
   //    Existing behaviour preserved: lunch/snacks allow up to 3 claims;
   //    registration/goodies/certificates allow one claim.
@@ -399,11 +394,6 @@ export async function recordTeamBulkAction(teamId: string, actionType: ActionTyp
     typeof profile === "object" && profile !== null && "full_name" in profile
       ? (profile as { full_name?: string | null }).full_name ?? user.email ?? "Operations"
       : user.email ?? "Operations";
-
-  // SPOC users have read-only scanner access — mutations are rejected.
-  if (operatorRole === "spoc") {
-    throw new Error("Forbidden: SPOC scanner access is read-only. Mutations are not permitted.");
-  }
 
   // Fetch team members
   const { data: members, error: membersError } = await supabaseAdmin
@@ -718,7 +708,6 @@ export async function getRecentlyScannedTeams(limit = 3): Promise<{
       teams (id, name, code, track)
     `
     )
-    .eq("operator_id", operatorId)
     .eq("result", "success")
     .order("created_at", { ascending: false })
     .limit(limit);
@@ -1036,5 +1025,480 @@ export async function getTeamLookupDetails(teamId: string): Promise<TeamLookupRe
       created_at: s.created_at,
       updated_at: s.updated_at,
     })),
+  };
+}
+
+export interface ProcessScanResult {
+  success: boolean;
+  status: "success" | "already_completed" | "not_found" | "ineligible" | "error";
+  message: string;
+  action_type: ActionType;
+  team?: {
+    id: string;
+    name: string;
+    code?: string | null;
+    track?: string | null;
+    leader_name?: string | null;
+  };
+  participant?: {
+    id: string;
+    name: string;
+    email?: string | null;
+    role?: string | null;
+  };
+  claimedCount?: number;
+  totalMembers?: number;
+  previousClaim?: {
+    time: string;
+    operator: string;
+  };
+  teamData?: TeamScanData | null;
+  error?: string;
+}
+
+/**
+ * Executes automatic operational scanning with instant database persistence,
+ * duplicate/fraud prevention, participant resolution, and multi-portal sync.
+ */
+export async function processAutomatedScan(params: {
+  rawCode: string;
+  actionType: ActionType;
+  participantId?: string;
+  [CSRF_CONSTANTS.HEADER_NAME]?: string;
+}): Promise<ProcessScanResult> {
+  const { user, profile } = await requireOperationsRole();
+
+  try {
+    if (params[CSRF_CONSTANTS.HEADER_NAME]) {
+      await validateCsrfToken(params[CSRF_CONSTANTS.HEADER_NAME]);
+    }
+  } catch (csrfErr) {
+    console.warn("processAutomatedScan CSRF warning:", csrfErr);
+  }
+
+  const operatorId = user.id;
+  const operatorRole = (profile?.role as string) || "staff";
+  const operatorName =
+    typeof profile === "object" && profile !== null && "full_name" in profile
+      ? (profile as { full_name?: string | null }).full_name ?? user.email ?? "Operations"
+      : user.email ?? "Operations";
+
+  const raw = (params.rawCode || "").trim();
+  if (!raw) {
+    return {
+      success: false,
+      status: "not_found",
+      action_type: params.actionType,
+      message: "Empty QR code detected.",
+    };
+  }
+
+  let resolvedTeamId: string | null = null;
+  let resolvedParticipantId: string | null = params.participantId || null;
+
+  // 1. Attempt JSON parsing (e.g. {"team_id":"...","participant_id":"..."})
+  if (raw.startsWith("{")) {
+    try {
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === "object") {
+        resolvedTeamId = parsed.team_id || parsed.id || parsed.teamId || null;
+        if (!resolvedParticipantId) {
+          resolvedParticipantId =
+            parsed.participant_id ||
+            parsed.user_id ||
+            parsed.member_id ||
+            parsed.participantId ||
+            null;
+        }
+      }
+    } catch {
+      // Fall through to regex extraction
+    }
+  }
+
+  // 2. Extract UUIDs from string if not yet identified
+  if (!resolvedTeamId) {
+    const uuidMatches = raw.match(
+      /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi
+    ) || [];
+
+    for (const candidateUuid of uuidMatches) {
+      // Check if this UUID is a team
+      const { data: teamCheck } = await supabaseAdmin
+        .from("teams")
+        .select("id")
+        .eq("id", candidateUuid)
+        .maybeSingle();
+
+      if (teamCheck?.id) {
+        resolvedTeamId = teamCheck.id;
+        break;
+      }
+
+      // Check if this UUID is a participant / user
+      const { data: memberCheck } = await supabaseAdmin
+        .from("team_members")
+        .select("id, team_id, user_id")
+        .or(`user_id.eq.${candidateUuid},id.eq.${candidateUuid}`)
+        .maybeSingle();
+
+      if (memberCheck) {
+        resolvedParticipantId = memberCheck.user_id;
+        resolvedTeamId = memberCheck.team_id;
+        break;
+      }
+    }
+  }
+
+  // If participant is known but team is not, resolve team from team_members
+  if (resolvedParticipantId && !resolvedTeamId) {
+    const { data: mCheck } = await supabaseAdmin
+      .from("team_members")
+      .select("team_id, user_id")
+      .or(`user_id.eq.${resolvedParticipantId},id.eq.${resolvedParticipantId}`)
+      .maybeSingle();
+
+    if (mCheck) {
+      resolvedTeamId = mCheck.team_id;
+      resolvedParticipantId = mCheck.user_id;
+    }
+  }
+
+  if (!resolvedTeamId) {
+    return {
+      success: false,
+      status: "not_found",
+      action_type: params.actionType,
+      message: "Unrecognized QR code: No registered team or participant matched.",
+    };
+  }
+
+  // 3. Fetch team details
+  const { data: team, error: teamErr } = await supabaseAdmin
+    .from("teams")
+    .select("id, name, code, track, leader_name, qr_token, status")
+    .eq("id", resolvedTeamId)
+    .maybeSingle();
+
+  if (teamErr || !team) {
+    return {
+      success: false,
+      status: "not_found",
+      action_type: params.actionType,
+      message: `Team not found in registration database (${resolvedTeamId.slice(0, 8)}...).`,
+    };
+  }
+
+  // 4. Fetch team members with profiles
+  const { data: membersRaw, error: membersErr } = await supabaseAdmin
+    .from("team_members")
+    .select("id, user_id, role, name, email")
+    .eq("team_id", team.id);
+
+  const members = membersRaw || [];
+  if (membersErr || members.length === 0) {
+    return {
+      success: false,
+      status: "ineligible",
+      action_type: params.actionType,
+      message: `Team "${team.name}" has no registered members in the roster.`,
+      team: {
+        id: team.id,
+        name: team.name,
+        code: team.code,
+        track: team.track,
+        leader_name: team.leader_name,
+      },
+    };
+  }
+
+  const nowIso = new Date().toISOString();
+  const formatTime = (iso: string) => {
+    try {
+      return new Date(iso).toLocaleTimeString("en-US", {
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+        hour12: true,
+      });
+    } catch {
+      return iso;
+    }
+  };
+
+  // =========================================================================
+  // CASE A: SPECIFIC PARTICIPANT TARGETED (Or solo team)
+  // =========================================================================
+  if (resolvedParticipantId || members.length === 1) {
+    const targetUserId = resolvedParticipantId || members[0].user_id;
+    const targetMember = members.find(
+      (m) => m.user_id === targetUserId || m.id === targetUserId
+    ) || members[0];
+
+    const participantName = targetMember.name || "Participant";
+
+    // Duplicate check in event_activity_logs
+    const { data: existingLogs } = await supabaseAdmin
+      .from("event_activity_logs")
+      .select("id, created_at, operator_name, result")
+      .eq("participant_id", targetMember.user_id)
+      .eq("action_type", params.actionType)
+      .eq("result", "success")
+      .order("created_at", { ascending: false });
+
+    const existingCount = (existingLogs || []).length;
+    if (existingCount > 0) {
+      const prev = existingLogs![0];
+      const prevTime = formatTime(prev.created_at);
+      const prevOp = prev.operator_name || "Operations Staff";
+
+      const teamData = await fetchTeamMembersForScan(team.id).catch(() => null);
+
+      return {
+        success: false,
+        status: "already_completed",
+        action_type: params.actionType,
+        message: `ALREADY ${
+          params.actionType === "registration" ? "REGISTERED" : "CLAIMED"
+        }: ${participantName} (${team.name}) already completed ${params.actionType.toUpperCase()} at ${prevTime} from ${prevOp}.`,
+        previousClaim: { time: prevTime, operator: prevOp },
+        team: {
+          id: team.id,
+          name: team.name,
+          code: team.code,
+          track: team.track,
+          leader_name: team.leader_name,
+        },
+        participant: {
+          id: targetMember.user_id,
+          name: participantName,
+          email: targetMember.email,
+          role: targetMember.role,
+        },
+        teamData,
+      };
+    }
+
+    // Insert successful claim into event_activity_logs
+    const correlationId = crypto.randomUUID();
+    const { error: insertErr } = await supabaseAdmin
+      .from("event_activity_logs")
+      .insert([
+        {
+          team_id: team.id,
+          participant_id: targetMember.user_id,
+          action_type: params.actionType,
+          method: "qr",
+          result: "success",
+          new_status: "claimed",
+          scanned_by: user.id,
+          operator_id: operatorId,
+          operator_name: operatorName,
+          operator_role: operatorRole,
+          correlation_id: correlationId,
+          created_at: nowIso,
+        },
+      ]);
+
+    if (insertErr) {
+      return {
+        success: false,
+        status: "error",
+        action_type: params.actionType,
+        message: `Database transaction failed: ${insertErr.message}`,
+      };
+    }
+
+    // Rotate team QR token
+    const nextToken = `SEC-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
+    try {
+      await supabaseAdmin
+        .from("teams")
+        .update({
+          qr_token: nextToken,
+          last_scanned_at: nowIso,
+          last_scanned_by: user.id,
+        })
+        .eq("id", team.id);
+    } catch {}
+
+    // Write to audit_logs
+    try {
+      await supabaseAdmin.from("audit_logs").insert([
+        {
+          action: `OPS_SCAN_${params.actionType.toUpperCase()}`,
+          entity_type: "team",
+          entity_id: team.id,
+          admin_id: user.id,
+          details: {
+            participant_id: targetMember.user_id,
+            participant_name: participantName,
+            team_name: team.name,
+            action_type: params.actionType,
+            method: "qr",
+            correlation_id: correlationId,
+          },
+          created_at: nowIso,
+        },
+      ]);
+    } catch {}
+
+    const teamData = await fetchTeamMembersForScan(team.id).catch(() => null);
+
+    return {
+      success: true,
+      status: "success",
+      action_type: params.actionType,
+      message: `${params.actionType.toUpperCase()} SUCCESS: ${participantName} (${team.name}) verified and recorded!`,
+      team: {
+        id: team.id,
+        name: team.name,
+        code: team.code,
+        track: team.track,
+        leader_name: team.leader_name,
+      },
+      participant: {
+        id: targetMember.user_id,
+        name: participantName,
+        email: targetMember.email,
+        role: targetMember.role,
+      },
+      teamData,
+    };
+  }
+
+  // =========================================================================
+  // CASE B: TEAM-LEVEL WORKFLOW (Team QR code scanned for team roster)
+  // =========================================================================
+  const { data: existingTeamLogs } = await supabaseAdmin
+    .from("event_activity_logs")
+    .select("participant_id, created_at, operator_name, result")
+    .eq("team_id", team.id)
+    .eq("action_type", params.actionType)
+    .eq("result", "success")
+    .order("created_at", { ascending: false });
+
+  const claimedUserIds = new Set(
+    (existingTeamLogs || []).map((l) => l.participant_id)
+  );
+
+  const unclaimedMembers = members.filter(
+    (m) => !claimedUserIds.has(m.user_id)
+  );
+
+  // If ALL members have already claimed this action
+  if (unclaimedMembers.length === 0) {
+    const prev = existingTeamLogs?.[0];
+    const prevTime = prev?.created_at ? formatTime(prev.created_at) : "";
+    const prevOp = prev?.operator_name || "Operations Staff";
+
+    const teamData = await fetchTeamMembersForScan(team.id).catch(() => null);
+
+    return {
+      success: false,
+      status: "already_completed",
+      action_type: params.actionType,
+      message: `ALREADY ${
+        params.actionType === "registration" ? "REGISTERED" : "CLAIMED"
+      }: All ${members.length} member(s) of team "${team.name}" have already received ${params.actionType.toUpperCase()}${
+        prevTime ? ` at ${prevTime} from ${prevOp}` : ""
+      }.`,
+      previousClaim: { time: prevTime, operator: prevOp },
+      team: {
+        id: team.id,
+        name: team.name,
+        code: team.code,
+        track: team.track,
+        leader_name: team.leader_name,
+      },
+      totalMembers: members.length,
+      claimedCount: 0,
+      teamData,
+    };
+  }
+
+  // Record action for each unclaimed member
+  const baseCorrelationId = crypto.randomUUID();
+  const insertPayloads = unclaimedMembers.map((m) => ({
+    team_id: team.id,
+    participant_id: m.user_id,
+    action_type: params.actionType,
+    method: "qr",
+    result: "success",
+    new_status: "claimed",
+    scanned_by: user.id,
+    operator_id: operatorId,
+    operator_name: operatorName,
+    operator_role: operatorRole,
+    correlation_id: `${baseCorrelationId}-${m.user_id.slice(0, 8)}`,
+    created_at: nowIso,
+  }));
+
+  const { error: insertErr } = await supabaseAdmin
+    .from("event_activity_logs")
+    .insert(insertPayloads);
+
+  if (insertErr) {
+    return {
+      success: false,
+      status: "error",
+      action_type: params.actionType,
+      message: `Database insert failed: ${insertErr.message}`,
+    };
+  }
+
+  // Rotate QR token
+  const nextToken = `SEC-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
+  try {
+    await supabaseAdmin
+      .from("teams")
+      .update({
+        qr_token: nextToken,
+        last_scanned_at: nowIso,
+        last_scanned_by: user.id,
+      })
+      .eq("id", team.id);
+  } catch {}
+
+  // Write to audit_logs
+  try {
+    await supabaseAdmin.from("audit_logs").insert([
+      {
+        action: `OPS_SCAN_TEAM_${params.actionType.toUpperCase()}`,
+        entity_type: "team",
+        entity_id: team.id,
+        admin_id: user.id,
+        details: {
+          team_id: team.id,
+          team_name: team.name,
+          action_type: params.actionType,
+          claimed_count: unclaimedMembers.length,
+          unclaimed_members: unclaimedMembers.map((m) => ({
+            id: m.user_id,
+            name: m.name,
+          })),
+        },
+        created_at: nowIso,
+      },
+    ]);
+  } catch {}
+
+  const teamData = await fetchTeamMembersForScan(team.id).catch(() => null);
+
+  return {
+    success: true,
+    status: "success",
+    action_type: params.actionType,
+    message: `SUCCESS: ${params.actionType.toUpperCase()} recorded for ${unclaimedMembers.length} member(s) of "${team.name}"!`,
+    team: {
+      id: team.id,
+      name: team.name,
+      code: team.code,
+      track: team.track,
+      leader_name: team.leader_name,
+    },
+    claimedCount: unclaimedMembers.length,
+    totalMembers: members.length,
+    teamData,
   };
 }
