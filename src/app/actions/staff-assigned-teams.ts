@@ -304,6 +304,12 @@ export async function getMyAssignedTeams(): Promise<StaffAssignedTeamsData> {
     };
   });
 
+  teams.sort((a, b) => {
+    const codeA = a.code || a.id || "";
+    const codeB = b.code || b.id || "";
+    return codeA.localeCompare(codeB, undefined, { numeric: true, sensitivity: "base" });
+  });
+
   return {
     teams,
     staff: {

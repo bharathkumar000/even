@@ -166,7 +166,7 @@ export async function getSpocPortalData(): Promise<SpocPortalData> {
       supabaseAdmin
         .from("teams")
         .select("id, name, code, track")
-        .order("name", { ascending: true }),
+        .order("code", { ascending: true }),
       supabaseAdmin
         .from("team_spoc_assignments")
         .select("spoc_id, team_id"),
@@ -234,25 +234,31 @@ export async function getSpocPortalData(): Promise<SpocPortalData> {
       };
     });
 
-    const teams: SpocTeamOption[] = teamsList.map((team) => {
-      const assignedSpocRowId = teamToSpoc.get(team.id) || null;
-      const assignedStaffId = assignedSpocRowId
-        ? spocIdToStaffId.get(assignedSpocRowId) || null
-        : null;
+    const teams: SpocTeamOption[] = teamsList
+      .map((team) => {
+        const assignedSpocRowId = teamToSpoc.get(team.id) || null;
+        const assignedStaffId = assignedSpocRowId
+          ? spocIdToStaffId.get(assignedSpocRowId) || null
+          : null;
 
-      return {
-        id: team.id,
-        name: team.name,
-        code: team.code,
-        track: team.track,
-        assigned_spoc_id: assignedStaffId,
-        assigned_spoc_name: assignedStaffId
-          ? staffNameById.get(assignedStaffId) ||
-            spocNameById.get(assignedSpocRowId!) ||
-            "SPOC"
-          : null,
-      };
-    });
+        return {
+          id: team.id,
+          name: team.name,
+          code: team.code,
+          track: team.track,
+          assigned_spoc_id: assignedStaffId,
+          assigned_spoc_name: assignedStaffId
+            ? staffNameById.get(assignedStaffId) ||
+              spocNameById.get(assignedSpocRowId!) ||
+              "SPOC"
+            : null,
+        };
+      })
+      .sort((a, b) => {
+        const idA = a.code || a.id || "";
+        const idB = b.code || b.id || "";
+        return idA.localeCompare(idB, undefined, { numeric: true, sensitivity: "base" });
+      });
 
     return { spocs, teams };
   };
@@ -382,8 +388,8 @@ export async function autoBalanceSpocAssignments(
     supabaseAdmin.from("spocs").select("id, staff_id"),
     supabaseAdmin
       .from("teams")
-      .select("id, name, track")
-      .order("name", { ascending: true }),
+      .select("id, name, code, track")
+      .order("code", { ascending: true }),
   ]);
 
   if (profilesRes.error) {
