@@ -3,9 +3,9 @@ import { sanitizeText, limitedString, requiredLimitedString, FIELD_LIMITS, SafeU
 
 export const RoundSchema = z.object({
   title: requiredLimitedString(FIELD_LIMITS.title, "Title").transform(sanitizeText),
-  sequence_order: z.number().int().positive(),
+  sequence_order: z.coerce.number().int().positive("Sequence order must be positive"),
   status: z.enum(["draft", "open", "closed", "locked", "reopened"]).default("draft"),
-  event_id: z.string().uuid("Event is required"),
+  event_id: z.string().optional().nullable().transform((val) => (val && val.trim() !== "" ? val.trim() : undefined)),
 });
 
 export const CriterionSchema = z.object({
@@ -30,8 +30,9 @@ export const EvaluationOverrideSchema = z.object({
 });
 
 export const ResultActionSchema = z.object({
-  event_id: z.string().uuid(),
+  event_id: z.string().optional().nullable().transform((val) => (val && val.trim() !== "" ? val.trim() : undefined)),
   action: z.enum(["recalculate", "publish", "lock"]),
   olympic: z.boolean().optional(),
 });
+
 
