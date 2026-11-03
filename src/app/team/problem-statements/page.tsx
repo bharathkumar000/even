@@ -1,24 +1,48 @@
 import { requireAuthenticatedTeamUser } from "@/lib/auth/team";
-import { getPublishedProblemStatements } from "@/app/actions/admin-problem-statements";
+import { getPublishedProblemStatements, getAssignmentCounts } from "@/app/actions/admin-problem-statements";
 import { supabaseAdmin } from "@/lib/supabase/admin";
-import StatementCard from "./StatementCard";
-
+import DepartmentProblemStatements from "./department-problem-statements";
 
 export const dynamic = "force-dynamic";
 
-export default async function TeamProblemStatementsPage() {
-  await requireAuthenticatedTeamUser(); // Ensure team auth
-  const statements = await getPublishedProblemStatements();
+type Department = "cse-aiml" | "ece-eee" | "me-cv";
 
-  // Resolve current assignment counts for each statement (simple N+1 approach – acceptable for small sets)
-  const counts: Record<string, number> = {};
-  for (const stmt of statements) {
-    const { data: rows, error } = await supabaseAdmin
-      .from("team_problem_statement_assignments")
-      .select("team_id")
-      .eq("problem_statement_id", stmt.id);
-    if (!error && rows) counts[stmt.id] = rows.length;
-    else counts[stmt.id] = 0;
+const DEPARTMENTS: Array<{
+  id: Department;
+  label: string;
+  subtitle: string;
+}> = [
+  { id: "cse-aiml", label: "CSE / AIML", subtitle: "Computer Science & AI/ML" },
+  { id: "ece-eee", label: "ECE / EEE", subtitle: "Electronics & Electrical" },
+  { id: "me-cv", label: "ME / CV", subtitle: "Mechanical & Civil" },
+];
+
+export default async function TeamProblemStatementsPage() {
+  const { user, teamId, role } = await requireAuthenticatedTeamUser();
+
+  // Fetch all published statements server-side
+  const allStatements = await getPublishedProblemStatements();
+
+  // Resolve current assignment counts
+  const counts = await getAssignmentCounts(allStatements.map((s) => s.id));
+
+  // Determine user's department from team track
+  let userDepartment: Department | null = null;
+  if (teamId) {
+    const { data: team } = await supabaseAdmin
+      .from("teams")
+      .select("track")
+      .eq("id", teamId)
+      .maybeSingle();
+    const track = team?.track || "";
+    const t = track.toLowerCase();
+    if (t.includes("cse") || t.includes("aiml") || t.includes("computer")) {
+      userDepartment = "cse-aiml";
+    } else if (t.includes("ece") || t.includes("eee") || t.includes("electronics") || t.includes("electrical")) {
+      userDepartment = "ece-eee";
+    } else if (t.includes("me") || t.includes("cv") || t.includes("mechanical") || t.includes("civil")) {
+      userDepartment = "me-cv";
+    }
   }
 
   return (
@@ -33,18 +57,19 @@ export default async function TeamProblemStatementsPage() {
         </h1>
         <p className="font-tech text-text-secondary text-xs mt-2">
           Browse the officially published problem statements for the Ideathon.
+          {userDepartment && (
+            <span className="ml-2 px-2 py-0.5 bg-accent-secondary/10 border border-accent-secondary/40 text-accent-secondary text-[10px] font-bold uppercase rounded">
+              Your Dept: {DEPARTMENTS.find((d) => d.id === userDepartment)?.label}
+            </span>
+          )}
         </p>
       </div>
 
-      {statements.length === 0 ? (
-        <p className="text-center text-text-secondary">No problem statements have been published yet.</p>
-      ) : (
-        <div className="grid gap-4">
-          {statements.map((stmt) => (
-            <StatementCard key={stmt.id} stmt={stmt} assignedCount={counts[stmt.id] ?? 0} />
-          ))}
-        </div>
-      )}
+      <DepartmentProblemStatements
+        initialStatements={allStatements}
+        initialCounts={counts}
+        defaultDepartment={userDepartment}
+      />
     </div>
   );
 }

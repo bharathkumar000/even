@@ -102,7 +102,9 @@ export default async function JudgeRubricsPage() {
     if (criteriaRes.data) criteria = criteriaRes.data;
 
     const assignedRoundIds = new Set(
-      (assignmentsRes.data || []).map((a: any) => a.round_id)
+      (assignmentsRes.data || [])
+        .map((a: any) => a.round_id)
+        .filter(Boolean)
     );
 
     if (judgeUserId && assignedRoundIds.size > 0) {

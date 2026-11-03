@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import {
   CheckCircle2,
   AlertCircle,
@@ -499,21 +499,28 @@ export default function ScannerClientView() {
    * Executes the selected operation automatically upon QR detection or manual submission.
    * Confirms database transaction, updates roster, triggers cooldown, and re-arms scanner.
    */
-  const handleDetectedCode = async (rawCode: string, targetParticipantId?: string) => {
+  const handleDetectedCode = async (
+    rawCode: string,
+    targetParticipantId?: string,
+    overrideActionType?: ActionType
+  ) => {
     if (isProcessingRef.current || isCoolingDownRef.current) return;
     isProcessingRef.current = true;
     setLoading(true);
 
+    const effectiveActionType = overrideActionType ?? scanPurpose;
+
     try {
       const res = await processAutomatedScan({
         rawCode,
-        actionType: scanPurpose,
+        actionType: effectiveActionType,
         participantId: targetParticipantId,
         [CSRF_CONSTANTS.HEADER_NAME]: csrfToken,
       });
 
       const currentPurposeLabel =
-        SCAN_PURPOSES.find((p) => p.value === scanPurpose)?.label || scanPurpose;
+        SCAN_PURPOSES.find((p) => p.value === effectiveActionType)?.label ||
+        effectiveActionType;
 
       if (res.status === "success") {
         playScanSuccess();
@@ -556,7 +563,7 @@ export default function ScannerClientView() {
           status: res.status || "error",
           title: res.status === "not_found" ? "NOT FOUND" : "SCAN REJECTED",
           message: res.message || res.error || "Operation failed to record in database.",
-          actionType: res.action_type || scanPurpose,
+          actionType: res.action_type || effectiveActionType,
           teamName: res.team?.name,
           timestamp: new Date().toLocaleTimeString([], {
             hour: "2-digit",
@@ -646,6 +653,29 @@ export default function ScannerClientView() {
     return teamData?.activityLogs?.find(
       (log) => log.participant_id === participantId && log.action_type === actionType && log.result === "success"
     );
+  };
+
+  // Team-level distribution counts for lunch and snacks
+  const lunchCount = useMemo(
+    () =>
+      teamData?.activityLogs?.filter(
+        (l) => l.action_type === "lunch" && l.result === "success"
+      ).length ?? 0,
+    [teamData?.activityLogs]
+  );
+
+  const snacksCount = useMemo(
+    () =>
+      teamData?.activityLogs?.filter(
+        (l) => l.action_type === "snacks" && l.result === "success"
+      ).length ?? 0,
+    [teamData?.activityLogs]
+  );
+
+  // Team-level single-member distribution scan (one member per scan for lunch/snacks)
+  const handleTeamDistributionScan = async (actionType: "lunch" | "snacks") => {
+    if (!teamData?.team?.id) return;
+    await handleDetectedCode(teamData.team.id, undefined, actionType);
   };
 
   useEffect(() => {
@@ -866,6 +896,114 @@ export default function ScannerClientView() {
               <RefreshCw size={13} />
               <span>Clear / Ready Next</span>
             </button>
+          </div>
+
+          {/* Team Distribution Progress: Lunch & Snacks */}
+          <div className="border border-border-color rounded-lg bg-surface-color/50 p-4">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="font-heading text-sm text-text-primary uppercase m-0 tracking-wider flex items-center gap-2">
+                <Users size={14} className="text-accent-primary" />
+                Team Distribution Progress
+              </h3>
+              <span className="text-[10px] font-mono text-text-secondary">
+                {teamData.members.length} member(s)
+              </span>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              {/* Lunch Progress */}
+              <div className="border border-border-color rounded p-3 flex flex-col">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <Utensils className="w-4 h-4 text-status-warning" />
+                    <span className="font-heading text-xs text-text-primary uppercase m-0">Lunch</span>
+                  </div>
+                  <span className="font-mono text-xs font-bold text-text-primary">
+                    {lunchCount}/3
+                  </span>
+                </div>
+                <div className="w-full bg-surface-color border border-border-color rounded h-2 overflow-hidden">
+                  <div
+                    className={`h-full bg-status-warning transition-all duration-300 ${lunchCount >= 3 ? "bg-status-error" : ""}`}
+                    style={{ width: `${Math.min((lunchCount / 3) * 100, 100)}%` }}
+                  />
+                </div>
+                <button
+                  onClick={() => handleTeamDistributionScan("lunch")}
+                  disabled={loading || isCoolingDown || lunchCount >= 3}
+                  className={`mt-2 w-full py-1.5 text-[10px] font-bold uppercase rounded transition-all flex items-center justify-center gap-1.5 ${
+                    lunchCount >= 3
+                      ? "bg-status-error/20 border border-status-error/40 text-status-error disabled:opacity-100 cursor-not-allowed"
+                      : "bg-surface-color-light border border-accent-secondary text-accent-secondary hover:bg-accent-secondary/10 disabled:opacity-50"
+                  }`}
+                >
+                  {lunchCount >= 3 ? (
+                    <>
+                      <X size={11} className="mr-1" />
+                      <span>Lunch Complete (3/3)</span>
+                    </>
+                  ) : (
+                    <>
+                      <Utensils size={11} className="mr-1" />
+                      <span>Scan Lunch</span>
+                    </>
+                  )}
+                </button>
+              </div>
+
+              {/* Snacks Progress */}
+              <div className="border border-border-color rounded p-3 flex flex-col">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <Coffee className="w-4 h-4 text-accent-secondary" />
+                    <span className="font-heading text-xs text-text-primary uppercase m-0">Snacks</span>
+                  </div>
+                  <span className="font-mono text-xs font-bold text-text-primary">
+                    {snacksCount}/3
+                  </span>
+                </div>
+                <div className="w-full bg-surface-color border border-border-color rounded h-2 overflow-hidden">
+                  <div
+                    className={`h-full bg-accent-secondary transition-all duration-300 ${snacksCount >= 3 ? "bg-status-error" : ""}`}
+                    style={{ width: `${Math.min((snacksCount / 3) * 100, 100)}%` }}
+                  />
+                </div>
+                <button
+                  onClick={() => handleTeamDistributionScan("snacks")}
+                  disabled={loading || isCoolingDown || snacksCount >= 3}
+                  className={`mt-2 w-full py-1.5 text-[10px] font-bold uppercase rounded transition-all flex items-center justify-center gap-1.5 ${
+                    snacksCount >= 3
+                      ? "bg-status-error/20 border border-status-error/40 text-status-error disabled:opacity-100 cursor-not-allowed"
+                      : "bg-surface-color-light border border-accent-secondary text-accent-secondary hover:bg-accent-secondary/10 disabled:opacity-50"
+                  }`}
+                >
+                  {snacksCount >= 3 ? (
+                    <>
+                      <X size={11} className="mr-1" />
+                      <span>Snacks Complete (3/3)</span>
+                    </>
+                  ) : (
+                    <>
+                      <Coffee size={11} className="mr-1" />
+                      <span>Scan Snacks</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+
+            {(lunchCount >= 3 || snacksCount >= 3) && (
+              <div className="mt-3 p-2.5 bg-surface-color border border-border-color rounded text-[10px] font-mono text-text-secondary flex items-center gap-2">
+                <AlertCircle size={12} className="text-text-secondary" />
+                <span>
+                  {lunchCount >= 3 && snacksCount >= 3
+                    ? "All distributions complete for this team."
+                    : lunchCount >= 3
+                    ? "Lunch limit reached (3/3). Snacks still available."
+                    : "Snacks limit reached (3/3). Lunch still available."}
+              </span>
+              </div>
+            )}
           </div>
 
           {/* Members Table */}
