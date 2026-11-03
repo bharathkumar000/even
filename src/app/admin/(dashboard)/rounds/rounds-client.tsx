@@ -154,15 +154,21 @@ export default function RoundsClientView({
   const [criterionToDelete, setCriterionToDelete] = useState<AdminCriterionItem | null>(null);
 
   const [loading, setLoading] = useState(false);
+  const [isCreatingRound, setIsCreatingRound] = useState(false);
+  const [pendingRoundTempId, setPendingRoundTempId] = useState<string | null>(null);
   const [notification, setNotification] = useState<{
     type: "success" | "error";
     message: string;
   } | null>(null);
 
   const cleanErrorMsg = (err: unknown, fallback: string) => {
-    const msg = (err instanceof Error ? err.message : String(err || "")).trim();
-    if (!msg || msg.includes("Minified React error #441") || msg.includes("Server Components render") || msg.includes("digest")) {
-      return `${fallback}: Database or authorization error. Please check your admin permissions or refresh the page.`;
+    const rawMsg = err instanceof Error ? err.message : String(err || "");
+    const msg = rawMsg.trim();
+    if (!msg) {
+      return fallback;
+    }
+    if (msg.includes("Minified React error #441") || msg.includes("Server Components render")) {
+      return `${fallback}: Internal server rendering error. Please refresh the page.`;
     }
     return msg;
   };
@@ -177,6 +183,11 @@ export default function RoundsClientView({
   const activeRoundCriteria = useMemo(
     () => criteria.filter((c) => c.round_id === selectedRoundId),
     [criteria, selectedRoundId]
+  );
+
+  // Check whether the active round is still pending persistence
+  const isCurrentRoundPending = Boolean(
+    isCreatingRound || (pendingRoundTempId && (selectedRoundId === pendingRoundTempId || activeRound?.id === pendingRoundTempId))
   );
 
   // Total marks computation for active round
@@ -272,6 +283,10 @@ export default function RoundsClientView({
         event_id: targetEvId,
       };
 
+      setLoading(true);
+      setIsCreatingRound(true);
+      setPendingRoundTempId(tempId);
+
       // Optimistic update
       setRounds((prev) =>
         [...prev, newObj].sort((a, b) => a.sequence_order - b.sequence_order)
@@ -301,7 +316,7 @@ export default function RoundsClientView({
         } else {
           // Revert optimistic addition on failure!
           setRounds((prev) => prev.filter((r) => r.id !== tempId));
-          setSelectedRoundId(rounds[0]?.id || "");
+          setSelectedRoundId((prev) => (prev === tempId ? (rounds[0]?.id || "") : prev));
           setNotification({
             type: "error",
             message: res.error || "Failed to create round.",
@@ -310,11 +325,15 @@ export default function RoundsClientView({
       } catch (err: unknown) {
         // Revert optimistic addition on failure!
         setRounds((prev) => prev.filter((r) => r.id !== tempId));
-        setSelectedRoundId(rounds[0]?.id || "");
+        setSelectedRoundId((prev) => (prev === tempId ? (rounds[0]?.id || "") : prev));
         setNotification({
           type: "error",
           message: cleanErrorMsg(err, "Failed to create round"),
         });
+      } finally {
+        setLoading(false);
+        setIsCreatingRound(false);
+        setPendingRoundTempId(null);
       }
     }
   };
@@ -402,6 +421,13 @@ export default function RoundsClientView({
   // --- Handlers: Criteria CRUD ---
   const handleOpenCreateCriterion = () => {
     if (!activeRound) return;
+    if (isCurrentRoundPending) {
+      setNotification({
+        type: "error",
+        message: "Please wait until the new round is saved before adding criteria.",
+      });
+      return;
+    }
     setEditingCriterion(null);
     setCriterionTitle("");
     setCriterionDesc("");
@@ -421,7 +447,14 @@ export default function RoundsClientView({
 
   const handleSaveCriterion = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedRoundId || !criterionTitle.trim()) return;
+    if (!selectedRoundId || isCurrentRoundPending) {
+      setNotification({
+        type: "error",
+        message: "Cannot add criteria while round creation is pending. Please wait for the round to be saved.",
+      });
+      return;
+    }
+    if (!criterionTitle.trim()) return;
 
     const titleToSave = criterionTitle.trim();
     const descToSave = criterionDesc.trim() || undefined;
@@ -519,7 +552,7 @@ export default function RoundsClientView({
         setCriteria((prev) => prev.filter((c) => c.id !== tempId));
         setNotification({
           type: "error",
-          message: err instanceof Error ? err.message : "Failed to save criterion.",
+          message: cleanErrorMsg(err, "Failed to save criterion"),
         });
       }
     }
@@ -766,10 +799,16 @@ export default function RoundsClientView({
                   </div>
                   <button
                     onClick={handleOpenCreateCriterion}
-                    className="inline-flex items-center gap-1.5 px-4 py-2 bg-white text-black font-tech font-bold uppercase tracking-wider text-xs transition-all hover:bg-white/90 shadow-[0_0_20px_rgba(255,255,255,0.25)] cursor-pointer rounded"
+                    disabled={isCurrentRoundPending}
+                    className={`inline-flex items-center gap-1.5 px-4 py-2 font-tech font-bold uppercase tracking-wider text-xs transition-all shadow-[0_0_20px_rgba(255,255,255,0.25)] rounded ${
+                      isCurrentRoundPending
+                        ? "bg-white/40 text-black/60 cursor-not-allowed"
+                        : "bg-white text-black hover:bg-white/90 cursor-pointer"
+                    }`}
+                    title={isCurrentRoundPending ? "Round is being saved..." : "Add Criterion"}
                   >
                     <Plus size={14} />
-                    <span>Add Criterion</span>
+                    <span>{isCurrentRoundPending ? "Saving Round..." : "Add Criterion"}</span>
                   </button>
                 </div>
               </div>
@@ -787,9 +826,14 @@ export default function RoundsClientView({
                     </p>
                     <button
                       onClick={handleOpenCreateCriterion}
-                      className="mt-3 px-4 py-1.5 border border-accent-tertiary text-accent-tertiary text-xs uppercase font-bold hover:bg-accent-tertiary/10 transition-colors"
+                      disabled={isCurrentRoundPending}
+                      className={`mt-3 px-4 py-1.5 border border-accent-tertiary text-accent-tertiary text-xs uppercase font-bold transition-colors ${
+                        isCurrentRoundPending
+                          ? "opacity-50 cursor-not-allowed"
+                          : "hover:bg-accent-tertiary/10 cursor-pointer"
+                      }`}
                     >
-                      + Add First Criterion
+                      {isCurrentRoundPending ? "Saving Round..." : "+ Add First Criterion"}
                     </button>
                   </div>
                 ) : (

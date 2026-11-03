@@ -105,7 +105,13 @@ export async function getSubmissionForms(): Promise<{ forms: SubmissionForm[]; e
     return { forms: [], error: error.message };
   }
 
-  return { forms: (data || []) as SubmissionForm[] };
+  return {
+    forms: (data || []).map((f: any) => ({
+      ...f,
+      form_status: f.form_status || f.status || "draft",
+      submission_state: f.submission_state || (f.status === "published" ? "open" : "not_open"),
+    })) as SubmissionForm[],
+  };
 }
 
 export async function getSubmissionFormById(id: string): Promise<{

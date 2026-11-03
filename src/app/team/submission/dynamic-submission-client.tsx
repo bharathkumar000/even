@@ -337,7 +337,7 @@ export default function TeamDynamicSubmissionClientView({
   };
 
   const saveDraft = async (isAuto = false) => {
-    if (!formId || !teamId || isLocked || (!isLeader && !allowMemberSubmit)) return;
+    if (!formId || !teamId || isLocked) return;
 
     if (isAuto) {
       setIsAutoSaving(true);
@@ -388,14 +388,14 @@ export default function TeamDynamicSubmissionClientView({
   // Debounced auto-save when answers or files change
   useEffect(() => {
     if (!hasLoadedDraftRef.current) return;
-    if (isLocked || (!isLeader && !allowMemberSubmit) || currentSubmission) return;
+    if (isLocked) return;
 
     const timer = setTimeout(() => {
       saveDraft(true);
     }, 2500);
 
     return () => clearTimeout(timer);
-  }, [answers, fileRefs, isLocked, isLeader, allowMemberSubmit, currentSubmission]);
+  }, [answers, fileRefs, isLocked]);
 
   const submitFinal = async () => {
     if (!formId || !teamId) return;
@@ -460,7 +460,7 @@ export default function TeamDynamicSubmissionClientView({
     const value = answers[question.id];
     const error = validationErrors[question.id];
     const isRequired = question.is_required;
-    const disabled = isLocked || (!isLeader && !allowMemberSubmit);
+    const disabled = isLocked;
 
     const commonClasses = "w-full px-3 py-2 bg-surface-color border border-border-color rounded text-xs text-text-primary focus:border-accent-secondary outline-none disabled:opacity-60";
 
@@ -827,10 +827,10 @@ export default function TeamDynamicSubmissionClientView({
         </div>
       )}
 
-      {!isLeader && !allowMemberSubmit && (
+      {isLocked && (
         <div className="p-3 bg-status-warning/15 border border-status-warning text-status-warning rounded text-xs flex items-center gap-2">
           <AlertCircle size={16} />
-          <span>You are viewing in read-only mode. Only the Team Leader can submit deliverables.</span>
+          <span>Submissions are locked for this round. Responses are currently read-only.</span>
         </div>
       )}
 
@@ -888,7 +888,7 @@ export default function TeamDynamicSubmissionClientView({
           <div className="flex items-center gap-4">
             <button
               onClick={() => saveDraft(false)}
-              disabled={isSaving || isAutoSaving || isLocked || (!isLeader && !allowMemberSubmit)}
+              disabled={isSaving || isAutoSaving || isLocked}
               className="px-5 py-2.5 border border-accent-tertiary/40 text-accent-tertiary rounded text-[10px] font-bold uppercase tracking-wider transition-all disabled:opacity-50 hover:bg-accent-tertiary/10 flex items-center gap-2"
             >
               {isSaving && <Loader2 size={14} className="animate-spin" />}
@@ -903,7 +903,7 @@ export default function TeamDynamicSubmissionClientView({
             {currentSubmission && (
               <button
                 onClick={() => setShowReview(true)}
-                disabled={isLocked || (!isLeader && !allowMemberSubmit)}
+                disabled={isLocked}
                 className="px-5 py-2.5 border border-border-color rounded text-[10px] font-bold uppercase tracking-wider text-text-secondary hover:text-text-primary"
               >
                 Review Submission
@@ -918,7 +918,7 @@ export default function TeamDynamicSubmissionClientView({
                 setShowConfirm(true);
               }
             }}
-            disabled={isSubmitting || isLocked || (!isLeader && !allowMemberSubmit)}
+            disabled={isSubmitting || isLocked}
             className="px-6 py-2.5 bg-gradient-to-r from-accent-secondary to-accent-primary text-black font-tech font-bold uppercase tracking-wider text-xs rounded transition-all disabled:opacity-50 shadow-[0_0_18px_rgba(255,0,127,0.28)]"
           >
             <Loader2 size={14} className={isSubmitting ? "animate-spin" : ""} mr-2 />

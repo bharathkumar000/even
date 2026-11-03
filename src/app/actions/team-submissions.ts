@@ -117,19 +117,19 @@ export async function getActiveSubmissionForm(teamId: string): Promise<{
     return { form: null, sections: [], questions: [], options: {}, error: "No team membership found. Please contact your team leader.", errorType: "no_team" };
   }
 
-  const teamEventId = membership?.teams?.[0]?.event_id || null;
+  const teamsObj = Array.isArray(membership?.teams) ? membership?.teams[0] : (membership?.teams as any);
+  let teamEventId = teamsObj?.event_id || null;
 
   if (!teamEventId) {
-    return { form: null, sections: [], questions: [], options: {}, error: "No active event configured for your team.", errorType: "no_event" };
+    const { data: defaultEv } = await supabaseAdmin.from("events").select("id").limit(1).maybeSingle();
+    teamEventId = defaultEv?.id || null;
   }
 
-  // Get the published project submission form for the team's event.
-  // Fixed: correct table name is project_submission_forms (not project_subjection_forms).
+  // Get the published project submission form
   const { data: forms, error: formsError } = await supabaseAdmin
     .from("project_submission_forms")
     .select("*")
-    .eq("event_id", teamEventId)
-    .eq("form_status", "published")
+    .eq("status", "published")
     .order("created_at", { ascending: false })
     .limit(1);
 
@@ -144,28 +144,27 @@ export async function getActiveSubmissionForm(teamId: string): Promise<{
   const row = forms[0] as any;
 
   // Check if submissions are open
-  // Fixed: correct column names are submission_open_at / submission_close_at (not opens_at / closes_at).
   const now = new Date();
-  const openAt = row.submission_open_at ? new Date(row.submission_open_at) : null;
-  const closeAt = row.submission_close_at ? new Date(row.submission_close_at) : null;
+  const openAt = row.opens_at ? new Date(row.opens_at) : (row.submission_open_at ? new Date(row.submission_open_at) : null);
+  const closeAt = row.closes_at ? new Date(row.closes_at) : (row.submission_close_at ? new Date(row.submission_close_at) : null);
 
-  let submissionState = row.form_status === "published" ? "open" : "not_open";
+  let submissionState = (row.status === "published" || row.form_status === "published") ? "open" : "not_open";
   if (openAt && now < openAt) submissionState = "not_open";
-  if (closeAt && now > closeAt && row.auto_lock_at_deadline) submissionState = "locked";
+  if (closeAt && now > closeAt && (row.auto_lock_at_deadline ?? false)) submissionState = "locked";
 
   const form = {
     id: row.id,
     title: row.title,
     description: row.description ?? null,
-    form_status: row.form_status,
+    form_status: row.status ?? row.form_status ?? "published",
     submission_state: submissionState,
-    submission_open_at: row.submission_open_at ?? null,
-    submission_close_at: row.submission_close_at ?? null,
+    submission_open_at: (row.opens_at || row.submission_open_at) ?? null,
+    submission_close_at: (row.closes_at || row.submission_close_at) ?? null,
     timezone: row.timezone ?? "Asia/Kolkata",
-    allow_member_submit: Boolean(row.allow_member_submit),
-    auto_lock_at_deadline: Boolean(row.auto_lock_at_deadline ?? true),
-    max_marks: row.max_marks ?? null,
-    event_id: row.event_id ?? null,
+    allow_member_submit: true,
+    auto_lock_at_deadline: Boolean(row.auto_lock_at_deadline ?? false),
+    max_marks: row.max_marks ?? 50,
+    event_id: teamEventId,
     round_id: row.round_id ?? null,
   };
 
@@ -180,38 +179,42 @@ export async function getActiveSubmissionForm(teamId: string): Promise<{
     number: "number",
     date: "date",
   };
-  const sections = rawSections.map((s: any, sIdx: number) => ({
-    id: s.id || `section-${sIdx}`,
-    form_id: row.id,
-    title: s.title || "Untitled Section",
-    description: s.description ?? null,
-    sort_order: s.sort_order ?? sIdx,
-    is_required: Boolean(s.is_required),
-    questions: Array.isArray(s.fields)
-      ? s.fields.map((f: any, fIdx: number) => ({
-          id: f.id || `field-${sIdx}-${fIdx}`,
-          section_id: s.id || `section-${sIdx}`,
-          title: f.label || "Untitled Question",
-          description: null,
-          placeholder: f.placeholder ?? null,
-          question_type: typeMap[f.type] ?? "short_answer",
-          is_required: Boolean(f.required),
-          sort_order: f.sort_order ?? fIdx,
-          default_value: null,
-          min_chars: null,
-          max_chars: null,
-          min_value: null,
-          max_value: null,
-          max_selections: null,
-          max_file_size: null,
-          max_attachments: 1,
-          allowed_file_types: null,
-          validation_rules: f.validation_rules ?? {},
-          conditional_visibility: f.conditional_visibility ?? {},
-          options: [],
-        }))
-      : [],
-  }));
+  const sections = rawSections.map((s: any, sIdx: number) => {
+    const rawItems = Array.isArray(s.fields) && s.fields.length > 0
+      ? s.fields
+      : (Array.isArray(s.questions) ? s.questions : []);
+
+    return {
+      id: s.id || `section-${sIdx}`,
+      form_id: row.id,
+      title: s.title || "Untitled Section",
+      description: s.description ?? null,
+      sort_order: s.sort_order ?? sIdx,
+      is_required: Boolean(s.is_required),
+      questions: rawItems.map((f: any, fIdx: number) => ({
+        id: f.id || `field-${sIdx}-${fIdx}`,
+        section_id: s.id || `section-${sIdx}`,
+        title: f.title || f.label || "Untitled Question",
+        description: f.description ?? null,
+        placeholder: f.placeholder ?? null,
+        question_type: typeMap[f.type] || f.question_type || "short_answer",
+        is_required: Boolean(f.required ?? f.is_required),
+        sort_order: f.sort_order ?? fIdx,
+        default_value: f.default_value ?? null,
+        min_chars: f.min_chars ?? null,
+        max_chars: f.max_chars ?? null,
+        min_value: f.min_value ?? null,
+        max_value: f.max_value ?? null,
+        max_selections: f.max_selections ?? null,
+        max_file_size: f.max_file_size ?? null,
+        max_attachments: f.max_attachments ?? 1,
+        allowed_file_types: f.allowed_file_types ?? null,
+        validation_rules: f.validation_rules ?? {},
+        conditional_visibility: f.conditional_visibility ?? {},
+        options: f.options ?? [],
+      })),
+    };
+  });
 
   if (sections.length === 0) {
     return { form: null, sections: [], questions: [], options: {}, error: "The published form has no sections or questions configured.", errorType: "no_form" };

@@ -1,6 +1,7 @@
 "use server";
 
 import { requireAdmin } from "@/lib/auth/admin";
+import { createClient } from "@/lib/supabase/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import {
   RoundSchema,
@@ -10,6 +11,7 @@ import {
 import { z } from "zod";
 import { validateCsrfToken, CSRF_CONSTANTS } from "@/lib/csrf-server";
 import { revalidatePath } from "next/cache";
+import type { PostgrestError } from "@supabase/supabase-js";
 
 export type RoundInput = z.infer<typeof RoundSchema>;
 export type CriterionInput = z.infer<typeof CriterionSchema>;
@@ -26,6 +28,24 @@ export interface RoundActionResult<T = any> {
   data?: T;
   id?: string;
   error?: string;
+}
+
+/**
+ * Formats a Supabase PostgrestError preserving diagnostic fields
+ * (message, code, details, hint) without exposing server secrets.
+ */
+export function formatSupabaseError(
+  error: PostgrestError | { message?: string; code?: string; details?: string | null; hint?: string | null } | null | undefined,
+  fallback = "Database operation failed."
+): string {
+  if (!error) return fallback;
+  const parts: string[] = [];
+  const baseMessage = error.message?.trim() || fallback;
+  parts.push(baseMessage);
+  if (error.code) parts.push(`Code: ${error.code}`);
+  if (error.details) parts.push(`Details: ${error.details}`);
+  if (error.hint) parts.push(`Hint: ${error.hint}`);
+  return parts.join(" | ");
 }
 
 export async function createRound(
@@ -46,11 +66,12 @@ export async function createRound(
     }
 
     const validated = parsed.data;
+    const supabase = await createClient();
 
     // Resolve event_id: verify that the event actually exists in the database.
     let eventId: string | null = validated.event_id || null;
     if (eventId && UUID_REGEX.test(eventId)) {
-      const { data: exists } = await supabaseAdmin
+      const { data: exists } = await supabase
         .from("events")
         .select("id")
         .eq("id", eventId)
@@ -64,7 +85,7 @@ export async function createRound(
 
     // If no valid event specified, pick the most recent event if available
     if (!eventId) {
-      const { data: defaultEvent } = await supabaseAdmin
+      const { data: defaultEvent } = await supabase
         .from("events")
         .select("id")
         .order("created_at", { ascending: false })
@@ -74,8 +95,8 @@ export async function createRound(
       if (defaultEvent?.id) {
         eventId = defaultEvent.id;
       } else {
-        // Ensure default event exists in the database
-        const { data: newEv } = await supabaseAdmin
+        // Ensure default fallback event exists in the database
+        const { data: newEv } = await supabase
           .from("events")
           .upsert([{ id: "11111111-1111-1111-1111-111111111111", title: "IVC Hackathon 2026" }])
           .select("id")
@@ -91,17 +112,20 @@ export async function createRound(
       event_id: eventId,
     };
 
-    const { data: round, error } = await supabaseAdmin
+    const { data: round, error } = await supabase
       .from("evaluation_rounds")
       .insert([roundPayload])
       .select()
       .single();
 
     if (error || !round) {
-      return { success: false, error: `Failed to create round: ${error?.message || "Database insert error"}` };
+      return {
+        success: false,
+        error: `Failed to create round: ${formatSupabaseError(error, "Database insert error")}`,
+      };
     }
 
-    // Audit log write (non-blocking)
+    // Audit log write (non-blocking) using supabaseAdmin to guarantee privileged audit insertion
     try {
       await supabaseAdmin.from("audit_logs").insert([
         {
@@ -148,14 +172,16 @@ export async function updateRoundStatus(
     const parsedStatus = RoundSchema.shape.status.safeParse(status);
     const validStatus = parsedStatus.success ? parsedStatus.data : "draft";
 
+    const supabase = await createClient();
+
     // Fetch previous status for diffing
-    const { data: previousRound } = await supabaseAdmin
+    const { data: previousRound } = await supabase
       .from("evaluation_rounds")
       .select("status")
       .eq("id", roundId)
       .maybeSingle();
 
-    const { data: round, error } = await supabaseAdmin
+    const { data: round, error } = await supabase
       .from("evaluation_rounds")
       .update({ status: validStatus, updated_at: new Date().toISOString() })
       .eq("id", roundId)
@@ -163,7 +189,10 @@ export async function updateRoundStatus(
       .single();
 
     if (error || !round) {
-      return { success: false, error: `Failed to update round status: ${error?.message || "Not found"}` };
+      return {
+        success: false,
+        error: `Failed to update round status: ${formatSupabaseError(error, "Not found or update failed")}`,
+      };
     }
 
     // Audit log write (non-blocking)
@@ -212,7 +241,9 @@ export async function updateRound(
       return { success: false, error: "Round title is required." };
     }
 
-    const { data: round, error } = await supabaseAdmin
+    const supabase = await createClient();
+
+    const { data: round, error } = await supabase
       .from("evaluation_rounds")
       .update({
         title,
@@ -225,7 +256,10 @@ export async function updateRound(
       .single();
 
     if (error || !round) {
-      return { success: false, error: `Failed to update round: ${error?.message || "Not found"}` };
+      return {
+        success: false,
+        error: `Failed to update round: ${formatSupabaseError(error, "Not found or update failed")}`,
+      };
     }
 
     // Audit log write (non-blocking)
@@ -267,17 +301,22 @@ export async function deleteRound(roundId: string, csrfToken?: string): Promise<
       return { success: false, error: "Valid round identifier is required." };
     }
 
-    // Clean up evaluations and criteria associated with this round to prevent foreign key errors
-    await supabaseAdmin.from("evaluations").delete().eq("round_id", roundId);
-    await supabaseAdmin.from("evaluation_criteria").delete().eq("round_id", roundId);
+    const supabase = await createClient();
 
-    const { error } = await supabaseAdmin
+    // Clean up evaluations and criteria associated with this round to prevent foreign key errors
+    await supabase.from("evaluations").delete().eq("round_id", roundId);
+    await supabase.from("evaluation_criteria").delete().eq("round_id", roundId);
+
+    const { error } = await supabase
       .from("evaluation_rounds")
       .delete()
       .eq("id", roundId);
 
     if (error) {
-      return { success: false, error: `Failed to delete round: ${error.message}` };
+      return {
+        success: false,
+        error: `Failed to delete round: ${formatSupabaseError(error, "Delete failed")}`,
+      };
     }
 
     // Audit log write (non-blocking)
@@ -324,13 +363,21 @@ export async function createCriterion(
     }
 
     const validated = parsed.data;
+    const supabase = await createClient();
 
     // Verify round exists in database
-    const { data: roundExists } = await supabaseAdmin
+    const { data: roundExists, error: roundCheckError } = await supabase
       .from("evaluation_rounds")
       .select("id")
       .eq("id", validated.round_id)
       .maybeSingle();
+
+    if (roundCheckError) {
+      return {
+        success: false,
+        error: `Failed to verify round: ${formatSupabaseError(roundCheckError, "Round lookup failed")}`,
+      };
+    }
 
     if (!roundExists) {
       return {
@@ -347,14 +394,17 @@ export async function createCriterion(
       is_required: validated.is_required ?? true,
     };
 
-    const { data: criterion, error } = await supabaseAdmin
+    const { data: criterion, error } = await supabase
       .from("evaluation_criteria")
       .insert([criterionPayload])
       .select()
       .single();
 
     if (error || !criterion) {
-      return { success: false, error: `Failed to create criterion: ${error?.message || "Database insert error"}` };
+      return {
+        success: false,
+        error: `Failed to create criterion: ${formatSupabaseError(error, "Database insert error")}`,
+      };
     }
 
     // Audit log write (non-blocking)
@@ -405,8 +455,9 @@ export async function updateCriterion(
     }
 
     const validated = parsed.data;
+    const supabase = await createClient();
 
-    const { data: criterion, error } = await supabaseAdmin
+    const { data: criterion, error } = await supabase
       .from("evaluation_criteria")
       .update({ ...validated, updated_at: new Date().toISOString() })
       .eq("id", criterionId)
@@ -414,7 +465,10 @@ export async function updateCriterion(
       .single();
 
     if (error || !criterion) {
-      return { success: false, error: `Failed to update criterion: ${error?.message || "Not found"}` };
+      return {
+        success: false,
+        error: `Failed to update criterion: ${formatSupabaseError(error, "Not found or update failed")}`,
+      };
     }
 
     // Audit log write (non-blocking)
@@ -451,13 +505,18 @@ export async function deleteCriterion(criterionId: string, csrfToken?: string): 
       await validateCsrfToken(csrfToken || null);
     } catch {}
 
-    const { error } = await supabaseAdmin
+    const supabase = await createClient();
+
+    const { error } = await supabase
       .from("evaluation_criteria")
       .delete()
       .eq("id", criterionId);
 
     if (error) {
-      return { success: false, error: `Failed to delete criterion: ${error.message}` };
+      return {
+        success: false,
+        error: `Failed to delete criterion: ${formatSupabaseError(error, "Delete failed")}`,
+      };
     }
 
     // Audit log write (non-blocking)
@@ -489,12 +548,13 @@ export async function deleteCriterion(criterionId: string, csrfToken?: string): 
 
 export async function getRoundsData() {
   const fetchRounds = async () => {
+    const supabase = await createClient();
     const [roundsRes, criteriaRes] = await Promise.all([
-      supabaseAdmin
+      supabase
         .from("evaluation_rounds")
         .select("*")
         .order("sequence_order", { ascending: true }),
-      supabaseAdmin
+      supabase
         .from("evaluation_criteria")
         .select("*"),
     ]);
@@ -513,7 +573,8 @@ export async function getRoundsData() {
 
 export async function getEventsForDropdown() {
   try {
-    const { data, error } = await supabaseAdmin
+    const supabase = await createClient();
+    const { data, error } = await supabase
       .from("events")
       .select("id, title")
       .order("created_at", { ascending: false });

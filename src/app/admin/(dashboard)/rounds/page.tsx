@@ -1,4 +1,4 @@
-import { supabaseAdmin } from "@/lib/supabase/admin";
+import { createClient } from "@/lib/supabase/server";
 import RoundsClientView, {
   AdminRoundItem,
   AdminCriterionItem,
@@ -13,15 +13,16 @@ export default async function AdminRoundsPage() {
 
   try {
     const fetchRoundsData = async () => {
+      const supabase = await createClient();
       const [roundsRes, criteriaRes, eventsRes] = await Promise.all([
-        supabaseAdmin
+        supabase
           .from("evaluation_rounds")
           .select("*")
           .order("sequence_order", { ascending: true }),
-        supabaseAdmin
+        supabase
           .from("evaluation_criteria")
           .select("*"),
-        supabaseAdmin
+        supabase
           .from("events")
           .select("id, title")
           .order("created_at", { ascending: false }),
