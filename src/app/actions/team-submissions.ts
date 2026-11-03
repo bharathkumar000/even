@@ -400,7 +400,7 @@ export async function submitFinalSubmission(input: {
   // Check if form allows member submit or user is leader
   const { data: form } = await supabaseAdmin
     .from("project_subjection_forms")
-    .select("status, closes_at, allow_edit_after_submission")
+    .select("status, closes_at, allow_edit_after_submission, form_config")
     .eq("id", validated.form_id)
     .maybeSingle();
 
@@ -410,6 +410,42 @@ export async function submitFinalSubmission(input: {
 
   if (form.status !== "published") {
     throw new Error("Submissions are not open at this time");
+  }
+
+  // Server-side validation: required fields and URL validation
+  const formConfig = form.form_config || {};
+  const rawSections = Array.isArray(formConfig.sections) ? formConfig.sections : [];
+  const missingRequired: string[] = [];
+  const invalidUrls: string[] = [];
+
+  rawSections.forEach((section: any) => {
+    const fields = Array.isArray(section.fields) ? section.fields : [];
+    fields.forEach((f: any) => {
+      const value = validated.answers[f.id];
+      const strValue = value ? value.toString() : "";
+
+      // Check required fields
+      if (Boolean(f.required) && (!strValue || strValue.trim() === "")) {
+        missingRequired.push(f.label || f.title || "Untitled Question");
+      }
+
+      // URL validation for URL-type questions that have a value
+      if (value && f.question_type === "url") {
+        try {
+          new URL(String(value));
+        } catch {
+          invalidUrls.push(f.label || f.title || "Untitled Question");
+        }
+      }
+    });
+  });
+
+  if (missingRequired.length > 0) {
+    throw new Error(`Required fields missing: ${missingRequired.join(", ")}`);
+  }
+
+  if (invalidUrls.length > 0) {
+    throw new Error(`Invalid URL format for: ${invalidUrls.join(", ")}`);
   }
 
   if (!form.allow_edit_after_submission && membership.role !== "leader") {

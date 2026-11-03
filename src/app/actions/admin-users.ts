@@ -644,9 +644,11 @@ export async function bulkImportUsers(records: BulkImportUserRecord[], csrfToken
        : null;
      const email = loginEmail;
      const fullName = item.full_name?.trim();
-    let rawRole = item.role?.toLowerCase();
-    // Security fencing: Nobody can be assigned as admin through CSV import
-    if (rawRole === "admin") {
+let rawRole = item.role?.toLowerCase();
+    // Security fencing: nobody can be assigned as admin through CSV import
+    // Also validate against allowed roles
+    const allowedRoles: AllowedUserRole[] = ["judge", "staff", "spoc", "participant", "leader"];
+    if (rawRole === "admin" || !allowedRoles.includes(rawRole as AllowedUserRole)) {
       rawRole = "participant";
     }
     const role: AllowedUserRole = (rawRole as AllowedUserRole) || "participant";
