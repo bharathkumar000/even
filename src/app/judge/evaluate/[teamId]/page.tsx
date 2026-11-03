@@ -49,27 +49,18 @@ export default async function EvaluateTeamPage({
   let existingEvaluation: ExistingEvaluationDetail | null = null;
 
   // Get the authenticated judge's user ID for evaluation isolation
-  let judgeUserId: string | null = null;
+  let currentJudgeId: string | null = null;
   try {
     const supabase = await createClient();
-    const {
-      data: { user },
-      error: userError,
-    } = await supabase.auth.getUser();
-    if (!userError && user) {
-      judgeUserId = user.id;
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user?.id) {
+      currentJudgeId = user.id;
     }
   } catch {
     // Auth errors are non-fatal here; evaluation will be empty if unauthenticated
   }
 
   try {
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    const currentJudgeId = user?.id || judgeUserId;
-
     // 1. Fetch team, submission, and judge-specific assignment in parallel
     const [teamRes, subRes, assignmentRes] = await Promise.all([
       supabaseAdmin.from("teams").select("*").eq("id", teamId).single(),

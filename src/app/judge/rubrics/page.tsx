@@ -107,9 +107,12 @@ export default async function JudgeRubricsPage() {
         .filter(Boolean)
     );
 
-    if (assignedRoundIds.size > 0) {
+    if (judgeUserId && assignedRoundIds.size > 0) {
       rounds = rounds.filter((r) => assignedRoundIds.has(r.id));
       criteria = criteria.filter((c) => assignedRoundIds.has(c.round_id));
+    } else {
+      rounds = [];
+      criteria = [];
     }
   } catch (err) {
     console.error("Failed to load rubrics:", err);
