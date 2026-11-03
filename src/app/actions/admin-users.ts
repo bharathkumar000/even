@@ -498,6 +498,7 @@ export async function createUser(data: {
       email: data.email,
       full_name: data.fullName,
       role: data.role,
+      username: data.username ? data.username.trim().toLowerCase() : null,
     });
 
   if (profileError) {
@@ -673,6 +674,7 @@ export async function bulkImportUsers(records: BulkImportUserRecord[], csrfToken
           .update({
             full_name: fullName,
             role: role,
+            username: username ? username.toLowerCase() : null,
           })
           .eq("id", userId);
 
@@ -712,6 +714,7 @@ export async function bulkImportUsers(records: BulkImportUserRecord[], csrfToken
             email,
             full_name: fullName,
             role,
+            username: username ? username.toLowerCase() : null,
           });
           results.created++;
         }

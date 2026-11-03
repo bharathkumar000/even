@@ -1,5 +1,5 @@
-import { supabaseAdmin } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
+import { supabaseAdmin } from "@/lib/supabase/admin";
 import { slugify } from "@/lib/utils";
 import EvaluateClientView, { TeamDetail, SubmissionDetail, ActiveRoundDetail, CriterionDetail, ExistingEvaluationDetail } from "./evaluate-client";
 
@@ -32,12 +32,23 @@ export default async function EvaluateTeamPage({
     }
   }
 
-
   let team: TeamDetail | null = null;
   let submission: SubmissionDetail | null = null;
   let activeRound: ActiveRoundDetail | null = null;
   let criteria: CriterionDetail[] = [];
   let existingEvaluation: ExistingEvaluationDetail | null = null;
+
+  // Get the authenticated judge's user ID for evaluation isolation
+  let judgeUserId: string | null = null;
+  try {
+    const supabase = await createClient();
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    if (!userError && user) {
+      judgeUserId = user.id;
+    }
+  } catch {
+    // Auth errors are non-fatal here; evaluation will be empty if unauthenticated
+  }
 
   try {
     const supabase = await createClient();

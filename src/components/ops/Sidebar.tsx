@@ -102,11 +102,11 @@ export default function OpsSidebar() {
       desc: "Judge & team allocations",
     },
     {
-      href: "/ops/scanner#manual-lookup",
+      href: "/ops/team-lookup",
       icon: Search,
       label: "Team Lookup",
       badge: "Manual",
-      desc: "Manual ID search",
+      desc: "Search & verify teams",
     },
     {
       href: "/ops/scanner#live-activity",

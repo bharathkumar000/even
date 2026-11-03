@@ -67,13 +67,9 @@ function formatRelativeTime(isoString?: string | null) {
   if (!isoString) return "Just now";
   try {
     const d = new Date(isoString);
-    const diffSec = Math.floor((Date.now() - d.getTime()) / 1000);
-    if (diffSec < 60) return "Just now";
-    const diffMin = Math.floor(diffSec / 60);
-    if (diffMin < 60) return `${diffMin}m ago`;
-    const diffHr = Math.floor(diffMin / 60);
-    if (diffHr < 24) return `${diffHr}h ago`;
-    return d.toLocaleDateString([], { month: "short", day: "numeric" });
+    // Always render absolute date/time for deterministic SSR/client output
+    // Avoids hydration mismatch from Date.now() during render
+    return d.toLocaleDateString([], { month: "short", day: "numeric" }) + " " + d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
   } catch {
     return "Recent";
   }
