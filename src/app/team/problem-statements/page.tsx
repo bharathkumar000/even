@@ -20,8 +20,26 @@ const DEPARTMENTS: Array<{
 export default async function TeamProblemStatementsPage() {
   const { user, teamId } = await requireAuthenticatedTeamUser();
 
+  // Determine user department if team has a track
+  let userDepartment: Department | null = null;
+  if (teamId) {
+    const { data: team } = await supabaseAdmin
+      .from("teams")
+      .select("track")
+      .eq("id", teamId)
+      .maybeSingle();
+    const track = (team?.track || "").toLowerCase();
+    if (track.includes("cse") || track.includes("ai") || track.includes("ml")) {
+      userDepartment = "cse-aiml";
+    } else if (track.includes("ece") || track.includes("eee") || track.includes("ec")) {
+      userDepartment = "ece-eee";
+    } else if (track.includes("mech") || track.includes("civil") || track.includes("cv") || track.includes("me")) {
+      userDepartment = "me-cv";
+    }
+  }
+
   // Default to CSE/AIML as initial domain
-  const defaultDepartment = "cse-aiml";
+  const defaultDepartment: Department = userDepartment || "cse-aiml";
 
   // Fetch all published statements for default domain
   const allStatements = await getPublishedProblemStatements(defaultDepartment);
