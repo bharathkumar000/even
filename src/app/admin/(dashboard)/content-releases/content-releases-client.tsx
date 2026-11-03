@@ -10,6 +10,7 @@ import {
   AlertCircle,
   ArrowLeft,
   Award,
+  BarChart2,
   BookOpen,
   CalendarClock,
   Check,
@@ -496,6 +497,14 @@ export default function ContentHubClientView({
   });
 
   // Filter states
+  const [departmentFilter, setDepartmentFilter] = useState<string>("all");
+  const [categoryFilter, setCategoryFilter] = useState<string>("all");
+  const [sihYearFilter, setSihYearFilter] = useState<string>("all");
+
+  // SIH Import dialog state
+  const [sihImportOpen, setSihImportOpen] = useState(false);
+
+  // Filter states for SIH fields
   const [departmentFilter, setDepartmentFilter] = useState<string>("all");
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
   const [sihYearFilter, setSihYearFilter] = useState<string>("all");

@@ -427,9 +427,9 @@ function mapDomain(department: string): string {
     case "Electronics and Communication":
       return "ECE/EEE";
     case "Mechanical":
-      return "ME/CV";
+      return "Mech/Civil";
     case "Civil":
-      return "ME/CV";
+      return "Mech/Civil";
     default:
       return department;
   }
@@ -620,12 +620,12 @@ export async function importSIHProblemStatements(input: {
         source_document: "Ideathon_Case_Studies.pdf",
         status: "draft",
         is_visible_to_teams: false,
-        selection_enabled: false,
-        enable_selection: false,
+        selection_enabled: true,
+        enable_selection: true,
         manually_locked: false,
         manual_lock: false,
-        team_limit: null,
-        max_teams: null,
+        team_limit: 2,
+        max_teams: 2,
         selection_opening: null,
         selection_closing: null,
         selection_open_at: null,
@@ -635,7 +635,20 @@ export async function importSIHProblemStatements(input: {
         deliverables: [],
         constraints: [],
         evaluation_criteria: [],
-        resource_links: [],
+        resource_links: {
+          __hub_item: {
+            activity_id: "5f9736b5-603d-40a9-aa9b-edf9e93fad3a",
+            item_type: "problem_statement",
+            metadata: {
+              domain: mapDomain(ps.department),
+              category: ps.category,
+              organization: ps.organization,
+              theme: ps.theme,
+              sih_ps_number: ps.sihPsNumber,
+              department: ps.department,
+            },
+          },
+        },
         attachments: [],
         draft_content: {},
         published_content: {},
