@@ -64,7 +64,11 @@ export async function revertScanActivity(
       };
     }
 
-    if (targetLog.result === "reverted") {
+    const isAlreadyReverted =
+      targetLog.result === "reverted" ||
+      (targetLog.result === "rejected" && targetLog.new_status === "unclaimed");
+
+    if (isAlreadyReverted) {
       return {
         success: false,
         error: "This scan activity has already been reverted.",
@@ -114,7 +118,7 @@ export async function revertScanActivity(
     const { error: updateErr } = await supabaseAdmin
       .from("event_activity_logs")
       .update({
-        result: "reverted",
+        result: "rejected",
         previous_status: targetLog.new_status || "claimed",
         new_status: "unclaimed",
         reason: `Reverted by Admin (${adminName}): ${reasonText}`,
@@ -142,7 +146,9 @@ export async function revertScanActivity(
     }
 
     const allReverted = verifiedRows.every(
-      (r) => r.result === "reverted" && r.new_status === "unclaimed"
+      (r) =>
+        (r.result === "rejected" || r.result === "reverted") &&
+        r.new_status === "unclaimed"
     );
     if (!allReverted) {
       return {

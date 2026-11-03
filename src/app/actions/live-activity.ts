@@ -104,7 +104,13 @@ export async function getActivityPage(input: ActivityPageInput): Promise<Activit
     query = query.eq("method", filters.method);
   }
   if (filters.result && filters.result !== "all") {
-    query = query.eq("result", filters.result);
+    if (filters.result === "reverted") {
+      query = query.or("result.eq.reverted,and(result.eq.rejected,new_status.eq.unclaimed)");
+    } else if (filters.result === "rejected") {
+      query = query.eq("result", "rejected").neq("new_status", "unclaimed");
+    } else {
+      query = query.eq("result", filters.result);
+    }
   }
   if (filters.from) {
     query = query.gte("created_at", filters.from);
@@ -246,7 +252,7 @@ export async function getActivityPage(input: ActivityPageInput): Promise<Activit
     total: filteredLogs.length,
     success: filteredLogs.filter((l) => l.result === "success").length,
     failed: filteredLogs.filter(
-      (l) => l.result === "failure" || l.result === "rejected"
+      (l) => l.result === "failure" || (l.result === "rejected" && l.new_status !== "unclaimed")
     ).length,
     checkIns: filteredLogs.filter((l) => l.result === "success" && isCheckin(l.action_type)).length,
     distributions: filteredLogs.filter(
