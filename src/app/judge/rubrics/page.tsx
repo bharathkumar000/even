@@ -102,15 +102,14 @@ export default async function JudgeRubricsPage() {
     if (criteriaRes.data) criteria = criteriaRes.data;
 
     const assignedRoundIds = new Set(
-      (assignmentsRes.data || []).map((a: any) => a.round_id)
+      (assignmentsRes.data || [])
+        .map((a: any) => a.round_id)
+        .filter(Boolean)
     );
 
-    if (judgeUserId && assignedRoundIds.size > 0) {
+    if (assignedRoundIds.size > 0) {
       rounds = rounds.filter((r) => assignedRoundIds.has(r.id));
       criteria = criteria.filter((c) => assignedRoundIds.has(c.round_id));
-    } else {
-      rounds = [];
-      criteria = [];
     }
   } catch (err) {
     console.error("Failed to load rubrics:", err);

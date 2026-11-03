@@ -1,19 +1,29 @@
 import { createClient } from "@/lib/supabase/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { slugify } from "@/lib/utils";
-import EvaluateClientView, { TeamDetail, SubmissionDetail, ActiveRoundDetail, CriterionDetail, ExistingEvaluationDetail } from "./evaluate-client";
+import EvaluateClientView, {
+  TeamDetail,
+  SubmissionDetail,
+  ActiveRoundDetail,
+  CriterionDetail,
+  ExistingEvaluationDetail,
+} from "./evaluate-client";
 
 export const dynamic = "force-dynamic";
 
 export default async function EvaluateTeamPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ teamId: string }>;
+  searchParams?: Promise<{ round?: string }>;
 }) {
   const { teamId: slugOrId } = await params;
+  const { round: queryRoundId } = (await searchParams) || {};
 
   // Resolve the actual team ID. If the segment looks like a UUID we use it directly; otherwise we treat it as a slug derived from the team name.
-  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  const uuidRegex =
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
   let teamId = slugOrId;
   if (!uuidRegex.test(slugOrId)) {
     // Assume it's a slug; attempt to find the associated team ID.
@@ -42,7 +52,10 @@ export default async function EvaluateTeamPage({
   let judgeUserId: string | null = null;
   try {
     const supabase = await createClient();
-    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser();
     if (!userError && user) {
       judgeUserId = user.id;
     }
@@ -52,41 +65,97 @@ export default async function EvaluateTeamPage({
 
   try {
     const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    const currentJudgeId = user?.id || judgeUserId;
 
-    const [teamRes, subRes, roundRes] = await Promise.all([
+    // 1. Fetch team, submission, and judge-specific assignment in parallel
+    const [teamRes, subRes, assignmentRes] = await Promise.all([
       supabaseAdmin.from("teams").select("*").eq("id", teamId).single(),
-      supabaseAdmin.from("team_submissions").select("*").eq("team_id", teamId).maybeSingle(),
       supabaseAdmin
+        .from("team_submissions")
+        .select("*")
+        .eq("team_id", teamId)
+        .maybeSingle(),
+      currentJudgeId
+        ? supabaseAdmin
+            .from("judge_assignments")
+            .select("round_id")
+            .eq("judge_id", currentJudgeId)
+            .eq("team_id", teamId)
+            .maybeSingle()
+        : Promise.resolve({ data: null }),
+    ]);
+
+    if (teamRes.data) team = teamRes.data;
+    if (subRes.data) submission = subRes.data;
+
+    // 2. Resolve target round:
+    // Priority a: Explicit round specified in URL (?round=<id>)
+    // Priority b: Round explicitly assigned to this judge for this team in judge_assignments
+    // Priority c: Active open/reopened round
+    // Priority d: Any round (draft/first available)
+    let targetRound: ActiveRoundDetail | null = null;
+
+    if (queryRoundId && uuidRegex.test(queryRoundId)) {
+      const { data: qRound } = await supabaseAdmin
+        .from("evaluation_rounds")
+        .select("*")
+        .eq("id", queryRoundId)
+        .maybeSingle();
+      if (qRound) targetRound = qRound;
+    }
+
+    if (!targetRound && assignmentRes?.data?.round_id) {
+      const { data: aRound } = await supabaseAdmin
+        .from("evaluation_rounds")
+        .select("*")
+        .eq("id", assignmentRes.data.round_id)
+        .maybeSingle();
+      if (aRound) targetRound = aRound;
+    }
+
+    if (!targetRound) {
+      const { data: openRound } = await supabaseAdmin
         .from("evaluation_rounds")
         .select("*")
         .in("status", ["open", "reopened"])
         .order("sequence_order", { ascending: true })
         .limit(1)
-        .maybeSingle(),
-    ]);
+        .maybeSingle();
+      if (openRound) targetRound = openRound;
+    }
 
-    if (teamRes.data) team = teamRes.data;
-    if (subRes.data) submission = subRes.data;
-    if (roundRes.data) {
-      const currentRound = roundRes.data;
-      activeRound = currentRound;
+    if (!targetRound) {
+      const { data: fallbackRound } = await supabaseAdmin
+        .from("evaluation_rounds")
+        .select("*")
+        .order("sequence_order", { ascending: true })
+        .limit(1)
+        .maybeSingle();
+      if (fallbackRound) targetRound = fallbackRound;
+    }
+
+    if (targetRound) {
+      activeRound = targetRound;
 
       let evalQuery = supabaseAdmin
         .from("evaluations")
         .select("*")
-        .eq("round_id", currentRound.id)
+        .eq("round_id", targetRound.id)
         .eq("team_id", teamId);
 
-      if (user?.id) {
-        evalQuery = evalQuery.eq("judge_id", user.id);
+      if (currentJudgeId) {
+        evalQuery = evalQuery.eq("judge_id", currentJudgeId);
       }
 
       const [critRes, evalRes] = await Promise.all([
         supabaseAdmin
           .from("evaluation_criteria")
           .select("*")
-          .eq("round_id", currentRound.id),
+          .eq("round_id", targetRound.id)
+          .order("created_at", { ascending: true }),
         evalQuery.maybeSingle(),
       ]);
 
