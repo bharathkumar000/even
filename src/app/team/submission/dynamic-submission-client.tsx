@@ -860,11 +860,11 @@ export default function TeamDynamicSubmissionClientView({
                 <div className="flex items-center justify-between">
                   <label className="block text-[10px] font-bold text-text-primary flex items-center justify-between gap-2">
                     <span>{question.title}</span>
-                    {question.is_required ? (
-                      <span className="text-[10px] text-accent-secondary uppercase font-bold">
-                        Mandatory
-                      </span>
-                    ) : (
+                      {question.is_required ? (
+                        <span className="text-[10px] text-accent-secondary uppercase font-bold">
+                          {question.title === "Canva PPT Link" ? "MANDATORY LINK" : "MANDATORY"}
+                        </span>
+                      ) : (
                       <span className="text-[10px] text-text-secondary/60 uppercase font-bold">
                         Optional
                       </span>

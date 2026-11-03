@@ -116,11 +116,11 @@ export default async function SubmissionFormsPage() {
                     </div>
                     <div className="flex items-center gap-2">
                       <Link
-                        href={`/admin/submission-forms/${form.id}`}
+                        href={`/admin/submission-forms/${form.id}/edit`}
                         className="px-3 py-1.5 border border-accent-secondary/40 text-accent-secondary rounded text-[10px] font-bold uppercase tracking-wider hover:bg-accent-secondary/10"
                       >
                         <Edit3 size={13} />
-                        <span>Edit</span>
+                        <span>Edit Form</span>
                       </Link>
                       <Link
                         href={`/admin/submission-forms/${form.id}/submissions`}

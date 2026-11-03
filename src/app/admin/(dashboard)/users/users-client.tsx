@@ -371,7 +371,7 @@ export default function UsersClientView({
            let roleRaw = (roleIdx !== -1 ? cols[roleIdx]?.trim().toLowerCase() : "participant") as AllowedUserRole;
             
            // Fencing: nobody can be assigned as admin through CSV import
-           if (roleRaw === "admin" || !["judge", "staff", "participant", "leader"].includes(roleRaw)) {
+           if (roleRaw === "admin" || !["judge", "staff", "spoc", "participant", "leader"].includes(roleRaw)) {
              roleRaw = "participant";
            }
  
