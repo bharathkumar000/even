@@ -144,9 +144,13 @@ export async function createRound(
       ]);
     } catch {}
 
-    revalidatePath("/admin/rounds");
-    revalidatePath("/judge/rubrics");
-    revalidatePath("/ops/rounds");
+    try {
+      revalidatePath("/admin/rounds");
+      revalidatePath("/judge/rubrics");
+      revalidatePath("/ops/rounds");
+    } catch (revalErr) {
+      console.warn("revalidatePath notice:", revalErr);
+    }
 
     return { success: true, round, data: round, id: round.id };
   } catch (err: unknown) {
@@ -212,9 +216,13 @@ export async function updateRoundStatus(
       ]);
     } catch {}
 
-    revalidatePath("/admin/rounds");
-    revalidatePath("/judge/rubrics");
-    revalidatePath("/ops/rounds");
+    try {
+      revalidatePath("/admin/rounds");
+      revalidatePath("/judge/rubrics");
+      revalidatePath("/ops/rounds");
+    } catch (revalErr) {
+      console.warn("revalidatePath notice:", revalErr);
+    }
 
     return { success: true, round, data: round, id: round.id };
   } catch (err: unknown) {
@@ -276,9 +284,13 @@ export async function updateRound(
       ]);
     } catch {}
 
-    revalidatePath("/admin/rounds");
-    revalidatePath("/judge/rubrics");
-    revalidatePath("/ops/rounds");
+    try {
+      revalidatePath("/admin/rounds");
+      revalidatePath("/judge/rubrics");
+      revalidatePath("/ops/rounds");
+    } catch (revalErr) {
+      console.warn("revalidatePath notice:", revalErr);
+    }
 
     return { success: true, round, data: round, id: round.id };
   } catch (err: unknown) {
@@ -333,9 +345,13 @@ export async function deleteRound(roundId: string, csrfToken?: string): Promise<
       ]);
     } catch {}
 
-    revalidatePath("/admin/rounds");
-    revalidatePath("/judge/rubrics");
-    revalidatePath("/ops/rounds");
+    try {
+      revalidatePath("/admin/rounds");
+      revalidatePath("/judge/rubrics");
+      revalidatePath("/ops/rounds");
+    } catch (revalErr) {
+      console.warn("revalidatePath notice:", revalErr);
+    }
 
     return { success: true };
   } catch (err: unknown) {
