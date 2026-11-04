@@ -131,7 +131,7 @@ export const SCAN_PURPOSES: ScanPurposeOption[] = [
 ];
 
 export interface ScanFeedbackState {
-  status: "success" | "already_completed" | "error" | "not_found" | "ineligible";
+  status: "success" | "already_completed" | "error" | "not_found" | "ineligible" | "limit_reached";
   title: string;
   message: string;
   actionType: ActionType;
@@ -518,7 +518,7 @@ export default function ScannerClientView() {
         status: "error",
         title: "CAMERA ERROR",
         message: rawMsg || "Failed to initialize camera scanner. You can use Manual ID Lookup below.",
-        actionType: scanPurpose,
+        actionType: scanPurposeRef.current,
         timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
       });
     }
@@ -580,6 +580,24 @@ export default function ScannerClientView() {
           teamId: res.team?.id,
           participantName: res.participant?.name,
           previousClaim: res.previousClaim,
+          timestamp: new Date().toLocaleTimeString([], {
+            hour: "2-digit",
+            minute: "2-digit",
+            second: "2-digit",
+          }),
+        });
+      } else if (res.status === "limit_reached") {
+        playScanError();
+        setScanFeedback({
+          status: "limit_reached",
+          title: `${res.action_type.toUpperCase()} LIMIT REACHED (3/3)`,
+          message: res.message,
+          actionType: res.action_type,
+          teamName: res.team?.name,
+          teamId: res.team?.id,
+          participantName: res.participant?.name,
+          claimedCount: res.claimedCount,
+          totalMembers: res.totalMembers,
           timestamp: new Date().toLocaleTimeString([], {
             hour: "2-digit",
             minute: "2-digit",
@@ -796,6 +814,53 @@ export default function ScannerClientView() {
         </div>
       </div>
 
+      {/* Team Distribution Counters (Lunch & Snacks Limits) */}
+      {teamData?.team?.id && (
+        <div className="glass-panel p-4 border border-border-color rounded-xl space-y-3">
+          <p className="text-xs uppercase tracking-[2px] text-text-secondary font-bold m-0 flex items-center gap-2">
+            <Users size={14} className="text-accent-secondary" />
+            Team Distribution Limits
+          </p>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="border rounded-lg p-3 flex flex-col items-center justify-center">
+              <div className="flex items-center gap-2 mb-2">
+                <Utensils size={16} className={`w-5 h-5 ${lunchCount >= 3 ? "text-status-error" : "text-accent-secondary"}`} />
+                <span className={`font-heading text-xs uppercase font-bold ${lunchCount >= 3 ? "text-status-error" : "text-text-primary"}`}>
+                  Lunch
+                </span>
+              </div>
+              <div className="text-2xl font-mono font-bold">
+                {lunchCount}/3
+              </div>
+              {lunchCount >= 3 && (
+                <p className="text-[10px] uppercase font-bold text-status-error mt-1">
+                  LIMIT REACHED
+                </p>
+              )}
+            </div>
+            <div className="border rounded-lg p-3 flex flex-col items-center justify-center">
+              <div className="flex items-center gap-2 mb-2">
+                <Coffee size={16} className={`w-5 h-5 ${snacksCount >= 3 ? "text-status-error" : "text-accent-secondary"}`} />
+                <span className={`font-heading text-xs uppercase font-bold ${snacksCount >= 3 ? "text-status-error" : "text-text-primary"}`}>
+                  Snacks
+                </span>
+              </div>
+              <div className="text-2xl font-mono font-bold">
+                {snacksCount}/3
+              </div>
+              {snacksCount >= 3 && (
+                <p className="text-[10px] uppercase font-bold text-status-error mt-1">
+                  LIMIT REACHED
+                </p>
+              )}
+            </div>
+          </div>
+          <p className="text-[10px] text-text-secondary/60 italic text-center m-0">
+            Maximum 3 successful scans per team per action. Lunch and Snacks have independent counters.
+          </p>
+        </div>
+      )}
+
       {/* 2. TRANSACTION RESULT BANNER (Instant, High-Visibility Feedback) */}
       {scanFeedback && (
         <div
@@ -804,6 +869,8 @@ export default function ScannerClientView() {
               ? "bg-status-success/15 border-status-success text-status-success shadow-[0_0_25px_rgba(0,255,157,0.15)]"
               : scanFeedback.status === "already_completed"
               ? "bg-yellow-500/15 border-yellow-500 text-yellow-300 shadow-[0_0_25px_rgba(234,179,8,0.15)]"
+              : scanFeedback.status === "limit_reached"
+              ? "bg-status-error/15 border-status-error text-status-error shadow-[0_0_25px_rgba(255,59,48,0.15)]"
               : "bg-status-error/15 border-status-error text-status-error shadow-[0_0_25px_rgba(255,59,48,0.15)]"
           }`}
         >
@@ -813,6 +880,8 @@ export default function ScannerClientView() {
                 <CheckCircle2 size={26} className="text-status-success shrink-0 mt-0.5" />
               ) : scanFeedback.status === "already_completed" ? (
                 <AlertCircle size={26} className="text-yellow-400 shrink-0 mt-0.5" />
+              ) : scanFeedback.status === "limit_reached" ? (
+                <ShieldAlert size={26} className="text-status-error shrink-0 mt-0.5" />
               ) : (
                 <ShieldAlert size={26} className="text-status-error shrink-0 mt-0.5" />
               )}

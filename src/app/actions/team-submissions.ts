@@ -1,7 +1,7 @@
 "use server";
 
 import { supabaseAdmin } from "@/lib/supabase/admin";
-import { createClient } from "@/lib/supabase/client";
+import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { validateCsrfToken, CSRF_CONSTANTS } from "@/lib/csrf-server";
 import { requireAdmin } from "@/lib/auth/admin";

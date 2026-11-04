@@ -167,7 +167,7 @@ export async function manualTeamLookup(teamId: string): Promise<TeamScanData> {
   // 3. Fetch active success activity logs for this team with scanner identity
   const { data: rawLogs, error: logsError } = await supabaseAdmin
     .from("event_activity_logs")
-    .select("id, participant_id, action_type, created_at, scanned_by")
+    .select("id, participant_id, action_type, created_at, scanned_by, result")
     .eq("team_id", teamId)
     .eq("result", "success");
 
@@ -206,6 +206,7 @@ export async function manualTeamLookup(teamId: string): Promise<TeamScanData> {
     scanned_by: l.scanned_by,
     scanner_name: l.scanned_by ? scannerMap[l.scanned_by]?.full_name || "Club Member" : "System",
     scanner_email: l.scanned_by ? scannerMap[l.scanned_by]?.email || "" : "",
+    result: l.result,
   }));
 
   return {
@@ -243,10 +244,10 @@ export async function recordMemberAction(data: ScanActionInput & {
       : user.email ?? "Operations";
 
   // Check existing successful claims for this participant + action
-  // lunch/snacks allow up to 3 claims; registration/goodies/certificates allow one
+  // One claim per participant per action (applies to all action types including lunch/snacks)
   const { data: existingRecords, error: checkError } = await supabaseAdmin
     .from("event_activity_logs")
-    .select("id, created_at, scanned_by, result")
+    .select("id, created_at, scanned_by, result, operator_name")
     .eq("participant_id", validated.participant_id)
     .eq("action_type", validated.action_type)
     .eq("result", "success");
@@ -257,10 +258,8 @@ export async function recordMemberAction(data: ScanActionInput & {
 
   const existingSuccessCount = (existingRecords || []).length;
 
-  const maxReached =
-    (validated.action_type === "lunch" || validated.action_type === "snacks")
-      ? existingSuccessCount >= 3
-      : existingSuccessCount > 0;
+  // One claim per participant per action (applies to all action types including lunch/snacks)
+  const maxReached = existingSuccessCount > 0;
 
   if (maxReached) {
     const prev = existingRecords?.[0];
@@ -272,6 +271,8 @@ export async function recordMemberAction(data: ScanActionInput & {
         .eq("id", prev.scanned_by)
         .maybeSingle();
       if (prevScanner?.full_name) prevScannerName = prevScanner.full_name;
+    } else if (prev?.operator_name) {
+      prevScannerName = prev.operator_name;
     }
     const timeStr = prev?.created_at
       ? new Date(prev.created_at).toLocaleTimeString("en-US", {
@@ -294,6 +295,52 @@ export async function recordMemberAction(data: ScanActionInput & {
       // Never let an audit failure mask a real business rejection.
     }
     throw new Error(message);
+  }
+
+  // Team-level capacity check for lunch/snacks (max 3 successful claims per team per action)
+  if (validated.action_type === "lunch" || validated.action_type === "snacks") {
+    const { data: teamActionLogs, error: teamCountError } = await supabaseAdmin
+      .from("event_activity_logs")
+      .select("id, scanned_by, created_at")
+      .eq("team_id", validated.team_id)
+      .eq("action_type", validated.action_type)
+      .eq("result", "success");
+
+    if (teamCountError) {
+      console.warn("Team action count query notice:", teamCountError.message);
+    }
+
+    const teamActionCount = (teamActionLogs || []).length;
+    if (teamActionCount >= 3) {
+      const prev = teamActionLogs?.[0];
+      let prevScannerName = "another club member";
+      if (prev?.scanned_by) {
+        const { data: prevScanner } = await supabaseAdmin
+          .from("profiles")
+          .select("full_name")
+          .eq("id", prev.scanned_by)
+          .maybeSingle();
+        if (prevScanner?.full_name) prevScannerName = prevScanner.full_name;
+      }
+      const timeStr = prev?.created_at
+        ? new Date(prev.created_at).toLocaleTimeString("en-US", {
+            hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: true,
+          })
+        : "";
+      const message = `${validated.action_type.toUpperCase()} LIMIT REACHED (3/3): Team "${validated.team_id}" has already received the maximum 3 ${validated.action_type.toUpperCase()} claims.${timeStr ? ` Last claim at ${timeStr} from ${prevScannerName}.` : ""}`;
+      try {
+        await recordScannerActivity({
+          teamId: validated.team_id,
+          participantId: validated.participant_id,
+          action: validated.action_type,
+          method,
+          result: "limit_reached",
+          reason: "Team distribution capacity already reached for this action.",
+          correlationId: `${correlationId}-limit`,
+        });
+      } catch {}
+      throw new Error(message);
+    }
   }
 
   // 2. Insert activity log atomically with ON CONFLICT handling.
@@ -465,8 +512,13 @@ export async function recordTeamBulkAction(teamId: string, actionType: ActionTyp
     throw new Error(`All members of this team have already received "${actionType.toUpperCase()}".`);
   }
 
+  // For lunch/snacks, claim exactly ONE member per call (one scan = one participant)
+  const membersToClaim = (actionType === "lunch" || actionType === "snacks")
+    ? unclaimedMembers.slice(0, 1)
+    : unclaimedMembers;
+
   const nowIso = new Date().toISOString();
-  const insertPayloads = unclaimedMembers.map((m) => ({
+  const insertPayloads = membersToClaim.map((m) => ({
     team_id: teamId,
     participant_id: m.user_id,
     action_type: actionType,
@@ -504,7 +556,7 @@ export async function recordTeamBulkAction(teamId: string, actionType: ActionTyp
 
   return {
     success: true,
-    claimedCount: unclaimedMembers.length,
+    claimedCount: membersToClaim.length,
     alreadyClaimedCount: claimedParticipantIds.size,
     qr_token: nextToken,
     correlationId: baseCorrelationId,
@@ -574,7 +626,7 @@ export async function fetchTeamMembersForScan(teamId: string) {
   // 3. Fetch active success activity logs for this team with scanner identity
   const { data: rawLogs, error: logsError } = await supabaseAdmin
     .from("event_activity_logs")
-    .select("id, participant_id, action_type, created_at, scanned_by")
+    .select("id, participant_id, action_type, created_at, scanned_by, result")
     .eq("team_id", teamId)
     .eq("result", "success");
 
@@ -613,6 +665,7 @@ export async function fetchTeamMembersForScan(teamId: string) {
     scanned_by: l.scanned_by,
     scanner_name: l.scanned_by ? scannerMap[l.scanned_by]?.full_name || "Club Member" : "System",
     scanner_email: l.scanned_by ? scannerMap[l.scanned_by]?.email || "" : "",
+    result: l.result,
   }));
 
   return {
@@ -1075,7 +1128,7 @@ export async function getTeamLookupDetails(teamId: string): Promise<TeamLookupRe
 
 export interface ProcessScanResult {
   success: boolean;
-  status: "success" | "already_completed" | "not_found" | "ineligible" | "error";
+  status: "success" | "already_completed" | "not_found" | "ineligible" | "error" | "limit_reached";
   message: string;
   action_type: ActionType;
   team?: {
@@ -1147,13 +1200,18 @@ export async function processAutomatedScan(params: {
       const parsed = JSON.parse(raw);
       if (parsed && typeof parsed === "object") {
         resolvedTeamId = parsed.team_id || parsed.id || parsed.teamId || null;
-        if (!resolvedParticipantId) {
-          resolvedParticipantId =
-            parsed.participant_id ||
-            parsed.user_id ||
-            parsed.member_id ||
-            parsed.participantId ||
-            null;
+        // For lunch/snacks, never use embedded participant_id from team QR —
+        // route to Case B for individual member selection.
+        // Only explicit params.participantId (individual member button) counts.
+        if (params.actionType !== "lunch" && params.actionType !== "snacks") {
+          if (!resolvedParticipantId) {
+            resolvedParticipantId =
+              parsed.participant_id ||
+              parsed.user_id ||
+              parsed.member_id ||
+              parsed.participantId ||
+              null;
+          }
         }
       }
     } catch {
@@ -1334,6 +1392,47 @@ export async function processAutomatedScan(params: {
 
     const participantName = targetMember.name || "Participant";
 
+    // Team-level limit check for lunch/snacks (max 3 successful scans per team per action)
+    if (params.actionType === "lunch" || params.actionType === "snacks") {
+      const { data: teamActionLogs, error: teamCountError } = await supabaseAdmin
+        .from("event_activity_logs")
+        .select("id")
+        .eq("team_id", team.id)
+        .eq("action_type", params.actionType)
+        .eq("result", "success");
+
+      if (teamCountError) {
+        console.warn("Team action count query notice:", teamCountError.message);
+      }
+
+      const teamActionCount = (teamActionLogs || []).length;
+      if (teamActionCount >= 3) {
+        const teamData = await fetchTeamMembersForScan(team.id).catch(() => null);
+        return {
+          success: false,
+          status: "limit_reached",
+          action_type: params.actionType,
+          message: `${params.actionType.toUpperCase()} LIMIT REACHED (3/3): Team "${team.name}" has already received the maximum 3 ${params.actionType.toUpperCase()} scans.`,
+          team: {
+            id: team.id,
+            name: team.name,
+            code: team.code,
+            track: team.track,
+            leader_name: team.leader_name,
+          },
+          participant: {
+            id: targetMember.user_id,
+            name: participantName,
+            email: targetMember.email,
+            role: targetMember.role,
+          },
+          teamData,
+          claimedCount: teamActionCount,
+          totalMembers: members.length,
+        };
+      }
+    }
+
     // Duplicate check in event_activity_logs
     const { data: existingLogs } = await supabaseAdmin
       .from("event_activity_logs")
@@ -1483,6 +1582,19 @@ export async function processAutomatedScan(params: {
   // =========================================================================
   // CASE B: TEAM-LEVEL WORKFLOW (Team QR code scanned for team roster)
   // =========================================================================
+  // Concurrency safety: serialize concurrent scans for the same team/action
+  // using a transaction-level advisory lock. Prevents two simultaneous scans
+  // from selecting the same pending participant.
+  if (params.actionType === "lunch" || params.actionType === "snacks") {
+    const lockKey = "ivc_team_distribution:" + team.id + ":" + params.actionType;
+    // Simple string hash to a 32-bit integer for pg_advisory_xact_lock(key1, key2)
+    let h = 0;
+    for (let i = 0; i < lockKey.length; i++) {
+      h = ((h << 5) - h + lockKey.charCodeAt(i)) | 0;
+    }
+    await supabaseAdmin.rpc("pg_advisory_xact_lock", { key1: h, key2: 0 });
+  }
+
   const { data: existingTeamLogs } = await supabaseAdmin
     .from("event_activity_logs")
     .select("participant_id, created_at, operator_name, result")
@@ -1490,6 +1602,32 @@ export async function processAutomatedScan(params: {
     .eq("action_type", params.actionType)
     .eq("result", "success")
     .order("created_at", { ascending: false });
+
+  // Team-level limit check for lunch/snacks (max 3 successful scans per team per action)
+  if ((params.actionType === "lunch" || params.actionType === "snacks") && (existingTeamLogs || []).length >= 3) {
+    const prev = existingTeamLogs?.[0];
+    const prevTime = prev?.created_at ? formatTime(prev.created_at) : "";
+    const prevOp = prev?.operator_name || "Operations Staff";
+
+    const teamData = await fetchTeamMembersForScan(team.id).catch(() => null);
+
+    return {
+      success: false,
+      status: "limit_reached",
+      action_type: params.actionType,
+      message: `${params.actionType.toUpperCase()} LIMIT REACHED (3/3): Team "${team.name}" has already received the maximum 3 ${params.actionType.toUpperCase()} scans${prevTime ? ` at ${prevTime} from ${prevOp}` : ""}.`,
+      team: {
+        id: team.id,
+        name: team.name,
+        code: team.code,
+        track: team.track,
+        leader_name: team.leader_name,
+      },
+      totalMembers: members.length,
+      claimedCount: (existingTeamLogs || []).length,
+      teamData,
+    };
+  }
 
   const claimedUserIds = new Set(
     (existingTeamLogs || []).map((l) => l.participant_id)

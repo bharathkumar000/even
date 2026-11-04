@@ -3,7 +3,7 @@
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { requireOperationsRole } from "@/lib/auth/operations";
 
-export type AuditResult = "success" | "failure" | "rejected" | "already_completed";
+export type AuditResult = "success" | "failure" | "rejected" | "already_completed" | "limit_reached";
 export type AuditMethod = "qr" | "manual";
 export type AuditAction =
   | "registration"

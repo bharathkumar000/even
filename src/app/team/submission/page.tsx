@@ -178,6 +178,8 @@ export default async function TeamSubmissionPage() {
           role={role}
           activeRound={null}
           formId={formId}
+          form={formData.form}
+          sections={formData.sections}
           formStatus={formStatus}
           submissionState={submissionState}
           submissionOpenAt={submissionOpenAt}

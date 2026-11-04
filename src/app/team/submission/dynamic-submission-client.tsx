@@ -89,6 +89,8 @@ interface TeamDynamicSubmissionClientViewProps {
   role: string;
   activeRound: any;
   formId: string | null;
+  form: SubmissionForm | null;
+  sections: FormSection[];
   formStatus: string;
   submissionState: string;
   submissionOpenAt: string | null;
@@ -109,6 +111,8 @@ export default function TeamDynamicSubmissionClientView({
   role,
   activeRound,
   formId,
+  form,
+  sections: serverSections,
   formStatus,
   submissionState,
   submissionOpenAt,
@@ -123,9 +127,9 @@ export default function TeamDynamicSubmissionClientView({
   currentSubmission,
 }: TeamDynamicSubmissionClientViewProps) {
   const now = useSyncExternalStore(subscribeTime, getClientTime, getServerTime);
-  const [sections, setSections] = useState<FormSection[]>([]);
-  const [form, setForm] = useState<SubmissionForm | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [sections, setSections] = useState<FormSection[]>(serverSections);
+  const [formState, setFormState] = useState<SubmissionForm | null>(form);
+  const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isAutoSaving, setIsAutoSaving] = useState(false);
   const [lastSavedAt, setLastSavedAt] = useState<string | null>(null);
@@ -145,54 +149,20 @@ export default function TeamDynamicSubmissionClientView({
   const fileRefsRef = useRef(fileRefs);
   fileRefsRef.current = fileRefs;
 
-  const loadForm = async () => {
-    if (!formId) {
-      setIsLoading(false);
-      return;
-    }
-
-    try {
-      const res = await fetch(`/api/team/submission-form/${formId}`);
-      if (!res.ok) throw new Error("Failed to load form");
-      const data = await res.json();
-      setSections(data.sections || []);
-      setForm(data.form || null);
-
-      // Load existing draft
-      const draftRes = await fetch(`/api/team/submission-draft?formId=${formId}&teamId=${teamId}`);
-      if (draftRes.ok) {
-        const draftData = await draftRes.json();
-        if (draftData.draft) {
-          setAnswers(draftData.draft.answers || {});
-          setFileRefs(draftData.draft.file_references || []);
-          if (draftData.draft.updated_at || draftData.draft.created_at) {
-            const dt = new Date(draftData.draft.updated_at || draftData.draft.created_at);
-            setLastSavedAt(
-              dt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })
-            );
-          }
-        }
-      }
-
-      // Load existing final submission
-      if (currentSubmission) {
-        setAnswers(currentSubmission.answers || {});
-        setFileRefs(currentSubmission.file_references || []);
-      }
-    } catch {
-      setNotification({ type: "error", message: "Failed to load submission form" });
-    } finally {
-      setIsLoading(false);
-      setTimeout(() => {
-        hasLoadedDraftRef.current = true;
-      }, 500);
-    }
-  };
-
+  // Load existing draft and final submission from server-passed data
   useEffect(() => {
-    loadForm();
     setMounted(true);
-  }, [formId]);
+
+    // Load existing draft
+    if (currentSubmission) {
+      setAnswers(currentSubmission.answers || {});
+      setFileRefs(currentSubmission.file_references || []);
+    }
+
+    setTimeout(() => {
+      hasLoadedDraftRef.current = true;
+    }, 500);
+  }, [currentSubmission]);
 
   const handleAnswerChange = (questionId: string, value: unknown) => {
     setAnswers((prev) => {
@@ -562,11 +532,7 @@ export default function TeamDynamicSubmissionClientView({
                 key={star}
                 onClick={() => handleAnswerChange(question.id, star)}
                 disabled={disabled}
-                className={`w-8 h-8 rounded flex items-center justify-center text-xs font-bold transition-colors ${
-                  typeof value === "number" && star <= value
-                    ? "text-yellow-400 bg-yellow-400/10"
-                    : "text-text-secondary hover:text-accent-secondary"
-                }`}
+                className={`w-8 h-8 rounded flex items-center justify-center text-xs font-bold transition-colors ${typeof value === "number" && star <= value ? "text-yellow-400 bg-yellow-400/10" : "text-text-secondary hover:text-accent-secondary"}`}
               >
                 ★
               </button>
@@ -758,19 +724,7 @@ export default function TeamDynamicSubmissionClientView({
 
   return (
     <div className="space-y-6">
-      <div className="border-b border-border-color pb-6 flex items-center justify-between">
-        <div>
-          <p className="font-tech text-xs uppercase tracking-[3px] text-accent-secondary font-bold mb-1">
-            Team Portal // Deliverables Submission
-          </p>
-          <h1 className="text-3xl md:text-5xl font-heading text-text-primary tracking-wider uppercase m-0">
-            Project Deliverables
-          </h1>
-            <p className="font-tech text-text-secondary text-sm mt-2 max-w-2xl">
-              {activeRound ? `Round: ${activeRound.title}` : ""} Submit your project deliverables through the administrator-configured form.
-            </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-3">
+      <div className="flex flex-wrap items-center gap-3">
           {/* Draft Auto-Saved Indicator */}
           {isAutoSaving ? (
             <div className="flex items-center gap-1.5 px-3 py-1.5 rounded bg-accent-tertiary/10 border border-accent-tertiary/30 text-accent-tertiary text-xs font-mono animate-pulse">
@@ -797,36 +751,12 @@ export default function TeamDynamicSubmissionClientView({
               <span className="text-text-secondary ml-1">Remaining</span>
             </div>
           )}
-          <span className={`px-3 py-1 rounded text-[10px] font-bold uppercase tracking-wider ${
-            isOpen ? "bg-status-success/15 border-status-success text-status-success" : "bg-status-warning/15 border-status-warning text-status-warning"
-          }`}
+          <span
+            className={`px-3 py-1 rounded text-[10px] font-bold uppercase tracking-wider ${isOpen ? "bg-status-success/15 border-status-success text-status-success" : "bg-status-warning/15 border-status-warning text-status-warning"}`}
           >
             {isOpen ? "OPEN FOR SUBMISSION" : "SUBMISSIONS CLOSED"}
           </span>
         </div>
-      </div>
-
-      {notification && (
-        <div
-          className={`p-3 border rounded flex items-center justify-between text-xs ${
-            notification.type === "success"
-              ? "bg-status-success/15 border-status-success text-status-success"
-              : "bg-status-error/15 border-status-error text-status-error"
-          }`}
-        >
-          <span className="flex items-center gap-2">
-            {notification.type === "success" ? <CheckCircle2 size={16} /> : <AlertCircle size={16} />}
-            <span>{notification.message}</span>
-          </span>
-          <button
-            onClick={() => setNotification(null)}
-            className="text-text-secondary hover:text-text-primary"
-          >
-            Dismiss
-          </button>
-        </div>
-      )}
-
       {isLocked && (
         <div className="p-3 bg-status-warning/15 border border-status-warning text-status-warning rounded text-xs flex items-center gap-2">
           <AlertCircle size={16} />
@@ -857,20 +787,20 @@ export default function TeamDynamicSubmissionClientView({
                   key={question.id}
                   className="space-y-2"
                 >
-                <div className="flex items-center justify-between">
-                  <label className="block text-[10px] font-bold text-text-primary flex items-center justify-between gap-2">
-                    <span>{question.title}</span>
+                  <div className="flex items-center justify-between">
+                    <label className="block text-[10px] font-bold text-text-primary flex items-center justify-between gap-2">
+                      <span>{question.title}</span>
                       {question.is_required ? (
                         <span className="text-[10px] text-accent-secondary uppercase font-bold">
                           {question.title === "Canva PPT Link" ? "MANDATORY LINK" : "MANDATORY"}
                         </span>
                       ) : (
-                      <span className="text-[10px] text-text-secondary/60 uppercase font-bold">
-                        Optional
-                      </span>
-                    )}
-                  </label>
-                  {validationErrors[question.id] && (
+                        <span className="text-[10px] text-text-secondary/60 uppercase font-bold">
+                          Optional
+                        </span>
+                      )}
+                    </label>
+                    {validationErrors[question.id] && (
                       <span className="text-[9px] text-status-error font-mono">{validationErrors[question.id]}</span>
                     )}
                   </div>
@@ -921,7 +851,10 @@ export default function TeamDynamicSubmissionClientView({
             disabled={isSubmitting || isLocked}
             className="px-6 py-2.5 bg-gradient-to-r from-accent-secondary to-accent-primary text-black font-tech font-bold uppercase tracking-wider text-xs rounded transition-all disabled:opacity-50 shadow-[0_0_18px_rgba(255,0,127,0.28)]"
           >
-            <Loader2 size={14} className={isSubmitting ? "animate-spin" : ""} mr-2 />
+            <Loader2
+              size={14}
+              className={`mr-2 ${isSubmitting ? "animate-spin" : ""}`}
+            />
             {isSubmitting ? "Submitting..." : currentSubmission ? "Resubmit" : "Submit Final"}
           </button>
         </div>
