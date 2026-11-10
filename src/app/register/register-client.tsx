@@ -10,8 +10,6 @@ import {
   AlertCircle,
   Copy,
   Check,
-  Volume2,
-  VolumeX,
   CreditCard,
   FileCheck,
   Zap,
@@ -103,9 +101,6 @@ export default function RegisterClientView() {
   const [submitting, setSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successData, setSuccessData] = useState<{ teamName: string; refId: string } | null>(null);
-
-  // Sound and Ambient toggle
-  const [soundEnabled, setSoundEnabled] = useState(true);
 
   // Live Squad Ticker State
   const [tickerIndex, setTickerIndex] = useState(0);
@@ -345,47 +340,6 @@ export default function RegisterClientView() {
 
   return (
     <div className="min-h-screen bg-[#020202] text-white font-sans selection:bg-red-600 selection:text-white pb-20">
-      {/* Top Cyberpunk Nav Bar */}
-      <header className="sticky top-0 z-50 bg-[#050505]/95 backdrop-blur-md border-b border-red-950/40 px-4 py-3">
-        <div className="max-w-7xl mx-auto flex items-center justify-between">
-          {/* Logo Badge */}
-          <Link href="/" className="flex items-center gap-2.5">
-            <div className="px-2.5 py-1 bg-red-600 text-black font-black uppercase text-xs italic tracking-widest rounded-sm shadow-[0_0_15px_rgba(255,0,0,0.5)]">
-              EVENTRA
-            </div>
-            <span className="font-mono text-[11px] uppercase tracking-widest text-red-500 font-bold hidden sm:inline">
-              // RELAYATHON 2026
-            </span>
-          </Link>
-
-          {/* Navigation links */}
-          <nav className="hidden md:flex items-center gap-1 font-mono text-[11px] uppercase tracking-wider text-neutral-400">
-            <Link href="/" className="px-3 py-1 hover:text-white transition-colors">
-              HOME
-            </Link>
-            <Link href="/event-details" className="px-3 py-1 hover:text-white transition-colors">
-              CIRCUIT BRIEF
-            </Link>
-            <Link href="/schedule" className="px-3 py-1 hover:text-white transition-colors">
-              RACE SCHEDULE
-            </Link>
-            <Link href="/faq" className="px-3 py-1 hover:text-white transition-colors">
-              RACE FAQ
-            </Link>
-            <span className="px-3 py-1 text-red-500 font-bold border-b-2 border-red-500">
-              REGISTER SQUAD
-            </span>
-          </nav>
-
-          <Link
-            href="/login"
-            className="px-3 py-1.5 border border-red-600/60 hover:border-red-500 bg-red-600/10 text-red-400 hover:text-white font-mono text-xs uppercase font-bold tracking-wider rounded transition-all"
-          >
-            LOGIN PORTAL &gt;
-          </Link>
-        </div>
-      </header>
-
       {/* Main Form Content */}
       <main className="max-w-5xl mx-auto px-4 sm:px-6 pt-8 sm:pt-12">
         {/* SUCCESS CONFIRMATION MODAL / SCREEN */}
@@ -1193,24 +1147,6 @@ export default function RegisterClientView() {
           </>
         )}
       </main>
-
-      {/* FLOATING AMBIENT / LIGHTS OUT PILL (Bottom Right) */}
-      <aside aria-label="Audio controls" className="fixed bottom-5 right-5 z-40">
-        <button
-          type="button"
-          onClick={() => setSoundEnabled((prev) => !prev)}
-          className="flex items-center gap-2 px-3.5 py-2 bg-black/90 hover:bg-black border border-red-600/60 hover:border-red-500 text-neutral-300 rounded-full font-mono text-[11px] uppercase font-bold tracking-wider shadow-2xl transition-all"
-        >
-          {soundEnabled ? (
-            <Volume2 size={14} className="text-red-500" />
-          ) : (
-            <VolumeX size={14} className="text-neutral-500" />
-          )}
-          <span className="px-2 py-0.5 rounded bg-red-600 text-black text-[10px] font-black">
-            LIGHTS OUT
-          </span>
-        </button>
-      </aside>
     </div>
   );
 }
