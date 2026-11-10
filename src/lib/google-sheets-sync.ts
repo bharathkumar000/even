@@ -1,14 +1,18 @@
 /**
  * Google Sheets & Drive Synchronization Module
  * Automatically streams complete 4-driver registration details and payment proofs
- * into Sheet 1 ("Approved Teams") or Sheet 2 ("Rejected Teams") upon admin verification.
+ * into 3 dedicated sheets:
+ *   - Sheet 1: "Registrations" (All teams upon registration submission, irrespective of approval status)
+ *   - Sheet 2: "Approved" (Teams approved by admin)
+ *   - Sheet 3: "Rejected" (Teams rejected by admin)
  */
 
 export interface ComprehensiveTeamRecord {
+  sheetName?: "Registrations" | "Approved" | "Rejected";
   teamName: string;
   track?: string;
   teamCode?: string;
-  status: "Approved" | "Rejected";
+  status: "Pending" | "Approved" | "Rejected";
   decisionAt: string;
   decisionBy?: string;
   rejectionReason?: string;
@@ -62,25 +66,31 @@ export type GoogleSheetRegistrationRecord = ComprehensiveTeamRecord;
 /**
  * Push a complete 4-driver registration record to the Google Sheets Webhook.
  * Google Apps Script routes:
- *   - Status "Approved" -> Sheet 1 ("Approved Teams")
- *   - Status "Rejected" -> Sheet 2 ("Rejected Teams")
+ *   - Sheet 1: "Registrations" (Initial registration submissions)
+ *   - Sheet 2: "Approved" (Admin-approved registrations)
+ *   - Sheet 3: "Rejected" (Admin-rejected registrations)
  * Also saves payment proof directly into Google Drive with zero Supabase storage usage.
  */
 export async function syncRegistrationToGoogleSheets(
   record: ComprehensiveTeamRecord
-): Promise<{ success: boolean; message: string; proofUrl?: string }> {
+): Promise<{ success: boolean; message: string; proofUrl?: string; sheet?: string }> {
   const webhookUrl =
     process.env.GOOGLE_SHEETS_WEBHOOK_URL ||
     process.env.GOOGLE_SHEET_WEBHOOK_URL ||
     process.env.NEXT_PUBLIC_GOOGLE_SHEETS_WEBHOOK_URL;
 
+  const targetTab =
+    record.sheetName ||
+    (record.status === "Approved" ? "Approved" : record.status === "Rejected" ? "Rejected" : "Registrations");
+
   if (!webhookUrl) {
     console.info(
-      `[Google Sheets Sync] Ready for sync: ${record.teamName} (${record.status}). Configure GOOGLE_SHEETS_WEBHOOK_URL in .env.local to stream rows to Google Sheets in real time.`
+      `[Google Sheets Sync] Ready for sync: ${record.teamName} -> Sheet "${targetTab}" (${record.status}). Configure GOOGLE_SHEETS_WEBHOOK_URL in .env.local to stream rows to Google Sheets in real time.`
     );
     return {
       success: true,
-      message: `Verified locally. Configure GOOGLE_SHEETS_WEBHOOK_URL to stream to Sheet ${record.status === "Approved" ? "1 (Approved)" : "2 (Rejected)"}.`,
+      message: `Verified locally. Configure GOOGLE_SHEETS_WEBHOOK_URL to stream to Sheet "${targetTab}".`,
+      sheet: targetTab,
     };
   }
 
@@ -90,7 +100,7 @@ export async function syncRegistrationToGoogleSheets(
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify(record),
+      body: JSON.stringify({ ...record, sheetName: targetTab }),
       redirect: "follow",
       signal: AbortSignal.timeout(12000),
     });
@@ -99,8 +109,9 @@ export async function syncRegistrationToGoogleSheets(
       const data = await res.json().catch(() => ({}));
       return {
         success: true,
-        message: `Successfully synced ${record.teamName} to Google Sheet tab "${record.status === "Approved" ? "Approved Teams" : "Rejected Teams"}".`,
+        message: `Successfully synced ${record.teamName} to Google Sheet tab "${targetTab}".`,
         proofUrl: data.proofUrl,
+        sheet: targetTab,
       };
     } else {
       const errText = await res.text().catch(() => "");
@@ -108,6 +119,7 @@ export async function syncRegistrationToGoogleSheets(
       return {
         success: false,
         message: `Google Sheets Webhook returned HTTP ${res.status}`,
+        sheet: targetTab,
       };
     }
   } catch (err: unknown) {
@@ -116,6 +128,7 @@ export async function syncRegistrationToGoogleSheets(
     return {
       success: false,
       message: `Failed to push to Google Sheets: ${errorMsg}`,
+      sheet: targetTab,
     };
   }
 }
@@ -223,10 +236,12 @@ export function generateRegistrationsCsv(records: ComprehensiveTeamRecord[]): st
 }
 
 /**
- * 2-Sheet Google Apps Script Template
+ * 3-Sheet Google Apps Script Template
  * Handles:
- * 1. Routing to Sheet 1 ("Approved Teams") or Sheet 2 ("Rejected Teams")
- * 2. Uploading payment proofs directly to Google Drive (Zero Supabase storage)
+ * 1. Sheet 1: "Registrations" (Stores all participant submissions irrespective of approval status)
+ * 2. Sheet 2: "Approved" (Stores approved teams upon admin verification)
+ * 3. Sheet 3: "Rejected" (Stores rejected teams upon admin rejection with reason)
+ * 4. Uploading payment proofs directly to Google Drive (Zero Supabase storage)
  */
 export const GOOGLE_APPS_SCRIPT_TEMPLATE = `
 function doPost(e) {
@@ -234,17 +249,37 @@ function doPost(e) {
     var ss = SpreadsheetApp.getActiveSpreadsheet();
     var data = JSON.parse(e.postData.contents);
     
-    // Route to Sheet 1 for Approved, Sheet 2 for Rejected
-    var sheetName = (data.status === "Approved") ? "Approved Teams" : "Rejected Teams";
+    // Auto-rename default 'Sheet1' to 'Registrations' if fresh spreadsheet
+    var regSheet = ss.getSheetByName("Registrations");
+    if (!regSheet) {
+      var defaultSheet = ss.getSheetByName("Sheet1");
+      if (defaultSheet && defaultSheet.getLastRow() === 0) {
+        defaultSheet.setName("Registrations");
+        regSheet = defaultSheet;
+      }
+    }
+    
+    // Determine target sheet: Registrations (Sheet 1), Approved (Sheet 2), Rejected (Sheet 3)
+    var sheetName = "Registrations";
+    if (data.sheetName) {
+      sheetName = data.sheetName;
+    } else if (data.status === "Approved") {
+      sheetName = "Approved";
+    } else if (data.status === "Rejected") {
+      sheetName = "Rejected";
+    } else {
+      sheetName = "Registrations";
+    }
+    
     var sheet = ss.getSheetByName(sheetName);
     if (!sheet) {
       sheet = ss.insertSheet(sheetName);
     }
     
-    // Auto-create 36-column Header if sheet is new
+    // Auto-create 36-column Header if sheet is new or empty
     if (sheet.getLastRow() === 0) {
       sheet.appendRow([
-        "Decision Time",
+        "Timestamp",
         "Status",
         "Team Name",
         "Team Code",
@@ -312,10 +347,10 @@ function doPost(e) {
       }
     }
     
-    // Append complete row
+    // Append complete row to target sheet (Registrations, Approved, or Rejected)
     sheet.appendRow([
       data.decisionAt || new Date().toISOString(),
-      data.status || "Approved",
+      data.status || "Pending",
       data.teamName || "",
       data.teamCode || "",
       data.track || "GRAND PRIX",
@@ -357,7 +392,7 @@ function doPost(e) {
       proofLink
     ]);
     
-    return ContentService.createTextOutput(JSON.stringify({ success: true, proofUrl: proofLink }))
+    return ContentService.createTextOutput(JSON.stringify({ success: true, proofUrl: proofLink, sheet: sheetName }))
       .setMimeType(ContentService.MimeType.JSON);
   } catch (err) {
     return ContentService.createTextOutput(JSON.stringify({ success: false, error: err.toString() }))
