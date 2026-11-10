@@ -61,34 +61,6 @@ const SEMESTERS = [
   "8th Semester",
 ];
 
-const DOMAINS = [
-  {
-    id: "CSE/AIML",
-    title: "CSE / AIML Track",
-    subtitle: "AI, Machine Learning, Web3, Distributed Cloud & Intelligent Systems",
-  },
-  {
-    id: "ECE/EEE",
-    title: "ECE / EEE Track",
-    subtitle: "IoT, Embedded Robotics, Smart Grid, Hardware & VLSI Design",
-  },
-  {
-    id: "MECH/CIVIL",
-    title: "Mech / Civil Track",
-    subtitle: "Smart Infrastructure, Clean Energy, EV Design & Automation",
-  },
-  {
-    id: "CYBER_SECURITY",
-    title: "Cyber Security & Defense",
-    subtitle: "Ethical Hacking, Cryptography, Network Defense & Zero Trust",
-  },
-  {
-    id: "OPEN_INNOVATION",
-    title: "Open Innovation & FinTech",
-    subtitle: "Cross-Disciplinary Technology Solutions & Novel Startups",
-  },
-];
-
 const TICKER_SQUADS = [
   { name: "NEON_HUNTERS", track: "CYBER SECURITY" },
   { name: "APEX_VELOCITY", track: "CSE / AIML" },
@@ -108,7 +80,7 @@ export default function RegisterClientView() {
 
   // Squad / Team Identity
   const [teamName, setTeamName] = useState("");
-  const [selectedDomain, setSelectedDomain] = useState("CSE/AIML");
+  const [selectedDomain, setSelectedDomain] = useState("GRAND PRIX");
 
   // Driver 1 (Captain)
   const [driver1, setDriver1] = useState<DriverState>({
@@ -156,7 +128,7 @@ export default function RegisterClientView() {
   // Generate crisp UPI QR Code for payment
   useEffect(() => {
     // Official UPI Payment Link with amount ₹400
-    const upiLink = "upi://pay?pa=6361455193@okbizaxis&pn=Parinitha%20K&am=400&cu=INR&tn=Eventra%20Circuit%20Entry%20Fee";
+    const upiLink = "upi://pay?pa=6361455193@okbizaxis&pn=Parinitha%20K&am=400&cu=INR&tn=Eventra%20Grand%20Prix%20Entry%20Fee";
     QRCode.toDataURL(
       upiLink,
       {
@@ -247,11 +219,11 @@ export default function RegisterClientView() {
 
     // Validate Payment
     if (!paymentUtr.trim() || paymentUtr.trim().length < 6) {
-      setErrorMsg("CIRCUIT ENTRY: Please enter a valid 12-digit UPI Reference / UTR Number.");
+      setErrorMsg("GRAND PRIX ENTRY: Please enter a valid 12-digit UPI Reference / UTR Number.");
       return false;
     }
     if (!paymentFile) {
-      setErrorMsg("CIRCUIT ENTRY: Please upload your payment screenshot proof.");
+      setErrorMsg("GRAND PRIX ENTRY: Please upload your payment screenshot proof.");
       return false;
     }
 
@@ -979,58 +951,13 @@ export default function RegisterClientView() {
                 </div>
               </div>
 
-              {/* SECTION 6: SELECT TARGET MISSION */}
-              <div className="space-y-4 pt-4 border-t border-red-950/40">
-                <h3 className="text-xl sm:text-2xl font-black italic tracking-wide uppercase text-white m-0 flex items-center gap-2">
-                  <span className="text-red-600">//</span> SELECT TARGET MISSION
-                </h3>
-
-                <div className="space-y-2 font-mono">
-                  <label className="block text-red-500 uppercase text-[11px] font-bold">
-                    OPERATIVE_TARGET: MISSION DOMAIN <span className="text-red-500">*</span>
-                  </label>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    {DOMAINS.map((d) => {
-                      const isSelected = selectedDomain === d.id;
-                      return (
-                        <button
-                          key={d.id}
-                          type="button"
-                          onClick={() => setSelectedDomain(d.id)}
-                          className={`p-3.5 rounded border text-left transition-all cursor-pointer flex flex-col justify-between ${
-                            isSelected
-                              ? "bg-red-950/40 border-red-500 text-white shadow-[0_0_15px_rgba(255,0,0,0.3)]"
-                              : "bg-[#0a0a0a] border-neutral-800 text-neutral-400 hover:border-neutral-600 hover:text-white"
-                          }`}
-                        >
-                          <div className="flex items-center justify-between mb-1">
-                            <span className="font-bold text-xs uppercase">{d.title}</span>
-                            <span
-                              className={`w-3 h-3 rounded-full border flex items-center justify-center ${
-                                isSelected ? "border-red-500 bg-red-600" : "border-neutral-700"
-                              }`}
-                            >
-                              {isSelected && <span className="w-1.5 h-1.5 bg-white rounded-full" />}
-                            </span>
-                          </div>
-                          <span className="text-[10px] text-neutral-500 line-clamp-2 leading-tight">
-                            {d.subtitle}
-                          </span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              </div>
-
-              {/* SECTION 7: CIRCUIT ENTRY FEE & PAYMENT VERIFICATION */}
+              {/* SECTION 6: GRAND PRIX ENTRY FEE & PAYMENT VERIFICATION */}
               <div className="space-y-5 pt-6 border-t-2 border-red-600/60 bg-[#080808]/90 p-4 sm:p-6 rounded-xl border border-red-900/40">
                 <div className="flex items-start gap-3 border-b border-red-950/60 pb-3">
                   <CreditCard className="text-red-500 mt-1 shrink-0" size={20} />
                   <div>
                     <h3 className="font-heading text-lg sm:text-xl text-white uppercase m-0 tracking-wide">
-                      CIRCUIT ENTRY FEE: ₹400 PER TEAM
+                      GRAND PRIX ENTRY FEE: ₹400 PER TEAM
                     </h3>
                     <p className="font-mono text-xs text-neutral-400 m-0 mt-0.5">
                       SCAN OFFICIAL UPI QR CODE, ENTER 12-DIGIT UTR, AND UPLOAD PAYMENT SCREENSHOT
@@ -1153,11 +1080,11 @@ export default function RegisterClientView() {
                 </div>
               </div>
 
-              {/* SECTION 8: BOTTOM CIRCUIT ENTRY SUMMARY & SUBMIT */}
+              {/* SECTION 7: BOTTOM GRAND PRIX ENTRY SUMMARY & SUBMIT */}
               <div className="pt-6 border-t border-red-950/60 text-center space-y-4">
                 <div className="space-y-1">
                   <p className="font-mono text-xs uppercase tracking-[3px] text-neutral-400 m-0">
-                    CIRCUIT ENTRY FEE
+                    GRAND PRIX ENTRY FEE
                   </p>
                   <p className="text-4xl sm:text-5xl font-black text-white italic tracking-wider m-0">
                     ₹400
