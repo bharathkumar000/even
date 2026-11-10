@@ -340,6 +340,34 @@ export default function RegisterClientView() {
 
   return (
     <div className="min-h-screen bg-[#020202] text-white font-sans selection:bg-red-600 selection:text-white pb-20">
+      {/* Top Header / Navigation Bar */}
+      <header className="sticky top-0 z-50 bg-[#050505]/95 backdrop-blur-md border-b border-red-950/40 px-4 sm:px-8 py-3.5">
+        <div className="max-w-7xl mx-auto flex items-center justify-between">
+          {/* Top Left: Eventra Relaython 2026 */}
+          <Link href="/" className="flex items-center gap-2.5 group">
+            <div className="px-2.5 py-1 bg-red-600 text-black font-black uppercase text-xs italic tracking-widest rounded-sm shadow-[0_0_15px_rgba(255,0,0,0.5)] group-hover:scale-105 transition-transform">
+              EVENTRA
+            </div>
+            <span className="font-mono text-xs uppercase tracking-widest text-red-500 font-bold">
+              // RELAYATHON 2026
+            </span>
+          </Link>
+
+          {/* Top Right: Login Button */}
+          <div className="flex items-center gap-2.5">
+            <span className="hidden sm:inline font-mono text-xs text-neutral-400">
+              Already Registered?
+            </span>
+            <Link
+              href="/login"
+              className="px-4 py-1.5 border border-red-600/70 hover:border-red-500 bg-red-600/15 hover:bg-red-600 text-red-400 hover:text-white font-mono text-xs uppercase font-bold tracking-wider rounded transition-all shadow-[0_0_15px_rgba(255,0,0,0.2)]"
+            >
+              LOGIN &gt;
+            </Link>
+          </div>
+        </div>
+      </header>
+
       {/* Main Form Content */}
       <main className="max-w-5xl mx-auto px-4 sm:px-6 pt-8 sm:pt-12">
         {/* SUCCESS CONFIRMATION MODAL / SCREEN */}
@@ -402,11 +430,11 @@ export default function RegisterClientView() {
         ) : (
           <>
             {/* HERO TITLE */}
-            <div className="text-center my-6 space-y-2">
-              <h1 className="text-4xl sm:text-6xl md:text-7xl font-black italic tracking-wider text-white uppercase m-0 leading-none drop-shadow-[0_0_25px_rgba(255,255,255,0.2)]">
-                ENTER THE CITY
+            <div className="text-center my-8 sm:my-12 space-y-3">
+              <h1 className="text-5xl sm:text-7xl md:text-8xl font-black italic tracking-wider text-white uppercase m-0 leading-none drop-shadow-[0_0_35px_rgba(255,0,0,0.3)]">
+                ENTER THE GRAND PRIX
               </h1>
-              <p className="font-mono text-xs text-neutral-400 uppercase tracking-widest">
+              <p className="font-mono text-xs sm:text-sm text-neutral-400 uppercase tracking-[3px]">
                 OFFICIAL 4-DRIVER CONSTRUCTOR SQUAD REGISTRATION PORTAL
               </p>
             </div>
