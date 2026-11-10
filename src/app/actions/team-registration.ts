@@ -3,6 +3,7 @@
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
+import { generateQrSignature } from "@/lib/qr-signature";
 
 export interface TeamMemberInput {
   name: string;
@@ -474,10 +475,11 @@ export async function approveRegistration(registrationId: string): Promise<{
       }
     }
 
-    // 7. Generate official QR Code pass payload (compatible with /ops/scanner)
+    // 7. Generate official QR Code pass payload (compatible with /ops/scanner, signed with HMAC)
     const qrPayload = JSON.stringify({
       team_id: teamId,
       name: teamName,
+      sig: generateQrSignature(teamId),
       v: 1,
     });
 

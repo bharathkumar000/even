@@ -3,6 +3,7 @@ import { supabaseAdmin } from "@/lib/supabase/admin";
 import { getTeamRegistrationByTeamId } from "@/lib/googleSheet";
 
 import { getTeamScanStatus } from "@/app/actions/operations";
+import { generateQrSignature } from "@/lib/qr-signature";
 import TeamQrClientView from "./qr-client";
 
 
@@ -81,6 +82,7 @@ export default async function TeamQrPage() {
           teamName={teamInfo?.name || "Team Alpha"}
           track={teamInfo?.track || "Innovation Track"}
           leaderName={teamInfo?.leader_name || "Team Leader"}
+          signature={generateQrSignature(effectiveTeamId)}
           initialStatus={initialStatus}
         />
       ) : (

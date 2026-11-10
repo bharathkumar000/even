@@ -68,15 +68,28 @@ export default function TeamActivitySyncListener({ teamId }: TeamActivitySyncLis
       })
       .subscribe();
 
-    // 3. Fallback interval every 5 seconds to guarantee eventual consistency
+    // 3. Refresh on tab focus or phone unlock
+    const handleVisibility = () => {
+      if (typeof document !== "undefined" && document.visibilityState === "visible") {
+        router.refresh();
+      }
+    };
+    window.addEventListener("visibilitychange", handleVisibility);
+    window.addEventListener("focus", handleVisibility);
+
+    // 4. Gentle 60s fallback interval (replacing aggressive 5s polling) to prevent serverless overload
     const pollInterval = setInterval(() => {
-      router.refresh();
-    }, 5000);
+      if (typeof document !== "undefined" && document.visibilityState === "visible") {
+        router.refresh();
+      }
+    }, 60000);
 
     return () => {
       supabase.removeChannel(pgChannel);
       supabase.removeChannel(broadcastChannel);
       supabase.removeChannel(qrBroadcastChannel);
+      window.removeEventListener("visibilitychange", handleVisibility);
+      window.removeEventListener("focus", handleVisibility);
       clearInterval(pollInterval);
     };
   }, [teamId, router]);

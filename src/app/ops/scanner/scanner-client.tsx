@@ -31,9 +31,11 @@ import {
   getLiveScanActivityStream,
   getRecentlyScannedTeams,
   processAutomatedScan,
+  getDeskProgressSummary,
   type ProcessScanResult,
   type LiveActivityFeedItem,
   type EnrichedActivityLog,
+  type DeskProgressSummary,
 } from "@/app/actions/operations";
 import type { ActionType } from "@/lib/validations/operations";
 import { CSRF_CONSTANTS } from "@/lib/csrf-constants";
@@ -229,6 +231,7 @@ export default function ScannerClientView() {
   const processingSafetyTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const html5QrCodeRef = useRef<any>(null);
+  const [progressSummary, setProgressSummary] = useState<DeskProgressSummary | null>(null);
 
   useEffect(() => {
     setLastSyncTime(new Date());
@@ -236,6 +239,8 @@ export default function ScannerClientView() {
       setIsOnline(navigator.onLine);
     }
     setOfflineQueueCount(getOfflineQueue().length);
+
+    void getDeskProgressSummary().then(setProgressSummary).catch(() => {});
 
     void fetch("/api/csrf/init")
       .then((res) => res.json())
@@ -253,8 +258,12 @@ export default function ScannerClientView() {
   const fetchLiveStream = useCallback(async () => {
     try {
       setStreamLoading(true);
-      const data = await getLiveScanActivityStream(35);
-      setLiveStreamLogs(data);
+      const [streamData, summary] = await Promise.all([
+        getLiveScanActivityStream(35),
+        getDeskProgressSummary().catch(() => null),
+      ]);
+      setLiveStreamLogs(streamData);
+      if (summary) setProgressSummary(summary);
       setLastSyncTime(new Date());
     } catch (err) {
       console.warn("Notice: Real-time stream sync notice:", err);
@@ -418,21 +427,27 @@ export default function ScannerClientView() {
       })
       .subscribe();
 
-    const pollInterval = setInterval(() => {
-      fetchLiveStream();
-      setTeamData((current) => {
-        if (current?.team?.id) {
-          fetchTeamMembersForScan(current.team.id)
-            .then((updated) => setTeamData(updated))
-            .catch(() => {});
-        }
-        return current;
-      });
-    }, 4000);
+    // Event-driven refresh: when staff returns to tab or window gains focus
+    const handleVisibilityChange = () => {
+      if (typeof document !== "undefined" && document.visibilityState === "visible") {
+        fetchLiveStream();
+      }
+    };
+    window.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("focus", handleVisibilityChange);
+
+    // Relaxed 60s fallback sync (instead of aggressive 4s polling) to prevent DB CPU spikes
+    const gentleFallbackInterval = setInterval(() => {
+      if (typeof document !== "undefined" && document.visibilityState === "visible") {
+        fetchLiveStream();
+      }
+    }, 60000);
 
     return () => {
       supabase.removeChannel(channel);
-      clearInterval(pollInterval);
+      window.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("focus", handleVisibilityChange);
+      clearInterval(gentleFallbackInterval);
     };
   }, [fetchLiveStream]);
 
@@ -592,6 +607,20 @@ export default function ScannerClientView() {
         // Smart deduplication: cache this badge so holding it won't re-trigger duplicate scans
         lastScannedCodeRef.current = candidateId;
         lastScannedTimeRef.current = Date.now();
+
+        // Increment in-memory Desk Progress HUD counters in 0ms without hitting database
+        setProgressSummary((prev) => {
+          if (!prev) return prev;
+          return {
+            ...prev,
+            checkedInTeams:
+              res.action_type === "registration" ? prev.checkedInTeams + 1 : prev.checkedInTeams,
+            lunchClaimedCount:
+              res.action_type === "lunch" ? prev.lunchClaimedCount + 1 : prev.lunchClaimedCount,
+            goodiesClaimedCount:
+              res.action_type === "goodies" ? prev.goodiesClaimedCount + 1 : prev.goodiesClaimedCount,
+          };
+        });
 
         setScanFeedback({
           status: "success",
@@ -838,6 +867,38 @@ export default function ScannerClientView() {
           })}
         </div>
       </div>
+
+      {/* 1.5 LIVE DESK PROGRESS HUD (Ultra-light, in-memory cached metric strip) */}
+      {progressSummary && (
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 font-tech text-xs">
+          <div className="glass-panel p-3 border border-border-color rounded flex items-center justify-between">
+            <span className="text-text-secondary uppercase">Teams Checked In</span>
+            <span className="font-heading text-sm text-status-success font-bold font-mono">
+              {progressSummary.checkedInTeams} / {progressSummary.totalTeams || "—"}
+            </span>
+          </div>
+          <div className="glass-panel p-3 border border-border-color rounded flex items-center justify-between">
+            <span className="text-text-secondary uppercase">Check-In Rate</span>
+            <span className="font-heading text-sm text-accent-primary font-bold font-mono">
+              {progressSummary.totalTeams > 0
+                ? `${Math.round((progressSummary.checkedInTeams / progressSummary.totalTeams) * 100)}%`
+                : "0%"}
+            </span>
+          </div>
+          <div className="glass-panel p-3 border border-border-color rounded flex items-center justify-between">
+            <span className="text-text-secondary uppercase">Lunch Claimed</span>
+            <span className="font-heading text-sm text-status-warning font-bold font-mono">
+              {progressSummary.lunchClaimedCount}
+            </span>
+          </div>
+          <div className="glass-panel p-3 border border-border-color rounded flex items-center justify-between">
+            <span className="text-text-secondary uppercase">Kits / Goodies</span>
+            <span className="font-heading text-sm text-accent-secondary font-bold font-mono">
+              {progressSummary.goodiesClaimedCount}
+            </span>
+          </div>
+        </div>
+      )}
 
       {/* 2. TRANSACTION RESULT BANNER (Instant, High-Visibility Feedback) */}
       {scanFeedback && (
