@@ -159,8 +159,8 @@ export default function RelayathonFooter() {
                   <a href="tel:+918310353103" className="text-red-500 hover:text-red-400 transition-colors font-bold">
                     Moksh: +91 83103 53103
                   </a>
-                  <a href="tel:+919019928883" className="text-red-500 hover:text-red-400 transition-colors font-bold">
-                    Rishith: +91 90199 28883
+                  <a href="tel:+919591755995" className="text-red-500 hover:text-red-400 transition-colors font-bold">
+                    Monish: +91 95917 55995
                   </a>
                 </div>
               </li>

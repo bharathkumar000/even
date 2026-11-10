@@ -385,7 +385,7 @@ export default function RegisterClientView() {
                 <span className="text-neutral-500 font-bold uppercase">For any queries contact:</span>{" "}
                 <span className="text-neutral-200">Moksh (+91 831 035 3103)</span> •{" "}
                 <span className="text-neutral-200">Parinitha (+91 63614 55193)</span> •{" "}
-                <span className="text-neutral-200">Rishith (+91 90199 28883)</span>
+                <span className="text-neutral-200">Monish (+91 95917 55995)</span>
               </div>
             </div>
 
@@ -991,7 +991,7 @@ export default function RegisterClientView() {
 
                     <div className="space-y-1">
                       <p className="text-[11px] text-neutral-300 font-bold m-0">
-                        COORDINATOR: <span className="text-white">Parinitha K (+91 6361455193)</span>
+                        COORDINATOR: <span className="text-white">Monish N Kumar (+91 95917 55995)</span>
                       </p>
                       <button
                         type="button"
@@ -1126,8 +1126,8 @@ export default function RegisterClientView() {
                         <span className="text-white font-bold">Parinitha</span> - +91 63614 55193
                       </a>
                       <span className="text-neutral-700 hidden sm:inline">•</span>
-                      <a href="tel:+919019928883" className="text-neutral-300 hover:text-red-400 transition-colors">
-                        <span className="text-white font-bold">Rishith</span> - +91 90199 28883
+                      <a href="tel:+919591755995" className="text-neutral-300 hover:text-red-400 transition-colors">
+                        <span className="text-white font-bold">Monish</span> - +91 95917 55995
                       </a>
                     </div>
                   </div>
