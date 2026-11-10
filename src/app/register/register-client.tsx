@@ -966,14 +966,15 @@ export default function RegisterClientView() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start font-mono text-xs">
+                {/* ROW 1: QR CODE & RECEIVING BENEFICIARY DETAILS SIDE BY SIDE */}
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch font-mono text-xs">
                   {/* Left Column: QR Code & Coordinator Details */}
-                  <div className="lg:col-span-5 bg-[#040404] border border-red-900/60 p-5 rounded-lg text-center space-y-3">
+                  <div className="lg:col-span-5 bg-[#040404] border border-red-900/60 p-5 rounded-lg text-center flex flex-col justify-between space-y-3">
                     <p className="text-[11px] font-bold text-yellow-400 uppercase tracking-wider m-0">
                       SCAN TO PAY ₹400 VIA GOOGLE PAY / PHONEPE / PAYTM
                     </p>
 
-                    <div className="inline-block p-2 bg-white rounded border-2 border-red-600 shadow-[0_0_20px_rgba(255,0,0,0.3)] my-1">
+                    <div className="inline-block p-2 bg-white rounded border-2 border-red-600 shadow-[0_0_20px_rgba(255,0,0,0.3)] my-1 mx-auto">
                       {paymentQrDataUrl ? (
                         <Image
                           src={paymentQrDataUrl}
@@ -989,14 +990,14 @@ export default function RegisterClientView() {
                       )}
                     </div>
 
-                    <div className="space-y-1">
+                    <div className="space-y-2">
                       <p className="text-[11px] text-neutral-300 font-bold m-0">
                         COORDINATOR: <span className="text-white">Monish N Kumar (+91 95917 55995)</span>
                       </p>
                       <button
                         type="button"
                         onClick={copyUpiId}
-                        className="inline-flex items-center gap-1.5 px-3 py-1 bg-white/5 hover:bg-white/10 text-neutral-300 border border-neutral-800 rounded text-[10px] transition-colors"
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white/5 hover:bg-white/10 text-neutral-300 border border-neutral-800 rounded text-[10px] transition-colors"
                       >
                         {copiedUpi ? <Check size={11} className="text-green-400" /> : <Copy size={11} />}
                         <span>{copiedUpi ? "UPI ID COPIED" : "COPY UPI ID: 6361455193@okbizaxis"}</span>
@@ -1004,8 +1005,63 @@ export default function RegisterClientView() {
                     </div>
                   </div>
 
-                  {/* Right Column: UTR Input & Screenshot Upload */}
-                  <div className="lg:col-span-7 space-y-4">
+                  {/* Right Column (Next to QR): Receiving Account Details for Participants to Confirm */}
+                  <div className="lg:col-span-7 bg-[#040404] border border-red-900/60 p-5 rounded-lg flex flex-col justify-between space-y-3">
+                    <div className="flex items-center justify-between border-b border-red-950/80 pb-2.5">
+                      <div className="flex items-center gap-2 text-red-500 font-bold uppercase tracking-wider text-xs">
+                        <ShieldCheck size={16} />
+                        <span>RECEIVING ACCOUNT CONFIRMATION</span>
+                      </div>
+                      <span className="text-[10px] text-green-400 border border-green-500/30 bg-green-950/30 px-2 py-0.5 rounded font-bold">
+                        VERIFIED RECEIVER
+                      </span>
+                    </div>
+
+                    <div className="p-2.5 bg-yellow-950/20 border border-yellow-900/40 rounded text-yellow-300/90 text-[11px] leading-relaxed">
+                      ⚠ <strong>Important:</strong> Please confirm that the receiver name matches the verified beneficiary below on your UPI app (Google Pay, PhonePe, Paytm, or BHIM) before approving the payment.
+                    </div>
+
+                    <div className="space-y-2 text-xs">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between p-2.5 bg-black/60 border border-neutral-800/80 rounded gap-1">
+                        <span className="text-neutral-500 text-[11px]">BENEFICIARY / RECEIVER NAME:</span>
+                        <span className="text-white font-bold text-xs tracking-wider">Parinitha K</span>
+                      </div>
+
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between p-2.5 bg-black/60 border border-neutral-800/80 rounded gap-1">
+                        <span className="text-neutral-500 text-[11px]">OFFICIAL RECEIVING UPI ID:</span>
+                        <span className="text-yellow-400 font-mono font-bold text-xs">6361455193@okbizaxis</span>
+                      </div>
+
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between p-2.5 bg-black/60 border border-neutral-800/80 rounded gap-1">
+                        <span className="text-neutral-500 text-[11px]">RECEIVING BANK / ACCOUNT:</span>
+                        <span className="text-neutral-200 font-bold text-xs">Axis Bank (Current A/c)</span>
+                      </div>
+
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between p-2.5 bg-black/60 border border-neutral-800/80 rounded gap-1">
+                        <span className="text-neutral-500 text-[11px]">ENTRY REGISTRATION FEE:</span>
+                        <span className="text-green-400 font-black text-xs">₹400.00 (Fixed per Team)</span>
+                      </div>
+
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between p-2.5 bg-black/60 border border-neutral-800/80 rounded gap-1">
+                        <span className="text-neutral-500 text-[11px]">PAYMENT DESK COORDINATOR:</span>
+                        <span className="text-neutral-300 text-xs">Monish N Kumar (+91 95917 55995)</span>
+                      </div>
+                    </div>
+
+                    <p className="text-[10px] text-neutral-500 m-0 italic">
+                      * Official QR, UPI ID and Receiving Account credentials are authenticated for Ideathon registration.
+                    </p>
+                  </div>
+                </div>
+
+                {/* ROW 2: TRANSACTION NUMBER ENTRY & SCREENSHOT UPLOAD (Moved Below QR) */}
+                <div className="pt-6 border-t border-red-950/60 space-y-4 font-mono text-xs">
+                  <div className="flex items-center gap-2 text-white font-bold text-xs uppercase tracking-wider">
+                    <span className="text-red-500">//</span>
+                    <span>SUBMIT TRANSACTION NUMBER &amp; PAYMENT PROOF</span>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="space-y-1.5">
                       <label className="block text-red-500 uppercase text-[11px] font-bold">
                         TRANSACTION_UTR_NO (12 DIGITS) <span className="text-red-500">*</span>
@@ -1018,6 +1074,9 @@ export default function RegisterClientView() {
                         placeholder="ENTER 12-DIGIT UPI REFERENCE / UTR NO"
                         className="w-full bg-[#0a0a0a] border border-red-900/60 focus:border-red-500 text-white p-3.5 rounded outline-none text-xs font-mono tracking-wider placeholder:text-neutral-600"
                       />
+                      <p className="text-[10px] text-neutral-500 m-0">
+                        Found in your payment app under &quot;UPI Ref No.&quot; or &quot;UTR&quot;.
+                      </p>
                     </div>
 
                     <div className="space-y-1.5">
@@ -1027,7 +1086,7 @@ export default function RegisterClientView() {
 
                       <div
                         onClick={() => fileInputRef.current?.click()}
-                        className="border border-dashed border-red-900/60 hover:border-red-500 bg-[#0a0a0a] p-5 rounded-lg text-center cursor-pointer transition-all space-y-2 group"
+                        className="border border-dashed border-red-900/60 hover:border-red-500 bg-[#0a0a0a] p-4 rounded-lg text-center cursor-pointer transition-all space-y-1.5 group"
                       >
                         <input
                           type="file"
@@ -1042,7 +1101,7 @@ export default function RegisterClientView() {
 
                         {previewUrl ? (
                           <div className="flex flex-col items-center gap-2">
-                            <div className="relative w-24 h-24 rounded border border-red-500/50 overflow-hidden">
+                            <div className="relative w-20 h-20 rounded border border-red-500/50 overflow-hidden">
                               <Image
                                 src={previewUrl}
                                 alt="Proof Preview"
@@ -1058,8 +1117,8 @@ export default function RegisterClientView() {
                             </span>
                           </div>
                         ) : (
-                          <div className="flex flex-col items-center gap-2 text-neutral-400">
-                            <UploadCloud size={28} className="text-red-500 group-hover:scale-110 transition-transform" />
+                          <div className="flex flex-col items-center gap-1.5 text-neutral-400">
+                            <UploadCloud size={24} className="text-red-500 group-hover:scale-110 transition-transform" />
                             <p className="text-xs font-bold text-white uppercase m-0">
                               CLICK OR DRAG TO UPLOAD PAYMENT SCREENSHOT *
                             </p>
@@ -1070,13 +1129,13 @@ export default function RegisterClientView() {
                         )}
                       </div>
                     </div>
+                  </div>
 
-                    <div className="p-3 bg-blue-950/20 border border-blue-900/40 rounded text-[11px] text-blue-300/90 flex items-start gap-2">
-                      <span className="text-blue-400 shrink-0 font-bold">ℹ</span>
-                      <span>
-                        Both your 12-digit UTR and payment screenshot will be recorded in Google Sheets. Organizers will manually cross-verify and approve your squad.
-                      </span>
-                    </div>
+                  <div className="p-3 bg-blue-950/20 border border-blue-900/40 rounded text-[11px] text-blue-300/90 flex items-start gap-2">
+                    <span className="text-blue-400 shrink-0 font-bold">ℹ</span>
+                    <span>
+                      Both your 12-digit UTR and payment screenshot will be recorded in Google Sheets. Organizers will manually cross-verify and approve your squad.
+                    </span>
                   </div>
                 </div>
               </div>
