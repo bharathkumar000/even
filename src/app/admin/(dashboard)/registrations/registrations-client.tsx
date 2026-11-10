@@ -26,12 +26,19 @@ import {
   X,
   CreditCard,
   Send,
+  FileSpreadsheet,
+  Download,
+  RefreshCw,
+  HelpCircle,
 } from "lucide-react";
 import {
   approveRegistration,
   rejectRegistration,
   GeneratedCredentials,
+  syncAllApprovedRegistrationsAction,
+  exportRegistrationsCsvAction,
 } from "@/app/actions/team-registration";
+import { GOOGLE_APPS_SCRIPT_TEMPLATE } from "@/lib/google-sheets-sync";
 
 interface RegistrationsClientViewProps {
   initialRegistrations: any[];
@@ -50,6 +57,9 @@ export default function RegistrationsClientView({
   const [qrDataUrl, setQrDataUrl] = useState<string>("");
   const [copied, setCopied] = useState(false);
   const [actionNotice, setActionNotice] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [syncingSheets, setSyncingSheets] = useState(false);
+  const [showScriptModal, setShowScriptModal] = useState(false);
+  const [copiedScript, setCopiedScript] = useState(false);
 
   // Generate local QR code base64 URL whenever modal opens
   useEffect(() => {
@@ -214,6 +224,55 @@ Event Organizing Committee`;
     window.open(gmailUrl, "_blank", "noopener,noreferrer");
   };
 
+  const handleExportCsv = async () => {
+    try {
+      setActionNotice(null);
+      const res = await exportRegistrationsCsvAction(filter);
+      if (res.success && res.csv) {
+        const blob = new Blob([res.csv], { type: "text/csv;charset=utf-8;" });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.setAttribute("href", url);
+        link.setAttribute("download", `eventra-registrations-${filter}-${Date.now()}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        setActionNotice({
+          type: "success",
+          text: "Registrations CSV downloaded! Includes Team Lead name, email, phone, clg, sem, branch, team name, transaction ID, and payment proof.",
+        });
+      } else {
+        setActionNotice({ type: "error", text: res.message || "Failed to export CSV." });
+      }
+    } catch (err: any) {
+      setActionNotice({ type: "error", text: err.message || "Export error" });
+    }
+  };
+
+  const handleSyncToSheets = async () => {
+    if (syncingSheets) return;
+    setSyncingSheets(true);
+    setActionNotice(null);
+    try {
+      const res = await syncAllApprovedRegistrationsAction();
+      if (res.success) {
+        setActionNotice({ type: "success", text: res.message });
+      } else {
+        setActionNotice({ type: "error", text: res.message });
+      }
+    } catch (err: any) {
+      setActionNotice({ type: "error", text: err.message || "Sync failed" });
+    } finally {
+      setSyncingSheets(false);
+    }
+  };
+
+  const copyAppsScript = () => {
+    navigator.clipboard.writeText(GOOGLE_APPS_SCRIPT_TEMPLATE);
+    setCopiedScript(true);
+    setTimeout(() => setCopiedScript(false), 2000);
+  };
+
   return (
     <div className="space-y-6">
       {/* Metric Counters */}
@@ -295,9 +354,9 @@ Event Organizing Committee`;
         </div>
       )}
 
-      {/* Filter Tabs and Search Bar */}
-      <div className="flex flex-col sm:flex-row gap-3 items-center justify-between">
-        <div className="flex items-center gap-1.5 p-1 bg-surface-color border border-border-color rounded-xl w-full sm:w-auto overflow-x-auto">
+      {/* Filter Tabs, Search Bar & Google Sheets Actions */}
+      <div className="flex flex-col lg:flex-row gap-3 items-stretch lg:items-center justify-between">
+        <div className="flex items-center gap-1.5 p-1 bg-surface-color border border-border-color rounded-xl w-full lg:w-auto overflow-x-auto">
           {(["all", "pending", "approved", "rejected"] as const).map((tab) => (
             <button
               key={tab}
@@ -313,15 +372,52 @@ Event Organizing Committee`;
           ))}
         </div>
 
-        <div className="relative w-full sm:w-72">
-          <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-text-secondary" />
-          <input
-            type="text"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="Search team, leader, UTR..."
-            className="w-full bg-surface-color border border-border-color focus:border-cyan-400 text-text-primary pl-9 pr-3.5 py-2 rounded-xl font-tech text-xs outline-none transition-all"
-          />
+        <div className="flex flex-col sm:flex-row items-center gap-2.5">
+          <div className="relative w-full sm:w-64">
+            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-text-secondary" />
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Search team, leader, UTR..."
+              className="w-full bg-surface-color border border-border-color focus:border-cyan-400 text-text-primary pl-9 pr-3.5 py-2 rounded-xl font-tech text-xs outline-none transition-all"
+            />
+          </div>
+
+          <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+            {/* Export CSV for Google Sheets */}
+            <button
+              type="button"
+              onClick={handleExportCsv}
+              title="Download CSV formatted for Google Sheets with Team Lead name, email, phone, clg, sem, branch, team name, transaction ID, and payment proof link"
+              className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3 py-2 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/40 hover:border-emerald-500 text-emerald-400 rounded-xl font-tech text-xs font-bold transition-all"
+            >
+              <FileSpreadsheet size={14} />
+              <span>Export CSV</span>
+            </button>
+
+            {/* Sync All to Google Sheets Webhook */}
+            <button
+              type="button"
+              onClick={handleSyncToSheets}
+              disabled={syncingSheets}
+              title="Sync verified registrations to Google Sheets via Webhook"
+              className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3 py-2 bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/40 hover:border-cyan-500 text-cyan-400 rounded-xl font-tech text-xs font-bold transition-all disabled:opacity-50"
+            >
+              <RefreshCw size={13} className={syncingSheets ? "animate-spin" : ""} />
+              <span>{syncingSheets ? "Syncing..." : "Sync Sheets"}</span>
+            </button>
+
+            {/* Help / Setup Guide Modal Trigger */}
+            <button
+              type="button"
+              onClick={() => setShowScriptModal(true)}
+              title="Google Sheets Apps Script Setup Instructions"
+              className="p-2 bg-surface-color hover:bg-white/10 border border-border-color hover:border-white/30 text-text-secondary hover:text-white rounded-xl transition-colors"
+            >
+              <HelpCircle size={15} />
+            </button>
+          </div>
         </div>
       </div>
 
@@ -756,6 +852,74 @@ Event Organizing Committee`;
                   Done
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Google Sheets Setup Instructions Modal */}
+      {showScriptModal && (
+        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4 animate-fade-in">
+          <div className="bg-surface-color border border-cyan-500/40 rounded-2xl max-w-2xl w-full p-6 text-left relative shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
+            <button
+              onClick={() => setShowScriptModal(false)}
+              className="absolute top-4 right-4 text-text-secondary hover:text-white"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="flex items-center gap-2 text-cyan-400 font-tech uppercase tracking-wider text-xs font-bold">
+              <FileSpreadsheet className="w-5 h-5" />
+              <span>Google Sheets Realtime Webhook Setup (1 Minute)</span>
+            </div>
+
+            <p className="font-tech text-xs text-text-secondary leading-relaxed">
+              When an admin approves a team registration, Eventra automatically sends all details (Team Lead Name, Email, Phone, College, Sem, Branch, Team Name, Transaction ID, and clickable Payment Proof link) to your Google Sheet.
+            </p>
+
+            <div className="space-y-2 font-tech text-xs text-text-secondary">
+              <p className="font-bold text-text-primary">Setup Instructions:</p>
+              <ol className="list-decimal list-inside space-y-1.5 bg-black/40 p-3.5 rounded-xl border border-white/5">
+                <li>Create a new Google Sheet (or open your existing one).</li>
+                <li>Go to <strong>Extensions &gt; Apps Script</strong> in the top menu.</li>
+                <li>Paste the script below into the code editor and save.</li>
+                <li>Click <strong>Deploy &gt; New deployment</strong>.</li>
+                <li>Choose type: <strong>Web app</strong>, Execute as: <strong>Me</strong>, Who has access: <strong>Anyone</strong>.</li>
+                <li>Copy the generated Web App URL and add to your <code className="text-cyan-400">.env.local</code>:</li>
+              </ol>
+              <div className="p-2.5 bg-[#050508] border border-cyan-500/30 rounded font-mono text-[11px] text-cyan-300">
+                GOOGLE_SHEETS_WEBHOOK_URL=https://script.google.com/macros/s/.../exec
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <span className="font-tech text-xs uppercase text-text-secondary font-bold">
+                  Google Apps Script Code:
+                </span>
+                <button
+                  type="button"
+                  onClick={copyAppsScript}
+                  className="px-2.5 py-1 bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-400 border border-cyan-500/40 rounded text-xs font-tech font-bold flex items-center gap-1 transition-all"
+                >
+                  {copiedScript ? <Check size={12} /> : <Copy size={12} />}
+                  <span>{copiedScript ? "Copied Script!" : "Copy Script"}</span>
+                </button>
+              </div>
+
+              <pre className="p-3 bg-black/80 border border-white/10 rounded-xl font-mono text-[10px] text-neutral-300 overflow-x-auto max-h-52">
+                {GOOGLE_APPS_SCRIPT_TEMPLATE}
+              </pre>
+            </div>
+
+            <div className="pt-2 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setShowScriptModal(false)}
+                className="px-4 py-2 bg-white/10 hover:bg-white/20 text-text-primary font-tech text-xs uppercase rounded-xl"
+              >
+                Close
+              </button>
             </div>
           </div>
         </div>

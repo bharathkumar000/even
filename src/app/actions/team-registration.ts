@@ -4,6 +4,11 @@ import { supabaseAdmin } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { generateQrSignature } from "@/lib/qr-signature";
+import {
+  syncRegistrationToGoogleSheets,
+  GoogleSheetRegistrationRecord,
+  generateRegistrationsCsv,
+} from "@/lib/google-sheets-sync";
 
 export interface TeamMemberInput {
   name: string;
@@ -509,6 +514,28 @@ export async function approveRegistration(registrationId: string): Promise<{
       })
       .eq("id", registrationId);
 
+    // 9. Sync verified payment and all Team Lead details to Google Sheets
+    const sheetRecord: GoogleSheetRegistrationRecord = {
+      teamName: teamName,
+      teamCode: teamCode,
+      leaderName: leaderName,
+      leaderEmail: leaderEmail,
+      leaderPhone: reg.leader_phone || reg.payment_phone || "",
+      leaderCollege: reg.leader_college || "",
+      leaderSem: reg.leader_sem || "",
+      leaderBranch: reg.leader_branch || "",
+      transactionId: reg.payment_utr || "",
+      paymentProofUrl: reg.payment_proof_url || "",
+      status: "Verified",
+      timestamp: nowIso,
+      usn: reg.leader_usn || "",
+    };
+
+    // Trigger Google Sheets sync (non-blocking)
+    syncRegistrationToGoogleSheets(sheetRecord).catch((e) =>
+      console.error("[approveRegistration] Background Google Sheets sync error:", e)
+    );
+
     revalidatePath("/admin/registrations");
     revalidatePath("/admin/users");
 
@@ -556,6 +583,108 @@ export async function rejectRegistration(
   } catch (err: any) {
     console.error("rejectRegistration error:", err);
     return { success: false, message: `Failed to reject: ${err.message}` };
+  }
+}
+
+/**
+ * Admin Action: Sync all currently approved registrations to Google Sheets.
+ */
+export async function syncAllApprovedRegistrationsAction(): Promise<{
+  success: boolean;
+  message: string;
+  count: number;
+}> {
+  await requireAdminUser();
+
+  try {
+    const { data: approvedList, error } = await supabaseAdmin
+      .from("team_registrations")
+      .select("*")
+      .eq("status", "approved");
+
+    if (error) {
+      return { success: false, message: error.message, count: 0 };
+    }
+
+    if (!approvedList || approvedList.length === 0) {
+      return { success: true, message: "No approved registrations to sync.", count: 0 };
+    }
+
+    let syncedCount = 0;
+    for (const reg of approvedList) {
+      const record: GoogleSheetRegistrationRecord = {
+        teamName: reg.team_name,
+        teamCode: reg.generated_credentials?.teamCode || "",
+        leaderName: reg.leader_name,
+        leaderEmail: reg.leader_email,
+        leaderPhone: reg.leader_phone || reg.payment_phone || "",
+        leaderCollege: reg.leader_college || "",
+        leaderSem: reg.leader_sem || "",
+        leaderBranch: reg.leader_branch || "",
+        transactionId: reg.payment_utr || "",
+        paymentProofUrl: reg.payment_proof_url || "",
+        status: "Verified",
+        timestamp: reg.approved_at || reg.created_at,
+        usn: reg.leader_usn || "",
+      };
+
+      const res = await syncRegistrationToGoogleSheets(record);
+      if (res.success) syncedCount++;
+    }
+
+    return {
+      success: true,
+      message: `Synced ${syncedCount}/${approvedList.length} verified teams to Google Sheets.`,
+      count: syncedCount,
+    };
+  } catch (err: unknown) {
+    const errorMsg = err instanceof Error ? err.message : String(err);
+    return { success: false, message: `Bulk sync failed: ${errorMsg}`, count: 0 };
+  }
+}
+
+/**
+ * Admin Action: Export registrations as CSV for direct import into Google Sheets.
+ */
+export async function exportRegistrationsCsvAction(
+  filterStatus?: "all" | "approved" | "pending" | "rejected"
+): Promise<{ success: boolean; csv?: string; message?: string }> {
+  await requireAdminUser();
+
+  try {
+    let query = supabaseAdmin
+      .from("team_registrations")
+      .select("*")
+      .order("created_at", { ascending: false });
+
+    if (filterStatus && filterStatus !== "all") {
+      query = query.eq("status", filterStatus);
+    }
+
+    const { data, error } = await query;
+    if (error) throw error;
+
+    const records: GoogleSheetRegistrationRecord[] = (data || []).map((r) => ({
+      teamName: r.team_name,
+      teamCode: r.generated_credentials?.teamCode || "",
+      leaderName: r.leader_name,
+      leaderEmail: r.leader_email,
+      leaderPhone: r.leader_phone || r.payment_phone || "",
+      leaderCollege: r.leader_college || "",
+      leaderSem: r.leader_sem || "",
+      leaderBranch: r.leader_branch || "",
+      transactionId: r.payment_utr || "",
+      paymentProofUrl: r.payment_proof_url || "",
+      status: r.status === "approved" ? "Verified" : r.status,
+      timestamp: r.approved_at || r.created_at,
+      usn: r.leader_usn || "",
+    }));
+
+    const csv = generateRegistrationsCsv(records);
+    return { success: true, csv };
+  } catch (err: unknown) {
+    const errorMsg = err instanceof Error ? err.message : String(err);
+    return { success: false, message: `Export failed: ${errorMsg}` };
   }
 }
 
