@@ -1,7 +1,7 @@
 import React from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { Instagram, Linkedin, Youtube } from "lucide-react";
+import { Instagram, Linkedin } from "lucide-react";
 
 export default function RelayathonFooter() {
   return (
@@ -205,31 +205,22 @@ export default function RelayathonFooter() {
           </div>
           <div className="flex gap-5 items-center text-neutral-400">
             <a
-              href="https://instagram.com"
+              href="https://instagram.com/the.official.ivc"
               target="_blank"
               rel="noopener noreferrer"
-              aria-label="Instagram"
+              aria-label="Instagram (@the.official.ivc)"
               className="hover:text-red-500 transition-colors"
             >
               <Instagram size={20} />
             </a>
             <a
-              href="https://linkedin.com"
+              href="https://www.linkedin.com/company/ivc-innovators-visionaries-club/"
               target="_blank"
               rel="noopener noreferrer"
-              aria-label="LinkedIn"
+              aria-label="LinkedIn (IVC - Innovators & Visionaries Club)"
               className="hover:text-red-500 transition-colors"
             >
               <Linkedin size={20} />
-            </a>
-            <a
-              href="https://youtube.com"
-              target="_blank"
-              rel="noopener noreferrer"
-              aria-label="YouTube"
-              className="hover:text-red-500 transition-colors"
-            >
-              <Youtube size={20} />
             </a>
           </div>
         </div>
