@@ -404,9 +404,17 @@ export default function RegisterClientView() {
               </div>
             </div>
 
-            <p className="font-mono text-xs text-neutral-500 max-w-md mx-auto">
-              Once the admin confirms receipt of your ₹400 entry fee, your team credentials and official QR Pass will be activated and emailed to your Captain ({driver1.email}).
-            </p>
+            <div className="space-y-2 max-w-md mx-auto font-mono text-xs">
+              <p className="text-yellow-400 font-bold">
+                Once the Transaction is verified, the login credentials will be shared to the Team Lead&apos;s email ({driver1.email}).
+              </p>
+              <div className="pt-2 border-t border-neutral-800 text-[11px] text-neutral-400">
+                <span className="text-neutral-500 font-bold uppercase">For any queries contact:</span>{" "}
+                <span className="text-neutral-200">Moksh (+91 831 035 3103)</span> •{" "}
+                <span className="text-neutral-200">Parinitha (+91 63614 55193)</span> •{" "}
+                <span className="text-neutral-200">Rishith (+91 90199 28883)</span>
+              </div>
+            </div>
 
             <div className="pt-4 flex flex-col sm:flex-row gap-3 justify-center">
               <Link
@@ -1170,6 +1178,32 @@ export default function RegisterClientView() {
                     <span>LOCK IN GRID POSITION &gt;&gt;</span>
                   )}
                 </button>
+
+                {/* TRANSACTION VERIFICATION & CONTACT QUERIES NOTICE */}
+                <div className="mt-8 p-5 sm:p-6 bg-[#080808] border border-red-900/50 rounded-xl space-y-3 font-mono text-center shadow-lg">
+                  <p className="text-xs sm:text-sm text-yellow-400 font-bold tracking-wide m-0">
+                    Once the Transaction is verified, the login credentials will be shared to the Team Lead&apos;s email.
+                  </p>
+
+                  <div className="pt-3 border-t border-neutral-800/80">
+                    <p className="text-[11px] uppercase tracking-widest text-neutral-400 font-bold mb-2">
+                      For any queries contact:
+                    </p>
+                    <div className="flex flex-wrap justify-center items-center gap-x-6 gap-y-2 text-xs">
+                      <a href="tel:+918310353103" className="text-neutral-300 hover:text-red-400 transition-colors">
+                        <span className="text-white font-bold">Moksh</span> - +91 831 035 3103
+                      </a>
+                      <span className="text-neutral-700 hidden sm:inline">•</span>
+                      <a href="tel:+916361455193" className="text-neutral-300 hover:text-red-400 transition-colors">
+                        <span className="text-white font-bold">Parinitha</span> - +91 63614 55193
+                      </a>
+                      <span className="text-neutral-700 hidden sm:inline">•</span>
+                      <a href="tel:+919019928883" className="text-neutral-300 hover:text-red-400 transition-colors">
+                        <span className="text-white font-bold">Rishith</span> - +91 90199 28883
+                      </a>
+                    </div>
+                  </div>
+                </div>
               </div>
             </form>
           </>
