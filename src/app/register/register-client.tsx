@@ -17,6 +17,7 @@ import {
   Users,
 } from "lucide-react";
 import { submitTeamRegistration, TeamMemberInput } from "@/app/actions/team-registration";
+import RelayathonFooter from "@/components/RelayathonFooter";
 
 interface DriverState {
   name: string;
@@ -1136,6 +1137,9 @@ export default function RegisterClientView() {
           </>
         )}
       </main>
+
+      {/* Cyberpunk Relayathon Footer with ECE Dept Affiliation */}
+      <RelayathonFooter />
     </div>
   );
 }
