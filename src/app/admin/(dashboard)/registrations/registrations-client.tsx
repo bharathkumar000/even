@@ -1,7 +1,8 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Image from "next/image";
+import QRCode from "qrcode";
 import {
   Users,
   CheckCircle2,
@@ -24,6 +25,7 @@ import {
   FileCheck2,
   X,
   CreditCard,
+  Send,
 } from "lucide-react";
 import {
   approveRegistration,
@@ -45,8 +47,33 @@ export default function RegistrationsClientView({
   const [activeProofUrl, setActiveProofUrl] = useState<{ url: string; team: string; utr: string } | null>(null);
   const [activeMembersModal, setActiveMembersModal] = useState<any | null>(null);
   const [activeCredentialsModal, setActiveCredentialsModal] = useState<GeneratedCredentials | null>(null);
+  const [qrDataUrl, setQrDataUrl] = useState<string>("");
   const [copied, setCopied] = useState(false);
   const [actionNotice, setActionNotice] = useState<{ type: "success" | "error"; text: string } | null>(null);
+
+  // Generate local QR code base64 URL whenever modal opens
+  useEffect(() => {
+    if (activeCredentialsModal?.qrPayload) {
+      QRCode.toDataURL(
+        activeCredentialsModal.qrPayload,
+        {
+          width: 320,
+          margin: 1,
+          color: {
+            dark: "#050508",
+            light: "#ffffff",
+          },
+        },
+        (err, url) => {
+          if (!err && url) {
+            setQrDataUrl(url);
+          }
+        }
+      );
+    } else {
+      setQrDataUrl("");
+    }
+  }, [activeCredentialsModal]);
 
   // Filtered registrations
   const filtered = registrations.filter((r) => {
@@ -135,6 +162,56 @@ Official QR Code is activated for Registration Check-in & Meals.
     navigator.clipboard.writeText(text);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  const getEmailContent = (creds: GeneratedCredentials) => {
+    const leader = creds.leaderName || "Team Leader";
+    const subject = `[IVC Ideathon 2026] Official Team Credentials & QR Pass - ${creds.teamName}`;
+    const body = `Dear ${leader},
+
+Congratulations! Your team registration and payment for the IVC Ideathon 2026 have been successfully verified.
+
+Here are your official credentials to access the Eventra portal:
+
+=========================================
+TEAM ACCESS CREDENTIALS
+=========================================
+Team Name / Username: ${creds.teamName}
+Team Code: ${creds.teamCode}
+Portal URL: https://eventra-ivc.vercel.app/login
+Login Email: ${creds.email}
+Password: ${creds.password}
+=========================================
+
+NEXT STEPS:
+1. Log in to the Eventra portal (https://eventra-ivc.vercel.app/login) using your email and password above.
+2. Go to the "Team QR" tab to access your squad's official live QR badge.
+3. Present this QR badge at the desk for Registration Check-in, Goodies / Kit collection, and Meals during the event.
+4. Problem statements and submission guidelines are now unlocked in your dashboard.
+
+If you have any questions or require support, feel free to reply to this email.
+
+Best regards,
+Innovators & Visionaries Club (IVC)
+Event Organizing Committee`;
+
+    return { subject, body };
+  };
+
+  const handleSendMailto = (creds: GeneratedCredentials) => {
+    const { subject, body } = getEmailContent(creds);
+    const mailtoUrl = `mailto:${encodeURIComponent(creds.email)}?subject=${encodeURIComponent(
+      subject
+    )}&body=${encodeURIComponent(body)}`;
+    window.location.href = mailtoUrl;
+  };
+
+  const handleOpenGmail = (creds: GeneratedCredentials) => {
+    const { subject, body } = getEmailContent(creds);
+    const gmailUrl = `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(
+      creds.email
+    )}&su=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+    window.open(gmailUrl, "_blank", "noopener,noreferrer");
   };
 
   return (
@@ -351,16 +428,28 @@ Official QR Code is activated for Registration Check-in & Meals.
                       View Proof
                     </button>
 
-                    {/* Approved: View Credentials */}
+                    {/* Approved: View Credentials & Quick Email */}
                     {isApproved && creds && (
-                      <button
-                        type="button"
-                        onClick={() => setActiveCredentialsModal(creds)}
-                        className="px-3.5 py-2 bg-cyan-500/20 hover:bg-cyan-500/30 border border-cyan-500/50 text-cyan-300 font-tech text-xs uppercase rounded-xl flex items-center gap-1.5 transition-all shadow-[0_0_15px_rgba(0,245,255,0.2)]"
-                      >
-                        <KeyRound className="w-3.5 h-3.5 text-cyan-400" />
-                        View Credentials
-                      </button>
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => setActiveCredentialsModal(creds)}
+                          className="px-3.5 py-2 bg-cyan-500/20 hover:bg-cyan-500/30 border border-cyan-500/50 text-cyan-300 font-tech text-xs uppercase rounded-xl flex items-center gap-1.5 transition-all shadow-[0_0_15px_rgba(0,245,255,0.2)]"
+                        >
+                          <KeyRound className="w-3.5 h-3.5 text-cyan-400" />
+                          View Credentials
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => handleOpenGmail(creds)}
+                          title="Open pre-formatted email draft in Gmail Web"
+                          className="px-3.5 py-2 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/40 text-rose-300 font-tech text-xs uppercase rounded-xl flex items-center gap-1.5 transition-all"
+                        >
+                          <Send className="w-3.5 h-3.5 text-rose-400" />
+                          Email Lead
+                        </button>
+                      </>
                     )}
 
                     {/* Pending: Approve & Reject */}
@@ -585,17 +674,21 @@ Official QR Code is activated for Registration Check-in & Meals.
               Team &quot;{activeCredentialsModal.teamName}&quot; is active in database and ready for check-in.
             </p>
 
-            {/* Generated QR Pass Preview */}
+            {/* Generated QR Pass Preview (Rendered locally from payload) */}
             <div className="bg-white p-3 rounded-xl w-40 h-40 mx-auto my-5 shadow-lg flex items-center justify-center">
-              <Image
-                src={`https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(
-                  activeCredentialsModal.qrPayload
-                )}`}
-                alt="Official QR Pass"
-                width={150}
-                height={150}
-                className="w-full h-full object-contain"
-              />
+              {qrDataUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={qrDataUrl}
+                  alt="Official QR Pass"
+                  className="w-full h-full object-contain"
+                />
+              ) : (
+                <div className="flex flex-col items-center justify-center text-gray-500 font-tech text-xs gap-1.5">
+                  <span className="w-5 h-5 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" />
+                  Generating QR...
+                </div>
+              )}
             </div>
             <p className="font-tech text-[10px] text-cyan-400 uppercase tracking-widest mb-4">
               Compatible with /ops/scanner Desk
@@ -623,22 +716,46 @@ Official QR Code is activated for Registration Check-in & Meals.
               </div>
             </div>
 
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={() => copyCredentials(activeCredentialsModal)}
-                className="flex-1 py-2.5 bg-cyan-500 hover:bg-cyan-400 text-black font-tech font-bold uppercase tracking-wider text-xs rounded-xl flex items-center justify-center gap-1.5 transition-all shadow-[0_0_15px_rgba(0,245,255,0.25)]"
-              >
-                {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-                {copied ? "Copied to Clipboard!" : "Copy All Credentials"}
-              </button>
-              <button
-                type="button"
-                onClick={() => setActiveCredentialsModal(null)}
-                className="px-4 py-2.5 bg-white/10 hover:bg-white/20 text-text-primary font-tech text-xs uppercase rounded-xl"
-              >
-                Done
-              </button>
+            {/* Quick Email & Copy Buttons */}
+            <div className="space-y-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => handleOpenGmail(activeCredentialsModal)}
+                  className="py-2.5 px-3 bg-gradient-to-r from-red-500 to-rose-600 hover:from-red-400 hover:to-rose-500 text-white font-tech font-bold uppercase tracking-wider text-xs rounded-xl flex items-center justify-center gap-1.5 transition-all shadow-[0_0_15px_rgba(244,63,94,0.3)]"
+                >
+                  <Send className="w-4 h-4" />
+                  Draft in Gmail Web
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleSendMailto(activeCredentialsModal)}
+                  className="py-2.5 px-3 bg-white/10 hover:bg-white/15 border border-white/20 text-text-primary font-tech font-bold uppercase tracking-wider text-xs rounded-xl flex items-center justify-center gap-1.5 transition-all"
+                >
+                  <Mail className="w-4 h-4 text-cyan-400" />
+                  Draft in Mail App
+                </button>
+              </div>
+
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => copyCredentials(activeCredentialsModal)}
+                  className="flex-1 py-2.5 bg-cyan-500 hover:bg-cyan-400 text-black font-tech font-bold uppercase tracking-wider text-xs rounded-xl flex items-center justify-center gap-1.5 transition-all shadow-[0_0_15px_rgba(0,245,255,0.25)]"
+                >
+                  {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                  {copied ? "Copied to Clipboard!" : "Copy All Credentials"}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setActiveCredentialsModal(null)}
+                  className="px-5 py-2.5 bg-white/10 hover:bg-white/20 text-text-primary font-tech text-xs uppercase rounded-xl"
+                >
+                  Done
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -646,3 +763,4 @@ Official QR Code is activated for Registration Check-in & Meals.
     </div>
   );
 }
+

@@ -33,6 +33,7 @@ export interface GeneratedCredentials {
   teamName: string;
   teamCode: string;
   email: string;
+  leaderName?: string;
   username: string;
   password: string;
   qrPayload: string;
@@ -487,6 +488,7 @@ export async function approveRegistration(registrationId: string): Promise<{
       teamName,
       teamCode,
       email: leaderEmail,
+      leaderName,
       username: teamName,
       password: generatedPassword,
       qrPayload,
@@ -554,3 +556,4 @@ export async function rejectRegistration(
     return { success: false, message: `Failed to reject: ${err.message}` };
   }
 }
+

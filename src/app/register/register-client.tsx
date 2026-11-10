@@ -864,3 +864,4 @@ export default function RegisterClientView() {
     </main>
   );
 }
+

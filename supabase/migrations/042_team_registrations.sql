@@ -69,3 +69,4 @@ CREATE POLICY "Allow admin to update registrations"
 -- Index for speedy listing by status and date
 CREATE INDEX IF NOT EXISTS idx_team_registrations_status ON public.team_registrations(status);
 CREATE INDEX IF NOT EXISTS idx_team_registrations_created_at ON public.team_registrations(created_at DESC);
+
