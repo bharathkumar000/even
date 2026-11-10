@@ -42,6 +42,7 @@ export default function AdminSidebar() {
 
   const navItems: NavItem[] = [
     { href: "/admin", icon: LayoutDashboard, label: "Overview" },
+    { href: "/admin/registrations", icon: UserCheck, label: "Registrations & Proofs" },
     { href: "/admin/content-releases", icon: FileCheck2, label: "Content Release" },
     { href: "/admin/submission-forms", icon: FileText, label: "Project Submissions" },
     { href: "/admin/users", icon: Users, label: "User Management" },
