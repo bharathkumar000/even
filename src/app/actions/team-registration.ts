@@ -131,29 +131,11 @@ export async function submitTeamRegistration(
       };
     }
 
-    // 1. Upload payment proof screenshot to Supabase Storage
-    const fileExt = paymentFile.name.split(".").pop() || "jpg";
-    const sanitizedTeamSlug = teamName.toLowerCase().replace(/[^a-z0-9]/g, "-");
-    const filePath = `payments/${Date.now()}-${sanitizedTeamSlug}.${fileExt}`;
-
+    // 1. Encode payment proof to base64 so ZERO files are stored in Supabase Storage
+    // The image is saved directly into Google Drive via Google Sheets integration on admin decision
     const fileBuffer = Buffer.from(await paymentFile.arrayBuffer());
-    const { error: uploadError } = await supabaseAdmin.storage
-      .from("payment-proofs")
-      .upload(filePath, fileBuffer, {
-        contentType: paymentFile.type || "image/jpeg",
-        upsert: true,
-      });
-
-    if (uploadError) {
-      console.error("Payment proof upload failed:", uploadError);
-      return { success: false, message: `Failed to upload payment proof: ${uploadError.message}` };
-    }
-
-    const { data: publicUrlData } = supabaseAdmin.storage
-      .from("payment-proofs")
-      .getPublicUrl(filePath);
-
-    const paymentProofUrl = publicUrlData.publicUrl;
+    const paymentProofBase64 = `data:${paymentFile.type || "image/jpeg"};base64,${fileBuffer.toString("base64")}`;
+    const paymentProofUrl = paymentProofBase64;
 
     // 2. Insert into team_registrations table
     const registrationPayload = {
@@ -514,25 +496,76 @@ export async function approveRegistration(registrationId: string): Promise<{
       })
       .eq("id", registrationId);
 
-    // 9. Sync verified payment and all Team Lead details to Google Sheets
+    // 9. Sync complete 4-driver squad details & payment proof directly to Sheet 1 ("Approved Teams")
+    const membersList: any[] = Array.isArray(reg.members) ? reg.members : [];
+    const d2 = membersList[0] || {};
+    const d3 = membersList[1] || {};
+    const d4 = membersList[2] || {};
+    const isBase64Proof = typeof reg.payment_proof_url === "string" && reg.payment_proof_url.startsWith("data:");
+
     const sheetRecord: GoogleSheetRegistrationRecord = {
       teamName: teamName,
+      track: track,
       teamCode: teamCode,
+      status: "Approved",
+      decisionAt: nowIso,
+      decisionBy: adminUser.email || adminUser.id,
+
+      // Driver 1 (Leader)
       leaderName: leaderName,
       leaderEmail: leaderEmail,
       leaderPhone: reg.leader_phone || reg.payment_phone || "",
       leaderCollege: reg.leader_college || "",
-      leaderSem: reg.leader_sem || "",
+      leaderUsn: reg.leader_usn || "",
       leaderBranch: reg.leader_branch || "",
+      leaderSem: reg.leader_sem || "",
+
+      // Driver 2
+      driver2Name: d2.name || "",
+      driver2Email: d2.email || "",
+      driver2Phone: d2.phone || "",
+      driver2College: d2.college || "",
+      driver2Usn: d2.usn || "",
+      driver2Branch: d2.branch || "",
+      driver2Sem: d2.sem || "",
+
+      // Driver 3
+      driver3Name: d3.name || "",
+      driver3Email: d3.email || "",
+      driver3Phone: d3.phone || "",
+      driver3College: d3.college || "",
+      driver3Usn: d3.usn || "",
+      driver3Branch: d3.branch || "",
+      driver3Sem: d3.sem || "",
+
+      // Driver 4
+      driver4Name: d4.name || "",
+      driver4Email: d4.email || "",
+      driver4Phone: d4.phone || "",
+      driver4College: d4.college || "",
+      driver4Usn: d4.usn || "",
+      driver4Branch: d4.branch || "",
+      driver4Sem: d4.sem || "",
+
+      // Payment
       transactionId: reg.payment_utr || "",
-      paymentProofUrl: reg.payment_proof_url || "",
-      status: "Verified",
-      timestamp: nowIso,
-      usn: reg.leader_usn || "",
+      paymentProofUrl: isBase64Proof ? undefined : reg.payment_proof_url,
+      paymentProofBase64: isBase64Proof ? reg.payment_proof_url : undefined,
     };
 
-    // Trigger Google Sheets sync (non-blocking)
-    syncRegistrationToGoogleSheets(sheetRecord).catch((e) =>
+    // Trigger Google Sheets sync (non-blocking, routes to Sheet 1)
+    syncRegistrationToGoogleSheets(sheetRecord).then(async (res) => {
+      if (res.proofUrl && isBase64Proof) {
+        try {
+          await supabaseAdmin
+            .from("team_registrations")
+            .update({ payment_proof_url: res.proofUrl })
+            .eq("id", registrationId);
+        } catch {
+          // ignore background update error
+        }
+      }
+    }).catch((e) =>
       console.error("[approveRegistration] Background Google Sheets sync error:", e)
     );
 
@@ -553,33 +586,117 @@ export async function approveRegistration(registrationId: string): Promise<{
 
 /**
  * Admin Action: Reject a registration with a mandatory or optional reason.
+ * Automatically archives all 4-driver details and payment proof to Sheet 2 ("Rejected Teams").
  */
 export async function rejectRegistration(
   registrationId: string,
   reason: string = "Payment proof verification failed."
 ): Promise<{ success: boolean; message: string }> {
-  await requireAdminUser();
+  const { user: adminUser } = await requireAdminUser();
 
   try {
+    const nowIso = new Date().toISOString();
+
+    // 1. Fetch full registration record so every detail can be archived
+    const { data: reg } = await supabaseAdmin
+      .from("team_registrations")
+      .select("*")
+      .eq("id", registrationId)
+      .maybeSingle();
+
     const { error } = await supabaseAdmin
       .from("team_registrations")
       .update({
         status: "rejected",
         rejection_reason: reason,
-        updated_at: new Date().toISOString(),
+        updated_at: nowIso,
       })
       .eq("id", registrationId);
 
     if (error) {
-      // Fallback check
       await supabaseAdmin
         .from("teams")
         .update({ status: "rejected" })
         .eq("id", registrationId);
     }
 
+    // 2. Stream all 4 drivers' details to Sheet 2 ("Rejected Teams")
+    if (reg) {
+      const membersList: any[] = Array.isArray(reg.members) ? reg.members : [];
+      const d2 = membersList[0] || {};
+      const d3 = membersList[1] || {};
+      const d4 = membersList[2] || {};
+      const isBase64Proof = typeof reg.payment_proof_url === "string" && reg.payment_proof_url.startsWith("data:");
+
+      const sheetRecord: GoogleSheetRegistrationRecord = {
+        teamName: reg.team_name,
+        track: reg.track || "GRAND PRIX",
+        status: "Rejected",
+        decisionAt: nowIso,
+        decisionBy: adminUser.email || adminUser.id,
+        rejectionReason: reason,
+
+        // Driver 1 (Leader)
+        leaderName: reg.leader_name,
+        leaderEmail: reg.leader_email,
+        leaderPhone: reg.leader_phone || reg.payment_phone || "",
+        leaderCollege: reg.leader_college || "",
+        leaderUsn: reg.leader_usn || "",
+        leaderBranch: reg.leader_branch || "",
+        leaderSem: reg.leader_sem || "",
+
+        // Driver 2
+        driver2Name: d2.name || "",
+        driver2Email: d2.email || "",
+        driver2Phone: d2.phone || "",
+        driver2College: d2.college || "",
+        driver2Usn: d2.usn || "",
+        driver2Branch: d2.branch || "",
+        driver2Sem: d2.sem || "",
+
+        // Driver 3
+        driver3Name: d3.name || "",
+        driver3Email: d3.email || "",
+        driver3Phone: d3.phone || "",
+        driver3College: d3.college || "",
+        driver3Usn: d3.usn || "",
+        driver3Branch: d3.branch || "",
+        driver3Sem: d3.sem || "",
+
+        // Driver 4
+        driver4Name: d4.name || "",
+        driver4Email: d4.email || "",
+        driver4Phone: d4.phone || "",
+        driver4College: d4.college || "",
+        driver4Usn: d4.usn || "",
+        driver4Branch: d4.branch || "",
+        driver4Sem: d4.sem || "",
+
+        // Payment
+        transactionId: reg.payment_utr || "",
+        paymentProofUrl: isBase64Proof ? undefined : reg.payment_proof_url,
+        paymentProofBase64: isBase64Proof ? reg.payment_proof_url : undefined,
+      };
+
+      // Background push to Sheet 2 ("Rejected Teams")
+      syncRegistrationToGoogleSheets(sheetRecord).then(async (res) => {
+        if (res.proofUrl && isBase64Proof) {
+          try {
+            await supabaseAdmin
+              .from("team_registrations")
+              .update({ payment_proof_url: res.proofUrl })
+              .eq("id", registrationId);
+          } catch {
+            // ignore background update error
+          }
+        }
+      }).catch((e) =>
+        console.error("[rejectRegistration] Background Google Sheets sync error:", e)
+      );
+    }
+
     revalidatePath("/admin/registrations");
-    return { success: true, message: "Registration marked as rejected." };
+    return { success: true, message: "Registration marked as rejected and streamed to Sheet 2 (Rejected Teams)." };
   } catch (err: any) {
     console.error("rejectRegistration error:", err);
     return { success: false, message: `Failed to reject: ${err.message}` };
@@ -587,7 +704,7 @@ export async function rejectRegistration(
 }
 
 /**
- * Admin Action: Sync all currently approved registrations to Google Sheets.
+ * Admin Action: Sync all currently approved registrations to Google Sheet 1 ("Approved Teams").
  */
 export async function syncAllApprovedRegistrationsAction(): Promise<{
   success: boolean;
@@ -612,20 +729,59 @@ export async function syncAllApprovedRegistrationsAction(): Promise<{
 
     let syncedCount = 0;
     for (const reg of approvedList) {
+      const membersList: any[] = Array.isArray(reg.members) ? reg.members : [];
+      const d2 = membersList[0] || {};
+      const d3 = membersList[1] || {};
+      const d4 = membersList[2] || {};
+      const isBase64 = typeof reg.payment_proof_url === "string" && reg.payment_proof_url.startsWith("data:");
+
       const record: GoogleSheetRegistrationRecord = {
         teamName: reg.team_name,
+        track: reg.track || "GRAND PRIX",
         teamCode: reg.generated_credentials?.teamCode || "",
+        status: "Approved",
+        decisionAt: reg.approved_at || reg.created_at,
+
+        // Driver 1 (Leader)
         leaderName: reg.leader_name,
         leaderEmail: reg.leader_email,
         leaderPhone: reg.leader_phone || reg.payment_phone || "",
         leaderCollege: reg.leader_college || "",
-        leaderSem: reg.leader_sem || "",
+        leaderUsn: reg.leader_usn || "",
         leaderBranch: reg.leader_branch || "",
+        leaderSem: reg.leader_sem || "",
+
+        // Driver 2
+        driver2Name: d2.name || "",
+        driver2Email: d2.email || "",
+        driver2Phone: d2.phone || "",
+        driver2College: d2.college || "",
+        driver2Usn: d2.usn || "",
+        driver2Branch: d2.branch || "",
+        driver2Sem: d2.sem || "",
+
+        // Driver 3
+        driver3Name: d3.name || "",
+        driver3Email: d3.email || "",
+        driver3Phone: d3.phone || "",
+        driver3College: d3.college || "",
+        driver3Usn: d3.usn || "",
+        driver3Branch: d3.branch || "",
+        driver3Sem: d3.sem || "",
+
+        // Driver 4
+        driver4Name: d4.name || "",
+        driver4Email: d4.email || "",
+        driver4Phone: d4.phone || "",
+        driver4College: d4.college || "",
+        driver4Usn: d4.usn || "",
+        driver4Branch: d4.branch || "",
+        driver4Sem: d4.sem || "",
+
+        // Payment
         transactionId: reg.payment_utr || "",
-        paymentProofUrl: reg.payment_proof_url || "",
-        status: "Verified",
-        timestamp: reg.approved_at || reg.created_at,
-        usn: reg.leader_usn || "",
+        paymentProofUrl: isBase64 ? undefined : reg.payment_proof_url,
+        paymentProofBase64: isBase64 ? reg.payment_proof_url : undefined,
       };
 
       const res = await syncRegistrationToGoogleSheets(record);
@@ -634,7 +790,7 @@ export async function syncAllApprovedRegistrationsAction(): Promise<{
 
     return {
       success: true,
-      message: `Synced ${syncedCount}/${approvedList.length} verified teams to Google Sheets.`,
+      message: `Synced ${syncedCount}/${approvedList.length} verified teams to Google Sheet 1 ("Approved Teams").`,
       count: syncedCount,
     };
   } catch (err: unknown) {
@@ -664,21 +820,63 @@ export async function exportRegistrationsCsvAction(
     const { data, error } = await query;
     if (error) throw error;
 
-    const records: GoogleSheetRegistrationRecord[] = (data || []).map((r) => ({
-      teamName: r.team_name,
-      teamCode: r.generated_credentials?.teamCode || "",
-      leaderName: r.leader_name,
-      leaderEmail: r.leader_email,
-      leaderPhone: r.leader_phone || r.payment_phone || "",
-      leaderCollege: r.leader_college || "",
-      leaderSem: r.leader_sem || "",
-      leaderBranch: r.leader_branch || "",
-      transactionId: r.payment_utr || "",
-      paymentProofUrl: r.payment_proof_url || "",
-      status: r.status === "approved" ? "Verified" : r.status,
-      timestamp: r.approved_at || r.created_at,
-      usn: r.leader_usn || "",
-    }));
+    const records: GoogleSheetRegistrationRecord[] = (data || []).map((r) => {
+      const membersList: any[] = Array.isArray(r.members) ? r.members : [];
+      const d2 = membersList[0] || {};
+      const d3 = membersList[1] || {};
+      const d4 = membersList[2] || {};
+
+      return {
+        teamName: r.team_name,
+        track: r.track || "GRAND PRIX",
+        teamCode: r.generated_credentials?.teamCode || "",
+        status: r.status === "approved" ? "Approved" : "Rejected",
+        decisionAt: r.approved_at || r.updated_at || r.created_at,
+        rejectionReason: r.rejection_reason || "",
+
+        // Driver 1 (Leader)
+        leaderName: r.leader_name,
+        leaderEmail: r.leader_email,
+        leaderPhone: r.leader_phone || r.payment_phone || "",
+        leaderCollege: r.leader_college || "",
+        leaderUsn: r.leader_usn || "",
+        leaderBranch: r.leader_branch || "",
+        leaderSem: r.leader_sem || "",
+
+        // Driver 2
+        driver2Name: d2.name || "",
+        driver2Email: d2.email || "",
+        driver2Phone: d2.phone || "",
+        driver2College: d2.college || "",
+        driver2Usn: d2.usn || "",
+        driver2Branch: d2.branch || "",
+        driver2Sem: d2.sem || "",
+
+        // Driver 3
+        driver3Name: d3.name || "",
+        driver3Email: d3.email || "",
+        driver3Phone: d3.phone || "",
+        driver3College: d3.college || "",
+        driver3Usn: d3.usn || "",
+        driver3Branch: d3.branch || "",
+        driver3Sem: d3.sem || "",
+
+        // Driver 4
+        driver4Name: d4.name || "",
+        driver4Email: d4.email || "",
+        driver4Phone: d4.phone || "",
+        driver4College: d4.college || "",
+        driver4Usn: d4.usn || "",
+        driver4Branch: d4.branch || "",
+        driver4Sem: d4.sem || "",
+
+        // Payment
+        transactionId: r.payment_utr || "",
+        paymentProofUrl: r.payment_proof_url?.startsWith("data:")
+          ? "[Base64 Screenshot Attached]"
+          : r.payment_proof_url || "",
+      };
+    });
 
     const csv = generateRegistrationsCsv(records);
     return { success: true, csv };
