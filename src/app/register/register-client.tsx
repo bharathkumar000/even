@@ -1130,13 +1130,6 @@ export default function RegisterClientView() {
                       </div>
                     </div>
                   </div>
-
-                  <div className="p-3 bg-blue-950/20 border border-blue-900/40 rounded text-[11px] text-blue-300/90 flex items-start gap-2">
-                    <span className="text-blue-400 shrink-0 font-bold">ℹ</span>
-                    <span>
-                      Both your 12-digit UTR and payment screenshot will be recorded in Google Sheets. Organizers will manually cross-verify and approve your squad.
-                    </span>
-                  </div>
                 </div>
               </div>
 
