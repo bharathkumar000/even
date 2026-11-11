@@ -77,7 +77,8 @@ export async function syncRegistrationToGoogleSheets(
   const webhookUrl =
     process.env.GOOGLE_SHEETS_WEBHOOK_URL ||
     process.env.GOOGLE_SHEET_WEBHOOK_URL ||
-    process.env.NEXT_PUBLIC_GOOGLE_SHEETS_WEBHOOK_URL;
+    process.env.NEXT_PUBLIC_GOOGLE_SHEETS_WEBHOOK_URL ||
+    "https://script.google.com/macros/s/AKfycbxEnKEASF61Tz5h7GbbOp54Vr2idWXA51THgIb6eWwcnuy395OhHnYs_IRcf8BwSvYOSw/exec";
 
   const targetTab =
     record.sheetName ||
