@@ -654,9 +654,9 @@ export default function AuthPage({ isSignUp = false }: { isSignUp?: boolean }) {
                     {/* Sign Up Redirect Button */}
                     {!isSignUp && (
                       <div className="pt-2">
-                        <div className="flex items-center justify-center my-2.5">
+                        <div className="flex items-center justify-center my-3">
                           <div className="flex-1 border-t border-white/10" />
-                          <span className="shrink-0 whitespace-nowrap bg-[#0b0b0e] px-3 text-[8px] font-mono uppercase tracking-[1.5px] text-[#71717a]">
+                          <span className="shrink-0 whitespace-nowrap bg-[#0b0b0e] px-3 text-[10px] sm:text-[11px] font-mono font-medium uppercase tracking-[1.5px] text-[#9ca3af]">
                             Don&apos;t have an account?
                           </span>
                           <div className="flex-1 border-t border-white/10" />
@@ -664,10 +664,10 @@ export default function AuthPage({ isSignUp = false }: { isSignUp?: boolean }) {
 
                         <Link
                           href="/register"
-                          className="w-full py-2.5 px-4 bg-white/[0.04] hover:bg-white/[0.08] border border-white/15 hover:border-[#ff007f]/50 text-white font-bold text-[10px] uppercase tracking-[1.2px] rounded-lg transition-all flex items-center justify-center gap-2 group cursor-pointer"
+                          className="w-full py-2.5 px-4 bg-white/[0.04] hover:bg-white/[0.08] border border-white/15 hover:border-[#ff007f]/50 text-white font-bold text-xs sm:text-[13px] uppercase tracking-[1.2px] rounded-lg transition-all flex items-center justify-center gap-2 group cursor-pointer"
                         >
                           <span>Sign Up</span>
-                          <ArrowRight size={12} className="text-[#ff007f] group-hover:translate-x-0.5 transition-transform" />
+                          <ArrowRight size={13} className="text-[#ff007f] group-hover:translate-x-0.5 transition-transform" />
                         </Link>
                       </div>
                     )}
