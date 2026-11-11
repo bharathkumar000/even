@@ -654,12 +654,12 @@ export default function AuthPage({ isSignUp = false }: { isSignUp?: boolean }) {
                     {/* Sign Up Redirect Button */}
                     {!isSignUp && (
                       <div className="pt-2">
-                        <div className="relative flex items-center justify-center my-2.5">
-                          <div className="border-t border-white/10 w-full" />
-                          <span className="bg-[#0b0b0e] px-2 text-[8px] font-mono uppercase tracking-[1.5px] text-[#71717a]">
+                        <div className="flex items-center justify-center my-2.5">
+                          <div className="flex-1 border-t border-white/10" />
+                          <span className="shrink-0 whitespace-nowrap bg-[#0b0b0e] px-3 text-[8px] font-mono uppercase tracking-[1.5px] text-[#71717a]">
                             Don&apos;t have an account?
                           </span>
-                          <div className="border-t border-white/10 w-full" />
+                          <div className="flex-1 border-t border-white/10" />
                         </div>
 
                         <Link
