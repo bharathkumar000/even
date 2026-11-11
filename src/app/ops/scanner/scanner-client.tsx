@@ -31,9 +31,11 @@ import {
   getLiveScanActivityStream,
   getRecentlyScannedTeams,
   processAutomatedScan,
+  getDeskProgressSummary,
   type ProcessScanResult,
   type LiveActivityFeedItem,
   type EnrichedActivityLog,
+  type DeskProgressSummary,
 } from "@/app/actions/operations";
 import type { ActionType } from "@/lib/validations/operations";
 import { CSRF_CONSTANTS } from "@/lib/csrf-constants";
@@ -219,14 +221,17 @@ export default function ScannerClientView() {
   const [isSyncingQueue, setIsSyncingQueue] = useState<boolean>(false);
   const isSyncingQueueRef = useRef(false);
 
-  // Auto-cooldown to prevent duplicate reads and auto-resume live scanning
-  const [isCoolingDown, setIsCoolingDown] = useState(false);
-  const [cooldownSeconds, setCooldownSeconds] = useState(0);
+  // Continuous Multi-QR Scanning Engine
+  // Smart per-badge deduplication allows scanning new codes immediately with 0s cooldown
+  const [continuousScanCount, setContinuousScanCount] = useState<number>(0);
   const isProcessingRef = useRef(false);
-  const isCoolingDownRef = useRef(false);
-  const cooldownTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const lastScannedCodeRef = useRef<string | null>(null);
+  const lastScannedTimeRef = useRef<number>(0);
+  const lastScanEndTimeRef = useRef<number>(0);
+  const processingSafetyTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const html5QrCodeRef = useRef<any>(null);
+  const [progressSummary, setProgressSummary] = useState<DeskProgressSummary | null>(null);
 
   useEffect(() => {
     setLastSyncTime(new Date());
@@ -234,6 +239,8 @@ export default function ScannerClientView() {
       setIsOnline(navigator.onLine);
     }
     setOfflineQueueCount(getOfflineQueue().length);
+
+    void getDeskProgressSummary().then(setProgressSummary).catch(() => {});
 
     void fetch("/api/csrf/init")
       .then((res) => res.json())
@@ -251,8 +258,12 @@ export default function ScannerClientView() {
   const fetchLiveStream = useCallback(async () => {
     try {
       setStreamLoading(true);
-      const data = await getLiveScanActivityStream(35);
-      setLiveStreamLogs(data);
+      const [streamData, summary] = await Promise.all([
+        getLiveScanActivityStream(35),
+        getDeskProgressSummary().catch(() => null),
+      ]);
+      setLiveStreamLogs(streamData);
+      if (summary) setProgressSummary(summary);
       setLastSyncTime(new Date());
     } catch (err) {
       console.warn("Notice: Real-time stream sync notice:", err);
@@ -416,25 +427,31 @@ export default function ScannerClientView() {
       })
       .subscribe();
 
-    const pollInterval = setInterval(() => {
-      fetchLiveStream();
-      setTeamData((current) => {
-        if (current?.team?.id) {
-          fetchTeamMembersForScan(current.team.id)
-            .then((updated) => setTeamData(updated))
-            .catch(() => {});
-        }
-        return current;
-      });
-    }, 4000);
+    // Event-driven refresh: when staff returns to tab or window gains focus
+    const handleVisibilityChange = () => {
+      if (typeof document !== "undefined" && document.visibilityState === "visible") {
+        fetchLiveStream();
+      }
+    };
+    window.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("focus", handleVisibilityChange);
+
+    // Relaxed 60s fallback sync (instead of aggressive 4s polling) to prevent DB CPU spikes
+    const gentleFallbackInterval = setInterval(() => {
+      if (typeof document !== "undefined" && document.visibilityState === "visible") {
+        fetchLiveStream();
+      }
+    }, 60000);
 
     return () => {
       supabase.removeChannel(channel);
-      clearInterval(pollInterval);
+      window.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("focus", handleVisibilityChange);
+      clearInterval(gentleFallbackInterval);
     };
   }, [fetchLiveStream]);
 
-  const stopScanner = async () => {
+  const stopScanner = useCallback(async () => {
     try {
       if (html5QrCodeRef.current) {
         if (html5QrCodeRef.current.isScanning) {
@@ -450,9 +467,21 @@ export default function ScannerClientView() {
     } finally {
       setScanning(false);
     }
-  };
+  }, []);
 
-  const startScanner = async () => {
+  const handleClearBadgeLock = useCallback(() => {
+    lastScannedCodeRef.current = null;
+    lastScanEndTimeRef.current = 0;
+  }, []);
+
+  const handleScanPurposeChange = useCallback((newPurpose: ActionType) => {
+    setScanPurpose(newPurpose);
+    // Reset badge deduplication cache when changing operation mode so any badge can scan immediately
+    lastScannedCodeRef.current = null;
+    lastScanEndTimeRef.current = 0;
+  }, []);
+
+  const startScanner = useCallback(async () => {
     try {
       await stopScanner();
 
@@ -460,19 +489,57 @@ export default function ScannerClientView() {
       const scanner = new Html5Qrcode("qr-reader-container");
       html5QrCodeRef.current = scanner;
 
-      await scanner.start(
-        { facingMode: "environment" },
-        {
-          fps: 10,
-          qrbox: { width: 350, height: 350 },
+      const scanConfig = {
+        fps: 15, // Responsive 15fps frame capture
+        qrbox: (viewfinderWidth: number, viewfinderHeight: number) => {
+          const minEdge = Math.min(viewfinderWidth, viewfinderHeight);
+          const size = Math.max(200, Math.floor(minEdge * 0.75));
+          return { width: size, height: size };
         },
-        (decodedText) => {
-          // Continuous scanning: ignore incoming camera frames while busy or in cooldown
-          if (isProcessingRef.current || isCoolingDownRef.current) return;
-          void handleDetectedCode(decodedText);
-        },
-        () => {}
-      );
+      };
+
+      const onScanSuccess = (decodedText: string) => {
+        if (!decodedText || isProcessingRef.current) return;
+
+        const now = Date.now();
+        const candidateId = extractTeamId(decodedText) || decodedText.trim();
+        const lastId = lastScannedCodeRef.current;
+
+        // 1. Same-badge deduplication:
+        // If the exact same QR badge is still in front of the camera, ignore duplicate frames
+        // for 3.5s so it won't loop "ALREADY REGISTERED" errors while the participant is lowering their phone.
+        if (lastId && (decodedText === lastId || candidateId === lastId)) {
+          if (now - lastScannedTimeRef.current < 3500) {
+            return;
+          }
+        }
+
+        // 2. Different / Next badge in queue:
+        // Ultra-low 250ms guard after previous scan finishes allows instant continuous multi-scanning!
+        if (now - lastScanEndTimeRef.current < 250) {
+          return;
+        }
+
+        void handleDetectedCode(decodedText);
+      };
+
+      try {
+        await scanner.start(
+          { facingMode: "environment" },
+          scanConfig,
+          onScanSuccess,
+          () => {}
+        );
+      } catch (camErr) {
+        console.warn("Back camera unavailable, attempting default camera:", camErr);
+        await scanner.start(
+          { facingMode: "user" },
+          scanConfig,
+          onScanSuccess,
+          () => {}
+        );
+      }
+
       setScanning(true);
     } catch (err: unknown) {
       console.error("Scanner start failure:", err);
@@ -493,22 +560,30 @@ export default function ScannerClientView() {
         timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
       });
     }
-  };
+  }, [stopScanner, scanPurpose]);
 
   /**
    * Executes the selected operation automatically upon QR detection or manual submission.
-   * Confirms database transaction, updates roster, triggers cooldown, and re-arms scanner.
+   * Confirms database transaction, updates roster, and immediately re-arms scanner for continuous multi-scanning.
    */
   const handleDetectedCode = async (
     rawCode: string,
     targetParticipantId?: string,
     overrideActionType?: ActionType
   ) => {
-    if (isProcessingRef.current || isCoolingDownRef.current) return;
+    if (!rawCode || isProcessingRef.current) return;
     isProcessingRef.current = true;
     setLoading(true);
 
+    // Watchdog safety timeout: prevent scanner from freezing if network hangs
+    if (processingSafetyTimeoutRef.current) clearTimeout(processingSafetyTimeoutRef.current);
+    processingSafetyTimeoutRef.current = setTimeout(() => {
+      isProcessingRef.current = false;
+      setLoading(false);
+    }, 10000);
+
     const effectiveActionType = overrideActionType ?? scanPurpose;
+    const candidateId = extractTeamId(rawCode) || rawCode.trim();
 
     try {
       const res = await processAutomatedScan({
@@ -524,9 +599,32 @@ export default function ScannerClientView() {
 
       if (res.status === "success") {
         playScanSuccess();
+        if (typeof navigator !== "undefined" && navigator.vibrate) {
+          navigator.vibrate([80, 40, 80]);
+        }
+        setContinuousScanCount((c) => c + 1);
+
+        // Smart deduplication: cache this badge so holding it won't re-trigger duplicate scans
+        lastScannedCodeRef.current = candidateId;
+        lastScannedTimeRef.current = Date.now();
+
+        // Increment in-memory Desk Progress HUD counters in 0ms without hitting database
+        setProgressSummary((prev) => {
+          if (!prev) return prev;
+          return {
+            ...prev,
+            checkedInTeams:
+              res.action_type === "registration" ? prev.checkedInTeams + 1 : prev.checkedInTeams,
+            lunchClaimedCount:
+              res.action_type === "lunch" ? prev.lunchClaimedCount + 1 : prev.lunchClaimedCount,
+            goodiesClaimedCount:
+              res.action_type === "goodies" ? prev.goodiesClaimedCount + 1 : prev.goodiesClaimedCount,
+          };
+        });
+
         setScanFeedback({
           status: "success",
-          title: `${res.action_type.toUpperCase()} RECORDED SUCCESSFULLY`,
+          title: `${res.action_type.toUpperCase()} RECORDED`,
           message: res.message,
           actionType: res.action_type,
           teamName: res.team?.name,
@@ -542,6 +640,13 @@ export default function ScannerClientView() {
         });
       } else if (res.status === "already_completed") {
         playScanError();
+        if (typeof navigator !== "undefined" && navigator.vibrate) {
+          navigator.vibrate(200);
+        }
+        // Cache this code so it doesn't repeatedly loop the error buzzer
+        lastScannedCodeRef.current = candidateId;
+        lastScannedTimeRef.current = Date.now();
+
         setScanFeedback({
           status: "already_completed",
           title: res.action_type === "registration" ? "ALREADY REGISTERED" : "ALREADY CLAIMED",
@@ -559,6 +664,13 @@ export default function ScannerClientView() {
         });
       } else {
         playScanError();
+        if (typeof navigator !== "undefined" && navigator.vibrate) {
+          navigator.vibrate(200);
+        }
+        // Shorter deduplication on rejection so retry is possible after 1.5s
+        lastScannedCodeRef.current = candidateId;
+        lastScannedTimeRef.current = Date.now() - 2000;
+
         setScanFeedback({
           status: res.status || "error",
           title: res.status === "not_found" ? "NOT FOUND" : "SCAN REJECTED",
@@ -600,25 +712,10 @@ export default function ScannerClientView() {
         }),
       });
     } finally {
+      if (processingSafetyTimeoutRef.current) clearTimeout(processingSafetyTimeoutRef.current);
       setLoading(false);
       isProcessingRef.current = false;
-
-      // Start automatic cooldown to resume continuous scanning without stopping camera
-      isCoolingDownRef.current = true;
-      setIsCoolingDown(true);
-      setCooldownSeconds(3);
-
-      if (cooldownTimerRef.current) clearInterval(cooldownTimerRef.current);
-      let remaining = 3;
-      cooldownTimerRef.current = setInterval(() => {
-        remaining -= 1;
-        setCooldownSeconds(remaining);
-        if (remaining <= 0) {
-          if (cooldownTimerRef.current) clearInterval(cooldownTimerRef.current);
-          isCoolingDownRef.current = false;
-          setIsCoolingDown(false);
-        }
-      }, 1000);
+      lastScanEndTimeRef.current = Date.now();
     }
   };
 
@@ -680,7 +777,7 @@ export default function ScannerClientView() {
 
   useEffect(() => {
     return () => {
-      if (cooldownTimerRef.current) clearInterval(cooldownTimerRef.current);
+      if (processingSafetyTimeoutRef.current) clearTimeout(processingSafetyTimeoutRef.current);
       if (html5QrCodeRef.current) {
         try {
           html5QrCodeRef.current.stop();
@@ -688,6 +785,10 @@ export default function ScannerClientView() {
       }
     };
   }, []);
+
+  const handleLookup = useCallback((id: string) => {
+    void handleDetectedCode(id);
+  }, [csrfToken, scanPurpose]);
 
   return (
     <div className="space-y-6">
@@ -737,7 +838,7 @@ export default function ScannerClientView() {
               <button
                 key={p.value}
                 type="button"
-                onClick={() => setScanPurpose(p.value)}
+                onClick={() => handleScanPurposeChange(p.value)}
                 className={`p-3 rounded border text-left transition-all cursor-pointer flex flex-col justify-between gap-2 ${
                   isSelected
                     ? "bg-accent-primary/15 border-accent-primary text-text-primary shadow-[0_0_15px_rgba(0,240,255,0.2)]"
@@ -766,6 +867,38 @@ export default function ScannerClientView() {
           })}
         </div>
       </div>
+
+      {/* 1.5 LIVE DESK PROGRESS HUD (Ultra-light, in-memory cached metric strip) */}
+      {progressSummary && (
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 font-tech text-xs">
+          <div className="glass-panel p-3 border border-border-color rounded flex items-center justify-between">
+            <span className="text-text-secondary uppercase">Teams Checked In</span>
+            <span className="font-heading text-sm text-status-success font-bold font-mono">
+              {progressSummary.checkedInTeams} / {progressSummary.totalTeams || "—"}
+            </span>
+          </div>
+          <div className="glass-panel p-3 border border-border-color rounded flex items-center justify-between">
+            <span className="text-text-secondary uppercase">Check-In Rate</span>
+            <span className="font-heading text-sm text-accent-primary font-bold font-mono">
+              {progressSummary.totalTeams > 0
+                ? `${Math.round((progressSummary.checkedInTeams / progressSummary.totalTeams) * 100)}%`
+                : "0%"}
+            </span>
+          </div>
+          <div className="glass-panel p-3 border border-border-color rounded flex items-center justify-between">
+            <span className="text-text-secondary uppercase">Lunch Claimed</span>
+            <span className="font-heading text-sm text-status-warning font-bold font-mono">
+              {progressSummary.lunchClaimedCount}
+            </span>
+          </div>
+          <div className="glass-panel p-3 border border-border-color rounded flex items-center justify-between">
+            <span className="text-text-secondary uppercase">Kits / Goodies</span>
+            <span className="font-heading text-sm text-accent-secondary font-bold font-mono">
+              {progressSummary.goodiesClaimedCount}
+            </span>
+          </div>
+        </div>
+      )}
 
       {/* 2. TRANSACTION RESULT BANNER (Instant, High-Visibility Feedback) */}
       {scanFeedback && (
@@ -831,13 +964,22 @@ export default function ScannerClientView() {
                 <X size={16} />
               </button>
 
-              {/* Live Cooldown & Next Scan Ready Indicator */}
-              {isCoolingDown && (
-                <div className="px-2.5 py-1 bg-black/60 border border-current rounded text-[10px] font-mono flex items-center gap-1.5 animate-pulse">
-                  <Clock size={11} />
-                  <span>Next scan in {cooldownSeconds}s</span>
+              {/* Continuous Ready Indicator & Re-scan Button */}
+              <div className="flex flex-col items-end gap-1.5">
+                <div className="px-2.5 py-1 bg-black/60 border border-status-success/50 text-status-success rounded text-[10px] font-mono flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-status-success animate-ping" />
+                  <span>Scanner Ready for Next QR</span>
                 </div>
-              )}
+                {lastScannedCodeRef.current && (
+                  <button
+                    type="button"
+                    onClick={handleClearBadgeLock}
+                    className="text-[10px] text-text-secondary hover:text-accent-primary underline font-mono cursor-pointer transition-colors"
+                  >
+                    Scan Same Badge Again
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         </div>
@@ -852,9 +994,11 @@ export default function ScannerClientView() {
           onStartScanner={startScanner}
           onStopScanner={stopScanner}
           onManualIdChange={setManualId}
-          onLookup={(id) => handleDetectedCode(id)}
-          onManualLookup={(id) => handleDetectedCode(id)}
+          onLookup={handleLookup}
+          onManualLookup={handleManualLookup}
           recentScans={recentScans}
+          continuousScanCount={continuousScanCount}
+          onClearBadgeLock={handleClearBadgeLock}
         />
       </div>
 
@@ -890,6 +1034,7 @@ export default function ScannerClientView() {
               onClick={() => {
                 setTeamData(null);
                 setScanFeedback(null);
+                handleClearBadgeLock();
               }}
               className="px-4 py-2 border border-border-color hover:border-accent-primary rounded text-text-secondary hover:text-text-primary font-tech uppercase text-xs transition-all flex items-center gap-2 self-start lg:self-center"
             >
@@ -930,7 +1075,7 @@ export default function ScannerClientView() {
                 </div>
                 <button
                   onClick={() => handleTeamDistributionScan("lunch")}
-                  disabled={loading || isCoolingDown || lunchCount >= 3}
+                  disabled={loading || lunchCount >= 3}
                   className={`mt-2 w-full py-1.5 text-[10px] font-bold uppercase rounded transition-all flex items-center justify-center gap-1.5 ${
                     lunchCount >= 3
                       ? "bg-status-error/20 border border-status-error/40 text-status-error disabled:opacity-100 cursor-not-allowed"
@@ -970,7 +1115,7 @@ export default function ScannerClientView() {
                 </div>
                 <button
                   onClick={() => handleTeamDistributionScan("snacks")}
-                  disabled={loading || isCoolingDown || snacksCount >= 3}
+                  disabled={loading || snacksCount >= 3}
                   className={`mt-2 w-full py-1.5 text-[10px] font-bold uppercase rounded transition-all flex items-center justify-center gap-1.5 ${
                     snacksCount >= 3
                       ? "bg-status-error/20 border border-status-error/40 text-status-error disabled:opacity-100 cursor-not-allowed"
@@ -1119,7 +1264,7 @@ export default function ScannerClientView() {
                             <button
                               type="button"
                               onClick={() => handleDetectedCode(teamData.team.id, participantId)}
-                              disabled={loading || isCoolingDown}
+                              disabled={loading}
                               className="px-3 py-1 bg-accent-primary hover:bg-accent-primary/80 text-black text-[10px] font-bold uppercase rounded font-tech transition-all disabled:opacity-50 cursor-pointer"
                             >
                               {scanPurpose === "registration" ? "Check In" : `Claim ${scanPurpose}`}

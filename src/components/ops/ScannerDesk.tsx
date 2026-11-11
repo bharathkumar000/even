@@ -13,9 +13,11 @@ interface ScannerDeskProps {
   onLookup: (id: string) => void;
   onManualLookup: (id: string) => void;
   recentScans?: string[];
+  continuousScanCount?: number;
+  onClearBadgeLock?: () => void;
 }
 
-export default function ScannerDesk({
+export default React.memo(function ScannerDesk({
   scanning,
   manualId,
   loading,
@@ -25,27 +27,54 @@ export default function ScannerDesk({
   onLookup,
   onManualLookup,
   recentScans,
+  continuousScanCount = 0,
+  onClearBadgeLock,
 }: ScannerDeskProps) {
   return (
     <div className="grid grid-cols-1 gap-6">
       {/* Camera Box */}
       <div className="glass-panel p-4 sm:p-6 border border-border-color space-y-4 min-w-0">
         <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
-          <h2 className="font-heading text-lg text-text-primary uppercase m-0 flex items-center gap-2 shrink-0">
-            <Camera className="text-accent-tertiary" size={18} />
-            Live Camera Scanner
-          </h2>
-          <button
-            type="button"
-            onClick={scanning ? onStopScanner : onStartScanner}
-            className={`px-3 py-1.5 font-tech font-bold uppercase text-xs transition-colors shrink-0 ${
-              scanning
-                ? "bg-status-error hover:bg-status-error/80 text-white"
-                : "bg-accent-tertiary hover:bg-accent-tertiary/80 text-black"
-            }`}
-          >
-            {scanning ? "Stop Camera" : "Launch Camera"}
-          </button>
+          <div className="flex items-center gap-2.5 flex-wrap">
+            <h2 className="font-heading text-lg text-text-primary uppercase m-0 flex items-center gap-2 shrink-0">
+              <Camera className="text-accent-tertiary" size={18} />
+              Live Camera Scanner
+            </h2>
+            {scanning && (
+              <span className="flex items-center gap-1.5 px-2.5 py-0.5 rounded text-[10px] font-mono font-bold bg-status-success/15 text-status-success border border-status-success/40">
+                <span className="w-1.5 h-1.5 rounded-full bg-status-success animate-ping" />
+                Continuous Mode Active
+              </span>
+            )}
+            {continuousScanCount > 0 && (
+              <span className="px-2.5 py-0.5 rounded text-[10px] font-mono font-bold bg-accent-primary/15 text-accent-primary border border-accent-primary/40">
+                {continuousScanCount} Scanned
+              </span>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            {scanning && onClearBadgeLock && (
+              <button
+                type="button"
+                onClick={onClearBadgeLock}
+                title="Reset badge deduplication lock to scan same QR code immediately"
+                className="px-2.5 py-1.5 font-tech uppercase text-[11px] font-bold text-text-secondary hover:text-white bg-surface-color border border-border-color hover:border-accent-primary rounded transition-colors"
+              >
+                Reset Lock
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={scanning ? onStopScanner : onStartScanner}
+              className={`px-3 py-1.5 font-tech font-bold uppercase text-xs transition-colors shrink-0 rounded ${
+                scanning
+                  ? "bg-status-error hover:bg-status-error/80 text-white"
+                  : "bg-accent-tertiary hover:bg-accent-tertiary/80 text-black"
+              }`}
+            >
+              {scanning ? "Stop Camera" : "Launch Camera"}
+            </button>
+          </div>
         </div>
 
         <div className="relative w-full min-h-[420px] lg:min-h-[500px] lg:max-h-[650px] bg-surface-color border border-dashed border-border-color overflow-hidden rounded flex items-center justify-center">
@@ -56,6 +85,14 @@ export default function ScannerDesk({
             <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none text-center text-text-secondary font-tech p-4 bg-surface-color/90">
               <QrCode size={48} className="mx-auto mb-2 opacity-50" />
               <p className="text-xs m-0">Click &quot;Launch Camera&quot; to scan QR badges</p>
+              <p className="text-[10px] text-text-secondary/70 mt-1">Multi-scan enabled: scan one badge after another seamlessly</p>
+            </div>
+          )}
+
+          {scanning && loading && (
+            <div className="absolute top-3 right-3 px-3 py-1 rounded bg-black/80 border border-accent-primary text-accent-primary font-tech text-xs flex items-center gap-2 pointer-events-none shadow-lg animate-pulse z-20">
+              <span className="w-2 h-2 rounded-full bg-accent-primary animate-ping" />
+              <span>Recording scan...</span>
             </div>
           )}
         </div>
@@ -133,4 +170,4 @@ export default function ScannerDesk({
       )}
     </div>
   );
-}
+});

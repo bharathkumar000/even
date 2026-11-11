@@ -30,9 +30,25 @@ export default function LiveActivityPage() {
       .on("postgres_changes", { event: "*", schema: "public", table: "event_activity_logs" }, () => fetchLogs())
       .on("broadcast", { event: "scan_action_recorded" }, () => fetchLogs())
       .subscribe();
-    const interval = setInterval(fetchLogs, 4000);
+    const handleVisibility = () => {
+      if (typeof document !== "undefined" && document.visibilityState === "visible") {
+        fetchLogs();
+      }
+    };
+    window.addEventListener("visibilitychange", handleVisibility);
+    window.addEventListener("focus", handleVisibility);
+
+    // 60s gentle fallback sync instead of aggressive 4s polling
+    const interval = setInterval(() => {
+      if (typeof document !== "undefined" && document.visibilityState === "visible") {
+        fetchLogs();
+      }
+    }, 60000);
+
     return () => {
       supabase.removeChannel(channel);
+      window.removeEventListener("visibilitychange", handleVisibility);
+      window.removeEventListener("focus", handleVisibility);
       clearInterval(interval);
     };
   }, [fetchLogs]);

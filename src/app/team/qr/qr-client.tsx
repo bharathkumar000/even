@@ -25,6 +25,7 @@ interface TeamQrClientViewProps {
   teamName: string;
   track: string;
   leaderName: string;
+  signature?: string;
   initialStatus?: {
     claimedActions: string[];
     logs: Array<{
@@ -43,6 +44,7 @@ export default function TeamQrClientView({
   teamName,
   track,
   leaderName,
+  signature,
   initialStatus,
 }: TeamQrClientViewProps) {
   const [qrUrl, setQrUrl] = useState<string>("");
@@ -55,6 +57,39 @@ export default function TeamQrClientView({
     initialStatus?.lastUpdated || new Date().toISOString()
   );
   const [justClaimedAlert, setJustClaimedAlert] = useState<string | null>(null);
+
+  // Offline-first: restore cached pass from browser storage memory if available
+  useEffect(() => {
+    try {
+      const cached = localStorage.getItem(`eventra_team_pass_${teamId}`);
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (parsed.claimedActions && parsed.claimedActions.length > 0 && claimedActions.length === 0) {
+          setClaimedActions(parsed.claimedActions);
+        }
+        if (parsed.qrUrl && !qrUrl) {
+          setQrUrl(parsed.qrUrl);
+        }
+      }
+    } catch {}
+  }, [teamId]);
+
+  // Persist latest state to browser cache memory for instant offline availability
+  useEffect(() => {
+    if (qrUrl) {
+      try {
+        localStorage.setItem(
+          `eventra_team_pass_${teamId}`,
+          JSON.stringify({
+            claimedActions,
+            logs,
+            qrUrl,
+            lastUpdated,
+          })
+        );
+      } catch {}
+    }
+  }, [teamId, claimedActions, logs, qrUrl, lastUpdated]);
 
   // Refresh latest status from server
   const refreshStatus = useCallback(async () => {
@@ -118,26 +153,39 @@ export default function TeamQrClientView({
       })
       .subscribe();
 
-    // Fallback polling interval every 3 seconds to guarantee instant refresh
+    // Event-driven: refresh when user unlocks phone or switches back to tab
+    const handleVisibilityChange = () => {
+      if (typeof document !== "undefined" && document.visibilityState === "visible") {
+        refreshStatus();
+      }
+    };
+    window.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("focus", handleVisibilityChange);
+
+    // Gentle 60s fallback to prevent burning serverless database connections (replacing 3s polling)
     const interval = setInterval(() => {
-      refreshStatus();
-    }, 3000);
+      if (typeof document !== "undefined" && document.visibilityState === "visible") {
+        refreshStatus();
+      }
+    }, 60000);
 
     return () => {
       supabase.removeChannel(channel);
       supabase.removeChannel(generalTeamChannel);
+      window.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("focus", handleVisibilityChange);
       clearInterval(interval);
     };
   }, [teamId, refreshStatus]);
 
-  // Re-generate QR code whenever claims change or QR token updates (Fraud Prevention)
+  // Re-generate QR code whenever claims change or QR token updates (Fraud Prevention with HMAC)
   useEffect(() => {
-    // Generate anti-fraud dynamic QR payload
+    // Generate anti-fraud dynamic QR payload signed with HMAC
     const payload = JSON.stringify({
       team_id: teamId,
       name: teamName,
-        v: 1,
-
+      sig: signature || undefined,
+      v: 1,
     });
 
     QRCode.toDataURL(
@@ -156,7 +204,87 @@ export default function TeamQrClientView({
         }
       }
     );
-  }, [teamId, teamName]);
+  }, [teamId, teamName, signature]);
+
+  const handleDownloadFullBadge = async () => {
+    if (!qrUrl) return;
+    try {
+      const canvas = document.createElement("canvas");
+      canvas.width = 600;
+      canvas.height = 840;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return;
+
+      // Dark card background
+      ctx.fillStyle = "#0a0e17";
+      ctx.fillRect(0, 0, 600, 840);
+
+      // Neon cyan border
+      ctx.strokeStyle = "#00f0ff";
+      ctx.lineWidth = 4;
+      ctx.strokeRect(16, 16, 568, 808);
+
+      // Inner subtle frame
+      ctx.strokeStyle = "rgba(255,255,255,0.08)";
+      ctx.lineWidth = 1;
+      ctx.strokeRect(28, 28, 544, 784);
+
+      // Header Tag
+      ctx.fillStyle = "#00f0ff";
+      ctx.font = "bold 16px monospace";
+      ctx.textAlign = "center";
+      ctx.fillText("IVC EVENTRA // OFFICIAL PARTICIPANT PASS", 300, 75);
+
+      // Track Tag
+      ctx.fillStyle = "#ff007f";
+      ctx.font = "bold 14px sans-serif";
+      ctx.fillText(track.toUpperCase(), 300, 115);
+
+      // Team Name
+      ctx.fillStyle = "#ffffff";
+      ctx.font = "bold 28px sans-serif";
+      ctx.fillText(teamName.toUpperCase(), 300, 165);
+
+      // Leader Name
+      ctx.fillStyle = "#8892b0";
+      ctx.font = "16px sans-serif";
+      ctx.fillText(`Leader: ${leaderName}`, 300, 200);
+
+      // QR Image
+      const img = new window.Image();
+      img.src = qrUrl;
+      await new Promise((resolve) => {
+        img.onload = resolve;
+      });
+
+      // White box for QR code
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(140, 240, 320, 320);
+      ctx.drawImage(img, 150, 250, 300, 300);
+
+      // Instructions
+      ctx.fillStyle = "#64ffda";
+      ctx.font = "bold 13px monospace";
+      ctx.fillText("PRESENT AT CHECK-IN • KITS • MEALS", 300, 600);
+
+      // Pass security identifier
+      ctx.fillStyle = "#718096";
+      ctx.font = "11px monospace";
+      ctx.fillText(`PASS ID: ${teamId.slice(0, 24)}...`, 300, 780);
+
+      const fullBadgeUrl = canvas.toDataURL("image/png");
+      const a = document.createElement("a");
+      a.href = fullBadgeUrl;
+      a.download = `eventra-pass-${teamName.toLowerCase().replace(/\s+/g, "-")}.png`;
+      a.click();
+    } catch {
+      // Fallback: download raw QR
+      const a = document.createElement("a");
+      a.href = qrUrl;
+      a.download = `team-${teamName.toLowerCase().replace(/\s+/g, "-")}-badge.png`;
+      a.click();
+    }
+  };
 
   const hasGoodies = claimedActions.includes("goodies");
   const goodiesLog = logs.find((l) => l.action_type === "goodies");
@@ -304,14 +432,21 @@ export default function TeamQrClientView({
 
             {/* Download Action */}
             {qrUrl && (
-              <div className="pt-2">
-                <a
-                  href={qrUrl}
-                  download={`team-${teamName.toLowerCase().replace(/\s+/g, "-")}-badge.png`}
+              <div className="pt-2 space-y-2">
+                <button
+                  type="button"
+                  onClick={handleDownloadFullBadge}
                   className="w-full inline-flex items-center justify-center gap-2 px-5 py-3 bg-accent-primary hover:bg-accent-primary/80 text-black font-bold uppercase text-xs rounded transition-all shadow-[0_0_20px_rgba(255,215,0,0.2)] cursor-pointer"
                 >
                   <Download size={15} />
-                  <span>Save Official Badge</span>
+                  <span>Save Badge Card to Photos</span>
+                </button>
+                <a
+                  href={qrUrl}
+                  download={`team-${teamName.toLowerCase().replace(/\s+/g, "-")}-qr.png`}
+                  className="w-full inline-flex items-center justify-center gap-1.5 py-1 text-[11px] font-mono text-text-secondary hover:text-white underline cursor-pointer transition-colors"
+                >
+                  Download Raw QR Code Only
                 </a>
               </div>
             )}

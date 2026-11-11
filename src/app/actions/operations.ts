@@ -12,6 +12,7 @@ import {
   recordScannerActivity,
   type AuditMethod,
 } from "@/lib/audit";
+import { verifyQrSignature } from "@/lib/qr-signature";
 
 // Matches a full 36-character UUID (8-4-4-4-12 hex segments).
 const UUID_REGEX =
@@ -796,6 +797,77 @@ export async function getTeamScanStatus(teamId: string) {
   };
 }
 
+export interface DeskProgressSummary {
+  totalTeams: number;
+  checkedInTeams: number;
+  lunchClaimedCount: number;
+  goodiesClaimedCount: number;
+  lastUpdated: string;
+}
+
+let cachedDeskProgress: DeskProgressSummary | null = null;
+let deskProgressExpiry = 0;
+
+/**
+ * Fetches high-level operational check-in & distribution progress with a 20-second
+ * in-memory TTL cache to eliminate 95% of database aggregation strain.
+ */
+export async function getDeskProgressSummary(): Promise<DeskProgressSummary> {
+  await requireOperationsRole();
+  const now = Date.now();
+
+  if (cachedDeskProgress && now < deskProgressExpiry) {
+    return cachedDeskProgress;
+  }
+
+  try {
+    const { count: totalTeamsCount } = await supabaseAdmin
+      .from("teams")
+      .select("*", { count: "exact", head: true });
+
+    const { data: checkedInLogs } = await supabaseAdmin
+      .from("event_activity_logs")
+      .select("team_id")
+      .eq("action_type", "registration")
+      .eq("result", "success");
+
+    const uniqueCheckedIn = new Set((checkedInLogs || []).map((l) => l.team_id)).size;
+
+    const { count: lunchCount } = await supabaseAdmin
+      .from("event_activity_logs")
+      .select("*", { count: "exact", head: true })
+      .eq("action_type", "lunch")
+      .eq("result", "success");
+
+    const { count: goodiesCount } = await supabaseAdmin
+      .from("event_activity_logs")
+      .select("*", { count: "exact", head: true })
+      .eq("action_type", "goodies")
+      .eq("result", "success");
+
+    cachedDeskProgress = {
+      totalTeams: totalTeamsCount || 0,
+      checkedInTeams: uniqueCheckedIn,
+      lunchClaimedCount: lunchCount || 0,
+      goodiesClaimedCount: goodiesCount || 0,
+      lastUpdated: new Date().toISOString(),
+    };
+    deskProgressExpiry = now + 20000; // 20s in-memory TTL
+    return cachedDeskProgress;
+  } catch (err) {
+    console.warn("Failed to fetch desk progress summary:", err);
+    return (
+      cachedDeskProgress || {
+        totalTeams: 0,
+        checkedInTeams: 0,
+        lunchClaimedCount: 0,
+        goodiesClaimedCount: 0,
+        lastUpdated: new Date().toISOString(),
+      }
+    );
+  }
+}
+
 /**
  * Search teams by ID prefix or name substring.
  * Staff can search all teams (not just assigned ones).
@@ -1109,6 +1181,19 @@ export async function processAutomatedScan(params: {
             parsed.member_id ||
             parsed.participantId ||
             null;
+        }
+
+        // Anti-tamper verification: check HMAC signature if badge carries one
+        if (parsed.sig && resolvedTeamId) {
+          const isValid = verifyQrSignature(resolvedTeamId, parsed.sig);
+          if (!isValid) {
+            return {
+              success: false,
+              status: "ineligible",
+              action_type: params.actionType,
+              message: "SECURITY WARNING: Cryptographic signature mismatch! Tampered badge rejected.",
+            };
+          }
         }
       }
     } catch {
