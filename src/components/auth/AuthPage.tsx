@@ -651,6 +651,27 @@ export default function AuthPage({ isSignUp = false }: { isSignUp?: boolean }) {
                       <ArrowRight size={13} />
                     </button>
 
+                    {/* Sign Up Redirect Button */}
+                    {!isSignUp && (
+                      <div className="pt-2">
+                        <div className="relative flex items-center justify-center my-2.5">
+                          <div className="border-t border-white/10 w-full" />
+                          <span className="bg-[#0b0b0e] px-2 text-[8px] font-mono uppercase tracking-[1.5px] text-[#71717a]">
+                            Don&apos;t have an account?
+                          </span>
+                          <div className="border-t border-white/10 w-full" />
+                        </div>
+
+                        <Link
+                          href="/register"
+                          className="w-full py-2.5 px-4 bg-white/[0.04] hover:bg-white/[0.08] border border-white/15 hover:border-[#ff007f]/50 text-white font-bold text-[10px] uppercase tracking-[1.2px] rounded-lg transition-all flex items-center justify-center gap-2 group cursor-pointer"
+                        >
+                          <span>Sign Up</span>
+                          <ArrowRight size={12} className="text-[#ff007f] group-hover:translate-x-0.5 transition-transform" />
+                        </Link>
+                      </div>
+                    )}
+
                     </form>
                 )}
 
