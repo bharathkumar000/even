@@ -465,11 +465,11 @@ export default function RegisterClientView({
         ) : (
           <>
             {/* HERO TITLE */}
-            <div className="text-center my-8 sm:my-12 space-y-3">
-              <h1 className="text-5xl sm:text-7xl md:text-8xl font-black italic tracking-wider text-white uppercase m-0 leading-none drop-shadow-[0_0_35px_rgba(255,0,0,0.3)]">
+            <div className="text-center my-6 sm:my-12 space-y-2 sm:space-y-3">
+              <h1 className="text-3xl sm:text-6xl md:text-8xl font-black italic tracking-wider text-white uppercase m-0 leading-tight drop-shadow-[0_0_35px_rgba(255,0,0,0.3)] break-words">
                 ENTER THE GRAND PRIX
               </h1>
-              <p className="font-mono text-xs sm:text-sm text-neutral-400 uppercase tracking-[3px]">
+              <p className="font-mono text-[10px] sm:text-sm text-neutral-400 uppercase tracking-[2px] sm:tracking-[3px]">
                 OFFICIAL 4-DRIVER CONSTRUCTOR SQUAD REGISTRATION PORTAL
               </p>
             </div>
@@ -631,7 +631,7 @@ export default function RegisterClientView({
             )}
 
             {/* MAIN RED BORDERED FORM */}
-            <form onSubmit={handleSubmit} className="border-2 border-red-600/80 bg-[#060606] rounded-xl p-5 sm:p-8 md:p-10 shadow-[0_0_40px_rgba(255,0,0,0.15)] space-y-10">
+            <form onSubmit={handleSubmit} className="border-2 border-red-600/80 bg-[#060606] rounded-xl p-3.5 sm:p-8 md:p-10 shadow-[0_0_40px_rgba(255,0,0,0.15)] space-y-7 sm:space-y-10">
               {/* SECTION 1: CREW IDENTIFIER & CAPACITY */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6 font-mono text-xs">
                 {/* Team Capacity Dropdown */}
@@ -1290,7 +1290,7 @@ export default function RegisterClientView({
 
                       <div className="flex flex-col sm:flex-row sm:items-center justify-between p-2.5 bg-black/60 border border-neutral-800/80 rounded gap-1">
                         <span className="text-neutral-500 text-[11px]">OFFICIAL RECEIVING UPI ID:</span>
-                        <span className="text-yellow-400 font-mono font-bold text-xs">6361455193@okbizaxis</span>
+                        <span className="text-yellow-400 font-mono font-bold text-xs break-all">6361455193@okbizaxis</span>
                       </div>
 
                       <div className="flex flex-col sm:flex-row sm:items-center justify-between p-2.5 bg-black/60 border border-neutral-800/80 rounded gap-1">

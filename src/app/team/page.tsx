@@ -189,26 +189,26 @@ export default async function TeamDashboardPage() {
 
 
       {/* Top Header */}
-      <div className="border-b border-border-color pb-6">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="border-b border-border-color pb-4 sm:pb-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
           <div>
-            <p className="font-tech text-xs uppercase tracking-[3px] text-accent-secondary font-bold mb-1">
+            <p className="font-tech text-[10px] sm:text-xs uppercase tracking-[3px] text-accent-secondary font-bold mb-1">
               Event Console // Team Lead
             </p>
-            <h1 className="text-3xl md:text-5xl font-heading text-text-primary tracking-wider uppercase m-0 flex items-center gap-3">
+            <h1 className="text-2xl sm:text-3xl md:text-5xl font-heading text-text-primary tracking-wider uppercase m-0 flex flex-wrap items-center gap-2 sm:gap-3">
               <span>{teamInfo?.name || "Team Console"}</span>
               <span className="text-accent-secondary">Dashboard</span>
             </h1>
-            <p className="font-tech text-text-secondary text-xs mt-2">
+            <p className="font-tech text-text-secondary text-xs mt-1.5 sm:mt-2">
               ViceVerse Ideathon 2026 — team deliverables, roster distribution & evaluation status.
             </p>
           </div>
 
-          <div className="flex items-center gap-2">
-            <span className="px-3 py-1 bg-surface-color border border-border-color text-text-secondary text-xs uppercase font-mono">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="px-2.5 py-1 bg-surface-color border border-border-color text-text-secondary text-[11px] sm:text-xs uppercase font-mono">
               Track: <span className="text-accent-primary font-bold">{teamInfo?.track || "GENERAL"}</span>
             </span>
-            <span className="px-3 py-1 bg-accent-secondary/15 border border-accent-secondary text-accent-secondary text-xs uppercase font-mono font-bold">
+            <span className="px-2.5 py-1 bg-accent-secondary/15 border border-accent-secondary text-accent-secondary text-[11px] sm:text-xs uppercase font-mono font-bold">
               {isLeader ? "LEADER CONSOLE" : "MEMBER"}
             </span>
           </div>
@@ -223,52 +223,52 @@ export default async function TeamDashboardPage() {
       />
 
       {/* Primary KPI Row: Team Status & Submission State */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-5">
         {/* Approved Roster Card */}
-        <div className="glass-panel p-5 border border-border-color flex flex-col justify-between">
+        <div className="glass-panel p-4 sm:p-5 border border-border-color flex flex-col justify-between">
           <div className="flex items-start justify-between">
             <div>
               <span className="text-[10px] uppercase tracking-wider text-text-secondary font-bold block mb-1">
                 Roster Members
               </span>
-              <p className="font-heading text-3xl text-text-primary uppercase m-0 font-bold">
+              <p className="font-heading text-2xl sm:text-3xl text-text-primary uppercase m-0 font-bold">
                 {totalMembers}
               </p>
             </div>
-            <div className="p-2.5 bg-accent-tertiary/10 border border-accent-tertiary/30 text-accent-tertiary rounded">
-              <Users size={20} />
+            <div className="p-2 sm:p-2.5 bg-accent-tertiary/10 border border-accent-tertiary/30 text-accent-tertiary rounded">
+              <Users size={18} className="sm:w-5 sm:h-5" />
             </div>
           </div>
-          <div className="pt-4 border-t border-border-color/50 mt-3 flex items-center justify-between text-xs">
+          <div className="pt-3 sm:pt-4 border-t border-border-color/50 mt-3 flex items-center justify-between text-xs">
             <span className="text-status-success flex items-center gap-1 font-bold">
               <CheckCircle2 size={13} /> Active Roster
             </span>
-            <span className="text-text-secondary font-mono">{teamInfo?.leader_name || "Leader"}</span>
+            <span className="text-text-secondary font-mono text-[11px] sm:text-xs truncate max-w-[120px]">{teamInfo?.leader_name || "Leader"}</span>
           </div>
         </div>
 
         {/* Problem Statements Card */}
-        <div className="glass-panel p-5 border border-border-color flex flex-col justify-between">
+        <div className="glass-panel p-4 sm:p-5 border border-border-color flex flex-col justify-between">
           <div className="flex items-start justify-between">
             <div>
               <span className="text-[10px] uppercase tracking-wider text-text-secondary font-bold block mb-1">
                 Problem Statement
               </span>
-              <p className="font-heading text-2xl text-accent-tertiary uppercase m-0 font-bold truncate">
+              <p className="font-heading text-xl sm:text-2xl text-accent-tertiary uppercase m-0 font-bold truncate">
                 Track Deliverable
               </p>
             </div>
-            <div className="p-2.5 bg-accent-tertiary/10 border border-accent-tertiary/30 text-accent-tertiary rounded">
-              <ScrollText size={20} />
+            <div className="p-2 sm:p-2.5 bg-accent-tertiary/10 border border-accent-tertiary/30 text-accent-tertiary rounded">
+              <ScrollText size={18} className="sm:w-5 sm:h-5" />
             </div>
           </div>
-          <div className="pt-4 border-t border-border-color/50 mt-3 flex items-center justify-between text-xs">
-            <span className="text-text-secondary">
+          <div className="pt-3 sm:pt-4 border-t border-border-color/50 mt-3 flex items-center justify-between text-xs">
+            <span className="text-text-secondary truncate max-w-[120px]">
               Domain: <span className="text-text-primary font-bold">{teamInfo?.track || "Innovation"}</span>
             </span>
             <Link
               href="/team/problem-statements"
-              className="text-accent-tertiary hover:underline font-bold uppercase text-[11px] flex items-center gap-1"
+              className="text-accent-tertiary hover:underline font-bold uppercase text-[11px] flex items-center gap-1 shrink-0"
             >
               <span>View Statements</span>
               <ArrowRight size={12} />
@@ -277,14 +277,14 @@ export default async function TeamDashboardPage() {
         </div>
 
         {/* Deliverables Submission Card */}
-        <div className="glass-panel p-5 border border-border-color flex flex-col justify-between">
+        <div className="glass-panel p-4 sm:p-5 border border-border-color flex flex-col justify-between">
           <div className="flex items-start justify-between">
             <div>
               <span className="text-[10px] uppercase tracking-wider text-text-secondary font-bold block mb-1">
                 Deliverables Status
               </span>
               <p
-                className={`font-heading text-2xl uppercase m-0 font-bold ${
+                className={`font-heading text-xl sm:text-2xl uppercase m-0 font-bold ${
                   hasSubmitted ? "text-status-success" : "text-status-warning"
                 }`}
               >
@@ -292,22 +292,22 @@ export default async function TeamDashboardPage() {
               </p>
             </div>
             <div
-              className={`p-2.5 rounded border ${
+              className={`p-2 sm:p-2.5 rounded border ${
                 hasSubmitted
                   ? "bg-status-success/10 border-status-success text-status-success"
                   : "bg-status-warning/10 border-status-warning text-status-warning"
               }`}
             >
-              <FileUp size={20} />
+              <FileUp size={18} className="sm:w-5 sm:h-5" />
             </div>
           </div>
-          <div className="pt-4 border-t border-border-color/50 mt-3 flex items-center justify-between text-xs">
-            <span className="text-text-secondary">
+          <div className="pt-3 sm:pt-4 border-t border-border-color/50 mt-3 flex items-center justify-between text-xs">
+            <span className="text-text-secondary truncate max-w-[120px]">
               Round: <span className="text-text-primary font-bold">{activeRound?.title || "Round 1"}</span>
             </span>
             <Link
               href="/team/submission"
-              className="text-accent-secondary hover:underline font-bold uppercase text-[11px] flex items-center gap-1"
+              className="text-accent-secondary hover:underline font-bold uppercase text-[11px] flex items-center gap-1 shrink-0"
             >
               <span>{hasSubmitted ? "Review" : "Upload Now"}</span>
               <ArrowRight size={12} />
@@ -316,27 +316,27 @@ export default async function TeamDashboardPage() {
         </div>
 
         {/* Results / Standings Card */}
-        <div className="glass-panel p-5 border border-border-color flex flex-col justify-between">
+        <div className="glass-panel p-4 sm:p-5 border border-border-color flex flex-col justify-between">
           <div className="flex items-start justify-between">
             <div>
               <span className="text-[10px] uppercase tracking-wider text-text-secondary font-bold block mb-1">
                 Evaluation Standing
               </span>
-              <p className="font-heading text-2xl text-accent-primary uppercase m-0 font-bold">
+              <p className="font-heading text-xl sm:text-2xl text-accent-primary uppercase m-0 font-bold">
                 {publishedResult ? `Rank #${publishedResult.rank || 1}` : "Under Review"}
               </p>
             </div>
-            <div className="p-2.5 bg-accent-primary/10 border border-accent-primary/30 text-accent-primary rounded">
-              <Trophy size={20} />
+            <div className="p-2 sm:p-2.5 bg-accent-primary/10 border border-accent-primary/30 text-accent-primary rounded">
+              <Trophy size={18} className="sm:w-5 sm:h-5" />
             </div>
           </div>
-          <div className="pt-4 border-t border-border-color/50 mt-3 flex items-center justify-between text-xs">
-            <span className="text-text-secondary">
+          <div className="pt-3 sm:pt-4 border-t border-border-color/50 mt-3 flex items-center justify-between text-xs">
+            <span className="text-text-secondary truncate max-w-[120px]">
               {publishedResult ? `${publishedResult.total_score} Points` : "Judging in Progress"}
             </span>
             <Link
               href="/team/results"
-              className="text-accent-primary hover:underline font-bold uppercase text-[11px] flex items-center gap-1"
+              className="text-accent-primary hover:underline font-bold uppercase text-[11px] flex items-center gap-1 shrink-0"
             >
               <span>View Scorecard</span>
               <ArrowRight size={12} />
@@ -413,114 +413,116 @@ export default async function TeamDashboardPage() {
 
       {/* SPOC Contact Directory */}
       <div className="space-y-4">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
           <div className="flex items-center gap-2">
             <Users className="w-5 h-5 text-accent-secondary shrink-0" />
-            <h2 className="font-heading text-xl text-text-primary uppercase m-0 font-bold tracking-wide">
+            <h2 className="font-heading text-lg sm:text-xl text-text-primary uppercase m-0 font-bold tracking-wide">
               SPOC Contact Directory
             </h2>
           </div>
-          <p className="text-[11px] text-text-secondary/70 font-mono">
+          <p className="text-[10px] sm:text-[11px] text-text-secondary/70 font-mono m-0">
             Single Point of Contact — Event Coordination
           </p>
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
           {SPOC_CONTACTS.map((spoc) => (
             <div
               key={spoc.name}
-              className="glass-panel p-6 sm:p-8 border border-border-color rounded-xl bg-[#0a0a0f]/50 flex flex-col h-full"
+              className="glass-panel p-4 sm:p-5 border border-border-color rounded-xl bg-[#0a0a0f]/50 flex flex-col justify-between"
             >
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="font-heading text-lg sm:text-xl text-text-primary uppercase m-0 font-bold tracking-wide leading-tight">
-                  {spoc.name}
-                </h3>
-                <div className="flex items-center gap-1 text-accent-secondary">
-                  <Users className="w-4 h-4 shrink-0" />
-                  <span className="text-[10px] text-text-secondary/60 uppercase tracking-wider font-bold font-mono">
-                    SPOC
-                  </span>
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="font-heading text-base sm:text-lg text-text-primary uppercase m-0 font-bold tracking-wide leading-tight">
+                    {spoc.name}
+                  </h3>
+                  <div className="flex items-center gap-1 text-accent-secondary">
+                    <span className="text-[9px] sm:text-[10px] text-accent-secondary/80 bg-accent-secondary/10 px-2 py-0.5 rounded border border-accent-secondary/30 uppercase tracking-wider font-bold font-mono">
+                      SPOC
+                    </span>
+                  </div>
+                </div>
+
+                <div className="space-y-2.5">
+                  <div className="flex items-center gap-2.5">
+                    <Phone className="w-4 h-4 text-accent-secondary shrink-0" />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[9px] uppercase tracking-wider text-text-secondary/60 font-mono m-0">
+                        Contact Number
+                      </p>
+                      <a
+                        href={`tel:${spoc.phone}`}
+                        className="text-text-primary text-xs sm:text-sm font-mono font-bold hover:text-accent-primary hover:underline transition-colors block truncate"
+                      >
+                        +91 {spoc.phone}
+                      </a>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2.5 pt-2 border-t border-border-color/30">
+                    <Mail className="w-4 h-4 text-accent-secondary shrink-0" />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[9px] uppercase tracking-wider text-text-secondary/60 font-mono m-0">
+                        Email Address
+                      </p>
+                      <a
+                        href={`mailto:${spoc.email}`}
+                        className="text-text-primary text-xs sm:text-sm font-mono font-bold hover:text-accent-primary hover:underline transition-colors block truncate"
+                        title={spoc.email}
+                      >
+                        {spoc.email}
+                      </a>
+                    </div>
+                  </div>
                 </div>
               </div>
 
-              <div className="space-y-4 flex-1">
-                <div className="flex items-center gap-3">
-                  <Phone className="w-5 h-5 text-accent-secondary shrink-0" />
-                  <div>
-                    <p className="text-[11px] uppercase tracking-wider text-text-secondary/60 font-mono m-0">
-                      Contact Number
-                    </p>
-                    <a
-                      href={`tel:${spoc.phone}`}
-                      className="text-text-primary text-base font-mono font-bold hover:text-accent-primary hover:underline transition-colors"
-                    >
-                      {spoc.phone}
-                    </a>
-                  </div>
-                </div>
-                <div className="flex items-center gap-3 pt-2 border-t border-border-color/40">
-                  <Mail className="w-5 h-5 text-accent-secondary shrink-0" />
-                  <div>
-                    <p className="text-[11px] uppercase tracking-wider text-text-secondary/60 font-mono m-0">
-                      Email Address
-                    </p>
-                    <a
-                      href={`mailto:${spoc.email}`}
-                      className="text-text-primary text-base font-mono font-bold hover:text-accent-primary hover:underline transition-colors"
-                    >
-                      {spoc.email}
-                    </a>
-                  </div>
-                </div>
-              </div>
-
-              <div className="mt-5 pt-4 border-t border-border-color/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="mt-4 pt-3 border-t border-border-color/30 flex items-center gap-2">
                 <a
                   href={`tel:${spoc.phone}`}
-                  className="flex-1 sm:w-1/2 px-4 py-3 bg-accent-secondary border border-accent-secondary/30 text-black text-xs sm:text-base uppercase font-bold tracking-wider rounded-lg transition-all hover:bg-accent-primary hover:border-accent-primary flex items-center justify-center gap-2"
+                  className="flex-1 py-2 sm:py-2.5 px-3 bg-accent-secondary border border-accent-secondary/30 text-black text-xs uppercase font-bold tracking-wider rounded-lg transition-all hover:bg-accent-primary hover:border-accent-primary flex items-center justify-center gap-1.5 min-h-[40px]"
                 >
-                  <Phone className="w-4 h-4 shrink-0" />
+                  <Phone className="w-3.5 h-3.5 shrink-0" />
                   <span>Call</span>
                 </a>
                 <a
                   href={`mailto:${spoc.email}`}
-                  className="flex-1 sm:w-1/2 px-4 py-3 bg-transparent border border-border-color hover:border-accent-secondary text-text-primary text-xs sm:text-base uppercase font-bold tracking-wider rounded-lg transition-all hover:bg-surface-color-light hover:text-text-primary flex items-center justify-center gap-2"
+                  className="flex-1 py-2 sm:py-2.5 px-3 bg-surface-color-light border border-border-color hover:border-accent-secondary text-text-primary text-xs uppercase font-bold tracking-wider rounded-lg transition-all hover:bg-surface-color hover:text-text-primary flex items-center justify-center gap-1.5 min-h-[40px]"
                 >
-                  <Mail className="w-4 h-4 shrink-0" />
+                  <Mail className="w-3.5 h-3.5 shrink-0" />
                   <span>Email</span>
                 </a>
               </div>
             </div>
           ))}
         </div>
-        <p className="text-[10px] text-text-secondary/50 italic mt-3">
+        <p className="text-[10px] text-text-secondary/50 italic mt-2">
           Tap Call to dial directly or Email to open your default mail client.
         </p>
       </div>
 
       {/* Distribution Progress Section (Identical to Ops Progress Cards) */}
       <div className="space-y-3">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
           <p className="text-xs uppercase tracking-[2px] text-text-secondary font-bold m-0 flex items-center gap-2">
-            <Activity size={15} className="text-accent-secondary" />
+            <Activity size={15} className="text-accent-secondary shrink-0" />
             Distribution & Check-in Progress
           </p>
-          <span className="text-[11px] text-text-secondary font-mono">
+          <span className="text-[10px] sm:text-[11px] text-text-secondary font-mono">
             {regCount}/{totalMembers} Members Checked In
           </span>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
           {/* Registrations */}
-          <div className="glass-panel p-4 border border-border-color space-y-3">
+          <div className="glass-panel p-3.5 sm:p-4 border border-border-color space-y-2 sm:space-y-3">
             <div className="flex items-center justify-between text-xs">
-              <span className="text-status-success font-bold uppercase flex items-center gap-1.5">
-                <CheckCircle2 size={14} /> Registrations
+              <span className="text-status-success font-bold uppercase flex items-center gap-1 text-[11px] sm:text-xs truncate">
+                <CheckCircle2 size={13} className="shrink-0" /> Registrations
               </span>
-              <span className="text-text-secondary font-mono text-[11px]">{regPct}%</span>
+              <span className="text-text-secondary font-mono text-[10px] sm:text-[11px]">{regPct}%</span>
             </div>
             <div className="flex items-baseline justify-between">
-              <p className="font-heading text-2xl text-text-primary m-0">
-                {regCount} <span className="text-text-secondary text-sm">/ {totalMembers}</span>
+              <p className="font-heading text-xl sm:text-2xl text-text-primary m-0">
+                {regCount} <span className="text-text-secondary text-xs sm:text-sm">/ {totalMembers}</span>
               </p>
             </div>
             <div className="w-full bg-surface-color h-1.5 rounded-full overflow-hidden">
@@ -532,16 +534,16 @@ export default async function TeamDashboardPage() {
           </div>
 
           {/* Goodies */}
-          <div className="glass-panel p-4 border border-border-color space-y-3">
+          <div className="glass-panel p-3.5 sm:p-4 border border-border-color space-y-2 sm:space-y-3">
             <div className="flex items-center justify-between text-xs">
-              <span className="text-accent-primary font-bold uppercase flex items-center gap-1.5">
-                <Gift size={14} /> Goodies / Kits
+              <span className="text-accent-primary font-bold uppercase flex items-center gap-1 text-[11px] sm:text-xs truncate">
+                <Gift size={13} className="shrink-0" /> Goodies Kit
               </span>
-              <span className="text-text-secondary font-mono text-[11px]">{goodiesPct}%</span>
+              <span className="text-text-secondary font-mono text-[10px] sm:text-[11px]">{goodiesPct}%</span>
             </div>
             <div className="flex items-baseline justify-between">
-              <p className="font-heading text-2xl text-text-primary m-0">
-                {goodiesCount} <span className="text-text-secondary text-sm">/ {totalMembers}</span>
+              <p className="font-heading text-xl sm:text-2xl text-text-primary m-0">
+                {goodiesCount} <span className="text-text-secondary text-xs sm:text-sm">/ {totalMembers}</span>
               </p>
             </div>
             <div className="w-full bg-surface-color h-1.5 rounded-full overflow-hidden">
@@ -553,16 +555,16 @@ export default async function TeamDashboardPage() {
           </div>
 
           {/* Lunch */}
-          <div className="glass-panel p-4 border border-border-color space-y-3">
+          <div className="glass-panel p-3.5 sm:p-4 border border-border-color space-y-2 sm:space-y-3">
             <div className="flex items-center justify-between text-xs">
-              <span className="text-accent-secondary font-bold uppercase flex items-center gap-1.5">
-                <Utensils size={14} /> Lunch Token
+              <span className="text-accent-secondary font-bold uppercase flex items-center gap-1 text-[11px] sm:text-xs truncate">
+                <Utensils size={13} className="shrink-0" /> Lunch Token
               </span>
-              <span className="text-text-secondary font-mono text-[11px]">{lunchPct}%</span>
+              <span className="text-text-secondary font-mono text-[10px] sm:text-[11px]">{lunchPct}%</span>
             </div>
             <div className="flex items-baseline justify-between">
-              <p className="font-heading text-2xl text-text-primary m-0">
-                {lunchCount} <span className="text-text-secondary text-sm">/ {totalMembers}</span>
+              <p className="font-heading text-xl sm:text-2xl text-text-primary m-0">
+                {lunchCount} <span className="text-text-secondary text-xs sm:text-sm">/ {totalMembers}</span>
               </p>
             </div>
             <div className="w-full bg-surface-color h-1.5 rounded-full overflow-hidden">
@@ -574,16 +576,16 @@ export default async function TeamDashboardPage() {
           </div>
 
           {/* Snacks */}
-          <div className="glass-panel p-4 border border-border-color space-y-3">
+          <div className="glass-panel p-3.5 sm:p-4 border border-border-color space-y-2 sm:space-y-3">
             <div className="flex items-center justify-between text-xs">
-              <span className="text-accent-tertiary font-bold uppercase flex items-center gap-1.5">
-                <Coffee size={14} /> Refreshments
+              <span className="text-accent-tertiary font-bold uppercase flex items-center gap-1 text-[11px] sm:text-xs truncate">
+                <Coffee size={13} className="shrink-0" /> Refreshments
               </span>
-              <span className="text-text-secondary font-mono text-[11px]">{snacksPct}%</span>
+              <span className="text-text-secondary font-mono text-[10px] sm:text-[11px]">{snacksPct}%</span>
             </div>
             <div className="flex items-baseline justify-between">
-              <p className="font-heading text-2xl text-text-primary m-0">
-                {snacksCount} <span className="text-text-secondary text-sm">/ {totalMembers}</span>
+              <p className="font-heading text-xl sm:text-2xl text-text-primary m-0">
+                {snacksCount} <span className="text-text-secondary text-xs sm:text-sm">/ {totalMembers}</span>
               </p>
             </div>
             <div className="w-full bg-surface-color h-1.5 rounded-full overflow-hidden">

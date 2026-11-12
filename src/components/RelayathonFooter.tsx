@@ -46,7 +46,7 @@ export default function RelayathonFooter() {
                   <div className="text-[11px] text-neutral-400 font-mono uppercase mb-2">
                     // ORGANISED BY
                   </div>
-                  <div className="inline-flex items-center gap-3 bg-white/[0.03] p-2.5 rounded-md border border-white/10">
+                  <div className="inline-flex flex-wrap items-center gap-2 sm:gap-3 bg-white/[0.03] p-2.5 rounded-md border border-white/10 max-w-full">
                     <Image
                       src="/vvce_logo.png"
                       alt="VVCE Logo"

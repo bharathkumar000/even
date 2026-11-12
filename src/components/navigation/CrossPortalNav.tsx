@@ -149,7 +149,7 @@ export default function CrossPortalNav({
           </Link>
 
           {/* Central Portal Switcher Navigation */}
-          <nav className="flex items-center gap-1 sm:gap-1.5 overflow-x-auto custom-scrollbar py-1 min-w-0 flex-1">
+          <nav className="flex items-center gap-1 sm:gap-1.5 overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden py-1 min-w-0 flex-1">
             {portals.map((p) => {
               const isActive = p.exact
                 ? pathname === p.href

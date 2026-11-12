@@ -409,7 +409,7 @@ export default function AuthPage({ isSignUp = false }: { isSignUp?: boolean }) {
               <div className="absolute top-3 left-3 w-2.5 h-2.5 border-t-1.5 border-l-1.5 border-white/15 pointer-events-none" />
               <div className="absolute bottom-3 right-3 w-2.5 h-2.5 border-b-1.5 border-r-1.5 border-white/15 pointer-events-none" />
               
-              <div className="p-5 sm:p-6 lg:p-7 space-y-5">
+              <div className="p-4 sm:p-6 lg:p-7 space-y-4 sm:space-y-5">
                 
                 {/* Card Header */}
                 <div className="flex flex-col items-center text-center">
@@ -635,7 +635,7 @@ export default function AuthPage({ isSignUp = false }: { isSignUp?: boolean }) {
                     <button
                       type="submit"
                       disabled={loading || (!isDev && rateLimitCooldown > 0)}
-                      className="w-full py-3 px-5 bg-[#ff007f] hover:bg-[#e60072] disabled:opacity-50 text-white font-bold text-[10px] uppercase tracking-[1.2px] rounded-lg transition-all shadow-[0_0_18px_rgba(255,0,127,0.35)] flex items-center justify-center gap-2 mt-1 cursor-pointer active:scale-[0.99]"
+                      className="w-full py-3 px-5 bg-[#ff007f] hover:bg-[#e60072] disabled:opacity-50 text-white font-bold text-[10px] uppercase tracking-[1.2px] rounded-lg transition-all shadow-[0_0_18px_rgba(255,0,127,0.35)] flex items-center justify-center gap-2 mt-1 cursor-pointer active:scale-[0.99] min-h-[44px]"
                     >
                       <span>
                         {!isDev && rateLimitCooldown > 0
@@ -654,7 +654,7 @@ export default function AuthPage({ isSignUp = false }: { isSignUp?: boolean }) {
                     {/* Sign Up Redirect Button */}
                     {!isSignUp && (
                       <div className="pt-2">
-                        <div className="flex items-center justify-center my-3">
+                        <div className="flex items-center justify-center my-2 sm:my-3">
                           <div className="flex-1 border-t border-white/10" />
                           <span className="shrink-0 whitespace-nowrap bg-[#0b0b0e] px-3 text-[10px] sm:text-[11px] font-mono font-medium uppercase tracking-[1.5px] text-[#9ca3af]">
                             Don&apos;t have an account?
@@ -664,7 +664,7 @@ export default function AuthPage({ isSignUp = false }: { isSignUp?: boolean }) {
 
                         <Link
                           href="/register"
-                          className="w-full py-2.5 px-4 bg-white/[0.04] hover:bg-white/[0.08] border border-white/15 hover:border-[#ff007f]/50 text-white font-bold text-xs sm:text-[13px] uppercase tracking-[1.2px] rounded-lg transition-all flex items-center justify-center gap-2 group cursor-pointer"
+                          className="w-full py-2.5 px-4 bg-white/[0.04] hover:bg-white/[0.08] border border-white/15 hover:border-[#ff007f]/50 text-white font-bold text-xs sm:text-[13px] uppercase tracking-[1.2px] rounded-lg transition-all flex items-center justify-center gap-2 group cursor-pointer min-h-[42px]"
                         >
                           <span>Sign Up</span>
                           <ArrowRight size={13} className="text-[#ff007f] group-hover:translate-x-0.5 transition-transform" />
