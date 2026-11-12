@@ -12,7 +12,7 @@ export interface ComprehensiveTeamRecord {
   teamName: string;
   track?: string;
   teamCode?: string;
-  status: "Pending" | "Approved" | "Rejected";
+  status: "Pending" | "Waitlist" | "Approved" | "Rejected";
   decisionAt: string;
   decisionBy?: string;
   rejectionReason?: string;
