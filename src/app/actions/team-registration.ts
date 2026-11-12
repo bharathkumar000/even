@@ -243,7 +243,16 @@ export async function submitTeamRegistration(
         return { success: false, message: "Payment proof image must be smaller than 10MB." };
       }
 
-      // Prevent duplicate UTR reuse across registrations
+      // Prevent duplicate UTR reuse across registrations (both in team_registrations and teams table)
+      const { data: dupRegs } = await supabaseAdmin
+        .from("team_registrations")
+        .select("id")
+        .eq("payment_utr", paymentUtr)
+        .limit(1);
+      if (dupRegs && dupRegs.length > 0) {
+        return { success: false, message: "This UTR / Transaction Reference Number has already been submitted." };
+      }
+
       const { data: dupTeams } = await supabaseAdmin
         .from("teams")
         .select("id")
