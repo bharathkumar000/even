@@ -42,6 +42,7 @@ export interface GeneratedCredentials {
   teamCode: string;
   email: string;
   leaderName?: string;
+  leaderPhone?: string;
   username: string;
   password: string;
   qrPayload: string;
@@ -696,6 +697,7 @@ export async function approveRegistration(registrationId: string): Promise<{
       teamCode,
       email: leaderEmail,
       leaderName,
+      leaderPhone: reg.leader_phone || reg.payment_phone || "",
       username: teamName,
       password: generatedPassword,
       qrPayload,

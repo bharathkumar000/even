@@ -30,6 +30,7 @@ import {
   Download,
   RefreshCw,
   HelpCircle,
+  MessageCircle,
 } from "lucide-react";
 import {
   approveRegistration,
@@ -157,15 +158,18 @@ export default function RegistrationsClientView({
     }
   };
 
+  const OFFICIAL_WHATSAPP_GROUP = "https://chat.whatsapp.com/Baq9uEcVFQs9loSZxJTspB";
+
   const copyCredentials = (creds: GeneratedCredentials) => {
     const text = `
-=== EVENTRA 1.0 - TEAM LOGIN CREDENTIALS ===
+=== EVENTRA 2026 - TEAM LOGIN CREDENTIALS ===
 Team Name: ${creds.teamName}
 Team Code: ${creds.teamCode}
 Portal URL: https://eventra-ivc.vercel.app/login
 Login Email: ${creds.email}
 Password: ${creds.password}
 ============================================
+Official WhatsApp Group: ${OFFICIAL_WHATSAPP_GROUP}
 Official QR Code is activated for Registration Check-in & Meals.
     `.trim();
 
@@ -193,13 +197,18 @@ Login Email: ${creds.email}
 Password: ${creds.password}
 =========================================
 
-NEXT STEPS:
-1. Log in to the Eventra portal (https://eventra-ivc.vercel.app/login) using your email and password above.
-2. Go to the "Team QR" tab to access your squad's official live QR badge.
-3. Present this QR badge at the desk for Registration Check-in, Goodies / Kit collection, and Meals during the event.
-4. Problem statements and submission guidelines are now unlocked in your dashboard.
+IMPORTANT - JOIN OFFICIAL PARTICIPANTS WHATSAPP GROUP:
+Join the official event WhatsApp group immediately to receive live schedule updates, announcements, problem statements, and round briefings:
+👉 ${OFFICIAL_WHATSAPP_GROUP}
 
-If you have any questions or require support, feel free to reply to this email.
+NEXT STEPS:
+1. Join the official WhatsApp group (${OFFICIAL_WHATSAPP_GROUP}) right away.
+2. Log in to the Eventra portal (https://eventra-ivc.vercel.app/login) using your email and password above.
+3. Go to the "Team QR" tab to access your squad's official live QR badge.
+4. Present this QR badge at the desk for Registration Check-in, Goodies / Kit collection, and Meals during the event.
+5. Problem statements and submission guidelines are now unlocked in your dashboard.
+
+If you have any questions or require support, feel free to reply to this email or ask in the WhatsApp group.
 
 Best regards,
 Innovators & Visionaries Club (IVC)
@@ -222,6 +231,30 @@ Event Organizing Committee`;
       creds.email
     )}&su=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
     window.open(gmailUrl, "_blank", "noopener,noreferrer");
+  };
+
+  const handleSendWhatsApp = (creds: GeneratedCredentials) => {
+    const cleanPhone = (creds.leaderPhone || "").replace(/\D/g, "");
+    const phoneWithCountry = cleanPhone.length === 10 ? `91${cleanPhone}` : cleanPhone;
+    const msg = `*EVENTRA 2026 - OFFICIAL SQUAD ACCESS PASS*
+
+Hello ${creds.leaderName || "Team Leader"}, your registration has been verified!
+
+*Team:* ${creds.teamName}
+*Team Code:* ${creds.teamCode}
+*Portal URL:* https://eventra-ivc.vercel.app/login
+*Login Email:* ${creds.email}
+*Password:* ${creds.password}
+
+👉 *Join Official WhatsApp Group:*
+${OFFICIAL_WHATSAPP_GROUP}
+
+Log in to the portal to view your squad's active QR Pass for check-in and meals!`;
+
+    const waUrl = phoneWithCountry
+      ? `https://api.whatsapp.com/send?phone=${phoneWithCountry}&text=${encodeURIComponent(msg)}`
+      : `https://api.whatsapp.com/send?text=${encodeURIComponent(msg)}`;
+    window.open(waUrl, "_blank", "noopener,noreferrer");
   };
 
   const handleExportCsv = async () => {
@@ -524,7 +557,7 @@ Event Organizing Committee`;
                       View Proof
                     </button>
 
-                    {/* Approved: View Credentials & Quick Email */}
+                    {/* Approved: View Credentials & Quick Email / WhatsApp */}
                     {isApproved && creds && (
                       <>
                         <button
@@ -544,6 +577,16 @@ Event Organizing Committee`;
                         >
                           <Send className="w-3.5 h-3.5 text-rose-400" />
                           Email Lead
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => handleSendWhatsApp(creds)}
+                          title="Send credentials and WhatsApp group link via WhatsApp"
+                          className="px-3.5 py-2 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 font-tech text-xs uppercase rounded-xl flex items-center gap-1.5 transition-all"
+                        >
+                          <MessageCircle className="w-3.5 h-3.5 text-emerald-400" />
+                          WhatsApp
                         </button>
                       </>
                     )}
@@ -810,18 +853,39 @@ Event Organizing Committee`;
                   {activeCredentialsModal.password}
                 </code>
               </div>
+              <div className="flex justify-between items-center pt-2 border-t border-white/5">
+                <span className="text-text-secondary">Official WhatsApp:</span>
+                <a
+                  href={OFFICIAL_WHATSAPP_GROUP}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-emerald-400 hover:text-emerald-300 font-mono text-[11px] font-bold underline flex items-center gap-1"
+                >
+                  <MessageCircle className="w-3.5 h-3.5" />
+                  Join Group &gt;&gt;
+                </a>
+              </div>
             </div>
 
-            {/* Quick Email & Copy Buttons */}
+            {/* Quick Email, WhatsApp & Copy Buttons */}
             <div className="space-y-2">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                 <button
                   type="button"
                   onClick={() => handleOpenGmail(activeCredentialsModal)}
                   className="py-2.5 px-3 bg-gradient-to-r from-red-500 to-rose-600 hover:from-red-400 hover:to-rose-500 text-white font-tech font-bold uppercase tracking-wider text-xs rounded-xl flex items-center justify-center gap-1.5 transition-all shadow-[0_0_15px_rgba(244,63,94,0.3)]"
                 >
                   <Send className="w-4 h-4" />
-                  Draft in Gmail Web
+                  Gmail Web
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleSendWhatsApp(activeCredentialsModal)}
+                  className="py-2.5 px-3 bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-500 hover:to-green-500 text-white font-tech font-bold uppercase tracking-wider text-xs rounded-xl flex items-center justify-center gap-1.5 transition-all shadow-[0_0_15px_rgba(16,185,129,0.3)]"
+                >
+                  <MessageCircle className="w-4 h-4" />
+                  WhatsApp
                 </button>
 
                 <button
@@ -830,7 +894,7 @@ Event Organizing Committee`;
                   className="py-2.5 px-3 bg-white/10 hover:bg-white/15 border border-white/20 text-text-primary font-tech font-bold uppercase tracking-wider text-xs rounded-xl flex items-center justify-center gap-1.5 transition-all"
                 >
                   <Mail className="w-4 h-4 text-cyan-400" />
-                  Draft in Mail App
+                  Mail App
                 </button>
               </div>
 
@@ -841,7 +905,7 @@ Event Organizing Committee`;
                   className="flex-1 py-2.5 bg-cyan-500 hover:bg-cyan-400 text-black font-tech font-bold uppercase tracking-wider text-xs rounded-xl flex items-center justify-center gap-1.5 transition-all shadow-[0_0_15px_rgba(0,245,255,0.25)]"
                 >
                   {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-                  {copied ? "Copied to Clipboard!" : "Copy All Credentials"}
+                  {copied ? "Copied to Clipboard!" : "Copy All Credentials & WhatsApp Link"}
                 </button>
 
                 <button
