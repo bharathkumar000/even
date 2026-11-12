@@ -137,11 +137,11 @@ export async function submitTeamRegistration(
     const teamName = String(formData.get("teamName") || "").trim();
     const track = String(formData.get("track") || "").trim();
 
-    // Leader info
+    // Leader info (VVCE exclusive)
     const leaderName = String(formData.get("leaderName") || "").trim();
     const leaderEmail = String(formData.get("leaderEmail") || "").trim().toLowerCase();
     const leaderPhone = String(formData.get("leaderPhone") || "").trim();
-    const leaderCollege = String(formData.get("leaderCollege") || "").trim();
+    const leaderCollege = "VVCE";
     const leaderUsn = String(formData.get("leaderUsn") || "").trim().toUpperCase();
     const leaderBranch = String(formData.get("leaderBranch") || "").trim();
     const leaderSem = String(formData.get("leaderSem") || "").trim();
@@ -164,6 +164,9 @@ export async function submitTeamRegistration(
     let members: TeamMemberInput[] = [];
     try {
       members = JSON.parse(membersRaw);
+      if (Array.isArray(members)) {
+        members = members.map((m) => ({ ...m, college: "VVCE" }));
+      }
     } catch {
       members = [];
     }

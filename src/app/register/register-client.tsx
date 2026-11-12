@@ -34,9 +34,9 @@ const DEFAULT_DRIVER: DriverState = {
   email: "",
   phone: "",
   usn: "",
-  branch: "CSE",
+  branch: "Computer Science & Engg (CSE)",
   sem: "1st Semester",
-  college: "VVCE Mysore",
+  college: "VVCE",
 };
 
 const BRANCHES = [
@@ -48,7 +48,7 @@ const BRANCHES = [
   "Mechanical Engineering (MECH)",
   "Civil Engineering (CIVIL)",
   "Data Science / Computer Science & Business (CSBS)",
-  "Other / Outside College",
+  "Other Branch",
 ];
 
 const SEMESTERS = [
@@ -82,7 +82,7 @@ export default function RegisterClientView({
     ...DEFAULT_DRIVER,
     sem: defaultAvailableSem,
     branch: "Computer Science & Engg (CSE)",
-    college: "",
+    college: "VVCE",
   });
 
   // Drivers 2, 3, 4
@@ -90,21 +90,21 @@ export default function RegisterClientView({
     ...DEFAULT_DRIVER,
     sem: defaultAvailableSem,
     branch: "Computer Science & Engg (CSE)",
-    college: "",
+    college: "VVCE",
   });
 
   const [driver3, setDriver3] = useState<DriverState>({
     ...DEFAULT_DRIVER,
     sem: defaultAvailableSem,
     branch: "Computer Science & Engg (CSE)",
-    college: "",
+    college: "VVCE",
   });
 
   const [driver4, setDriver4] = useState<DriverState>({
     ...DEFAULT_DRIVER,
     sem: defaultAvailableSem,
     branch: "Computer Science & Engg (CSE)",
-    college: "",
+    college: "VVCE",
   });
 
   // Payment
@@ -700,16 +700,18 @@ export default function RegisterClientView({
                   </div>
 
                   <div className="sm:col-span-2 space-y-1.5">
-                    <label className="block text-red-500 uppercase text-[11px] font-bold">
-                      COLLEGE / INSTITUTION <span className="text-red-500">*</span>
+                    <label className="flex items-center justify-between text-red-500 uppercase text-[11px] font-bold">
+                      <span>COLLEGE / INSTITUTION <span className="text-red-500">*</span></span>
+                      <span className="inline-flex items-center gap-1 text-[10px] text-neutral-400 font-normal">
+                        <Lock size={10} className="text-red-500" /> VVCE EXCLUSIVE
+                      </span>
                     </label>
                     <input
                       type="text"
                       required
-                      value={driver1.college}
-                      onChange={(e) => setDriver1({ ...driver1, college: e.target.value })}
-                      placeholder="ENTER COLLEGE NAME"
-                      className="w-full bg-[#0a0a0a] border border-neutral-800 focus:border-red-500 text-white p-3 rounded outline-none text-xs placeholder:text-neutral-600"
+                      readOnly
+                      value="VVCE"
+                      className="w-full bg-[#050505] border border-neutral-800/80 text-neutral-300 font-bold p-3 rounded outline-none text-xs cursor-not-allowed select-none"
                     />
                   </div>
                 </div>
@@ -823,16 +825,18 @@ export default function RegisterClientView({
                   </div>
 
                   <div className="sm:col-span-2 space-y-1.5">
-                    <label className="block text-red-500 uppercase text-[11px] font-bold">
-                      COLLEGE_2 <span className="text-red-500">*</span>
+                    <label className="flex items-center justify-between text-red-500 uppercase text-[11px] font-bold">
+                      <span>COLLEGE_2 <span className="text-red-500">*</span></span>
+                      <span className="inline-flex items-center gap-1 text-[10px] text-neutral-400 font-normal">
+                        <Lock size={10} className="text-red-500" /> VVCE EXCLUSIVE
+                      </span>
                     </label>
                     <input
                       type="text"
                       required
-                      value={driver2.college}
-                      onChange={(e) => setDriver2({ ...driver2, college: e.target.value })}
-                      placeholder="ENTER COLLEGE NAME"
-                      className="w-full bg-[#0a0a0a] border border-neutral-800 focus:border-red-500 text-white p-3 rounded outline-none text-xs placeholder:text-neutral-600"
+                      readOnly
+                      value="VVCE"
+                      className="w-full bg-[#050505] border border-neutral-800/80 text-neutral-300 font-bold p-3 rounded outline-none text-xs cursor-not-allowed select-none"
                     />
                   </div>
                 </div>
@@ -946,16 +950,18 @@ export default function RegisterClientView({
                   </div>
 
                   <div className="sm:col-span-2 space-y-1.5">
-                    <label className="block text-red-500 uppercase text-[11px] font-bold">
-                      COLLEGE_3 <span className="text-red-500">*</span>
+                    <label className="flex items-center justify-between text-red-500 uppercase text-[11px] font-bold">
+                      <span>COLLEGE_3 <span className="text-red-500">*</span></span>
+                      <span className="inline-flex items-center gap-1 text-[10px] text-neutral-400 font-normal">
+                        <Lock size={10} className="text-red-500" /> VVCE EXCLUSIVE
+                      </span>
                     </label>
                     <input
                       type="text"
                       required
-                      value={driver3.college}
-                      onChange={(e) => setDriver3({ ...driver3, college: e.target.value })}
-                      placeholder="ENTER COLLEGE NAME"
-                      className="w-full bg-[#0a0a0a] border border-neutral-800 focus:border-red-500 text-white p-3 rounded outline-none text-xs placeholder:text-neutral-600"
+                      readOnly
+                      value="VVCE"
+                      className="w-full bg-[#050505] border border-neutral-800/80 text-neutral-300 font-bold p-3 rounded outline-none text-xs cursor-not-allowed select-none"
                     />
                   </div>
                 </div>
@@ -1069,16 +1075,18 @@ export default function RegisterClientView({
                   </div>
 
                   <div className="sm:col-span-2 space-y-1.5">
-                    <label className="block text-red-500 uppercase text-[11px] font-bold">
-                      COLLEGE_4 <span className="text-red-500">*</span>
+                    <label className="flex items-center justify-between text-red-500 uppercase text-[11px] font-bold">
+                      <span>COLLEGE_4 <span className="text-red-500">*</span></span>
+                      <span className="inline-flex items-center gap-1 text-[10px] text-neutral-400 font-normal">
+                        <Lock size={10} className="text-red-500" /> VVCE EXCLUSIVE
+                      </span>
                     </label>
                     <input
                       type="text"
                       required
-                      value={driver4.college}
-                      onChange={(e) => setDriver4({ ...driver4, college: e.target.value })}
-                      placeholder="ENTER COLLEGE NAME"
-                      className="w-full bg-[#0a0a0a] border border-neutral-800 focus:border-red-500 text-white p-3 rounded outline-none text-xs placeholder:text-neutral-600"
+                      readOnly
+                      value="VVCE"
+                      className="w-full bg-[#050505] border border-neutral-800/80 text-neutral-300 font-bold p-3 rounded outline-none text-xs cursor-not-allowed select-none"
                     />
                   </div>
                 </div>
