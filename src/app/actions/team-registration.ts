@@ -211,6 +211,19 @@ export async function submitTeamRegistration(
       };
     }
 
+    // Strict Academic Cohort Integrity: Cross-cohort / mixed senior-junior teams are strictly prohibited.
+    // 1st Year category must be exclusively 1st Semester; 2nd Year category must be exclusively 3rd Semester.
+    const expectedSem = leaderSem.trim().toLowerCase();
+    for (let i = 0; i < members.length; i++) {
+      const memberSem = (members[i].sem || "").trim().toLowerCase();
+      if (memberSem !== expectedSem) {
+        return {
+          success: false,
+          message: "ACADEMIC COHORT POLICY VIOLATION: All 4 squad members must belong to the exact same academic semester. Cross-cohort and senior-junior combination teams are strictly prohibited.",
+        };
+      }
+    }
+
     // Check semester counts: 40 confirmed + 10 waiting list max (50 total per semester)
     const { firstSemCount, thirdSemCount, maxLimit, waitlistLimit } = await getSemesterRegistrationCounts();
     const maxTotalPerSem = maxLimit + waitlistLimit;

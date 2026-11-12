@@ -23,3 +23,4 @@ export const HapticFeedback = {
   /** Double warning buzz - invalid QR, quota full, validation error */
   warning: () => triggerHaptic([50, 60, 50]),
 };
+

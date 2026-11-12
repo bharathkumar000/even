@@ -15,3 +15,4 @@ export default function TeamPullToRefresh({ children }: { children: React.ReactN
 
   return <PullToRefresh onRefresh={handleRefresh}>{children}</PullToRefresh>;
 }
+
