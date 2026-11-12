@@ -31,6 +31,11 @@ export const metadata: Metadata = {
   creator: SITE_CONFIG.organization.name,
   publisher: SITE_CONFIG.organization.name,
   manifest: '/manifest.json',
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'black-translucent',
+    title: 'Eventra',
+  },
   icons: {
     icon: [
       { url: '/ivc-logo-transparent.png', type: 'image/png' },

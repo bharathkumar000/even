@@ -19,6 +19,7 @@ import {
 import { getTeamScanStatus } from "@/app/actions/operations";
 import Image from "next/image";
 import { createClient } from "@/lib/supabase/client";
+import { HapticFeedback } from "@/lib/haptic";
 
 interface TeamQrClientViewProps {
   teamId: string;
@@ -101,6 +102,7 @@ export default function TeamQrClientView({
 
       if (!prevGoodies && nextGoodies) {
         setJustClaimedAlert("Goodies & Welcome Kit successfully claimed from Operations Desk!");
+        HapticFeedback.success();
       } else if (prevGoodies && !nextGoodies) {
         setJustClaimedAlert(null);
       }

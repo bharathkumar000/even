@@ -35,6 +35,7 @@ import PitchAlertListener from "@/components/team/PitchAlertListener";
 import TeamActivitySyncListener from "@/components/team/TeamActivitySyncListener";
 import { getTeamRegistrationByEmail } from "@/lib/googleSheet";
 import { ContentActivityHub } from "@/components/content-hub";
+import TeamPullToRefresh from "@/components/team/TeamPullToRefresh";
 
 export const dynamic = "force-dynamic";
 
@@ -178,7 +179,8 @@ export default async function TeamDashboardPage() {
   const hasSubmitted = !!currentSubmission?.ppt_url;
 
   return (
-    <div className="space-y-8 animate-fade-in font-tech">
+    <TeamPullToRefresh>
+      <div className="space-y-8 animate-fade-in font-tech">
       {/* Real-time Jury Pitch Call Alert */}
       <PitchAlertListener teamId={effectiveTeamId} teamName={teamInfo?.name} />
 
@@ -610,5 +612,6 @@ export default async function TeamDashboardPage() {
         errorMessage="Failed to load team content."
       />
     </div>
+    </TeamPullToRefresh>
   );
 }

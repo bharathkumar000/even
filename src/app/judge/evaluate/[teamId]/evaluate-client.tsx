@@ -29,6 +29,7 @@ import {
   deleteOfflineDraft,
 } from "@/lib/offline-storage";
 import { withCsrfToken } from "@/lib/csrf-client";
+import { HapticFeedback } from "@/lib/haptic";
 
 export interface TeamDetail {
   id: string;
@@ -207,6 +208,7 @@ export default function EvaluateClientView({
         },
       });
       setPitchCallSent(true);
+      HapticFeedback.success();
       setTimeout(() => setPitchCallSent(false), 5000);
     } catch (err) {
       console.warn("Pitch call broadcast notice:", err);
@@ -266,6 +268,11 @@ export default function EvaluateClientView({
           ? "Draft saved successfully to cloud."
           : "Evaluation officially submitted and recorded!"
       );
+      if (isDraft) {
+        HapticFeedback.tap();
+      } else {
+        HapticFeedback.confirm();
+      }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err || "");
       console.error("[Evaluation submit error]:", {
