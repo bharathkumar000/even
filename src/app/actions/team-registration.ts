@@ -102,19 +102,41 @@ export async function getSemesterRegistrationCounts(): Promise<{
       .from("team_registrations")
       .select("leader_sem");
 
-    if (error || !data) {
+    let firstSemCount = 0;
+    let thirdSemCount = 0;
+
+    if (error) {
+      // Fallback: if team_registrations table is not created yet, count from teams.dietary_preference
+      if (error.message?.includes("Could not find the table") || error.code === "PGRST205") {
+        const { data: teamsData } = await supabaseAdmin
+          .from("teams")
+          .select("dietary_preference");
+
+        for (const t of teamsData || []) {
+          if (!t.dietary_preference) continue;
+          try {
+            const parsed = JSON.parse(t.dietary_preference);
+            const sem = String(parsed.leaderSem || "").toLowerCase();
+            if (sem.includes("1st") || sem === "1") {
+              firstSemCount++;
+            } else if (sem.includes("3rd") || sem === "3") {
+              thirdSemCount++;
+            }
+          } catch {
+            // ignore non-JSON dietary_preference
+          }
+        }
+      }
+
       return {
-        firstSemCount: 0,
-        thirdSemCount: 0,
+        firstSemCount,
+        thirdSemCount,
         maxLimit: MAX_CONFIRMED_PER_SEM,
         waitlistLimit: MAX_WAITLIST_PER_SEM,
       };
     }
 
-    let firstSemCount = 0;
-    let thirdSemCount = 0;
-
-    for (const row of data) {
+    for (const row of data || []) {
       const sem = String(row.leader_sem || "").toLowerCase();
       if (sem.includes("1st") || sem === "1") {
         firstSemCount++;
@@ -207,11 +229,37 @@ export async function submitTeamRegistration(
 
     // Require payment proof & UTR only for confirmed slots (< 40)
     if (!isWaitlist) {
-      if (!paymentUtr) {
-        return { success: false, message: "12-digit UPI Reference / UTR Number is required." };
+      if (!paymentUtr || paymentUtr.length < 6) {
+        return { success: false, message: "Valid 12-digit UPI Reference / UTR Number is required." };
       }
       if (!paymentFile || paymentFile.size === 0) {
         return { success: false, message: "Payment proof screenshot is required." };
+      }
+      const allowedMimeTypes = ["image/png", "image/jpeg", "image/jpg"];
+      if (!allowedMimeTypes.includes((paymentFile.type || "").toLowerCase())) {
+        return { success: false, message: "Invalid payment proof format. Only PNG, JPG, or JPEG images are allowed." };
+      }
+      if (paymentFile.size > 10 * 1024 * 1024) {
+        return { success: false, message: "Payment proof image must be smaller than 10MB." };
+      }
+
+      // Prevent duplicate UTR reuse across registrations (both in team_registrations and teams table)
+      const { data: dupRegs } = await supabaseAdmin
+        .from("team_registrations")
+        .select("id")
+        .eq("payment_utr", paymentUtr)
+        .limit(1);
+      if (dupRegs && dupRegs.length > 0) {
+        return { success: false, message: "This UTR / Transaction Reference Number has already been submitted." };
+      }
+
+      const { data: dupTeams } = await supabaseAdmin
+        .from("teams")
+        .select("id")
+        .eq("table_number", paymentUtr)
+        .limit(1);
+      if (dupTeams && dupTeams.length > 0) {
+        return { success: false, message: "This UTR / Transaction Reference Number has already been submitted." };
       }
     }
 
@@ -251,16 +299,20 @@ export async function submitTeamRegistration(
       .select("id")
       .single();
 
+    let insertedRegId = "";
+    let isFallback = false;
+
     if (insertError) {
       console.error("Database registration insertion error:", insertError);
       // Fallback: If table does not exist, insert into teams with status pending_verification
-      if (insertError.message.includes("Could not find the table") || insertError.code === "PGRST204") {
+      if (insertError.message.includes("Could not find the table") || insertError.code === "PGRST205" || insertError.code === "PGRST204") {
+        isFallback = true;
         const fallbackTeamPayload = {
           name: teamName,
           track: track,
           leader_name: leaderName,
           status: "pending_verification",
-          table_number: paymentUtr,
+          table_number: finalPaymentUtr,
           lab_room: paymentPhone,
           dietary_preference: JSON.stringify({
             leaderEmail,
@@ -270,6 +322,7 @@ export async function submitTeamRegistration(
             leaderSem,
             members,
             paymentProofUrl,
+            isWaitlist,
           }),
         };
 
@@ -283,14 +336,12 @@ export async function submitTeamRegistration(
           return { success: false, message: `Failed to record registration: ${fallbackError.message}` };
         }
 
-        return {
-          success: true,
-          message: "Registration submitted successfully! Payment verification in progress.",
-          registrationId: fallbackTeam.id,
-        };
+        insertedRegId = fallbackTeam.id;
+      } else {
+        return { success: false, message: `Failed to record registration: ${insertError.message}` };
       }
-
-      return { success: false, message: `Failed to record registration: ${insertError.message}` };
+    } else {
+      insertedRegId = insertData.id;
     }
 
     // 3. Automatically stream registration to Sheet 1 ("Registrations") irrespective of approval status
@@ -349,15 +400,16 @@ export async function submitTeamRegistration(
       paymentProofBase64: isBase64Proof ? paymentProofUrl : undefined,
     };
 
-    const insertedRegId = insertData.id;
     // Non-blocking background sync to Sheet 1 ("Registrations")
     syncRegistrationToGoogleSheets(initialSheetRecord).then(async (res) => {
       if (res.proofUrl && insertedRegId && isBase64Proof) {
         try {
-          await supabaseAdmin
-            .from("team_registrations")
-            .update({ payment_proof_url: res.proofUrl })
-            .eq("id", insertedRegId);
+          if (!isFallback) {
+            await supabaseAdmin
+              .from("team_registrations")
+              .update({ payment_proof_url: res.proofUrl })
+              .eq("id", insertedRegId);
+          }
         } catch {
           // ignore background update error
         }
@@ -372,7 +424,7 @@ export async function submitTeamRegistration(
       message: isWaitlist
         ? "Team added to the Waiting List! If a confirmed slot becomes available, we will contact you for payment."
         : "Registration submitted successfully! Your payment is under verification by IVC admins.",
-      registrationId: insertData.id,
+      registrationId: insertedRegId,
     };
   } catch (err: unknown) {
     const errorMsg = err instanceof Error ? err.message : String(err);
