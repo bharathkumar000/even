@@ -84,6 +84,49 @@ async function requireAdminUser() {
   return { user, profile };
 }
 
+const MAX_TEAMS_PER_SEM = 40;
+
+/**
+ * Public Server Action: Fetch total submitted teams count per semester
+ * irrespective of admin approval/rejection status.
+ */
+export async function getSemesterRegistrationCounts(): Promise<{
+  firstSemCount: number;
+  thirdSemCount: number;
+  maxLimit: number;
+}> {
+  try {
+    const { data, error } = await supabaseAdmin
+      .from("team_registrations")
+      .select("leader_sem");
+
+    if (error || !data) {
+      return { firstSemCount: 0, thirdSemCount: 0, maxLimit: MAX_TEAMS_PER_SEM };
+    }
+
+    let firstSemCount = 0;
+    let thirdSemCount = 0;
+
+    for (const row of data) {
+      const sem = String(row.leader_sem || "").toLowerCase();
+      if (sem.includes("1st") || sem === "1") {
+        firstSemCount++;
+      } else if (sem.includes("3rd") || sem === "3") {
+        thirdSemCount++;
+      }
+    }
+
+    return {
+      firstSemCount,
+      thirdSemCount,
+      maxLimit: MAX_TEAMS_PER_SEM,
+    };
+  } catch (err) {
+    console.error("getSemesterRegistrationCounts error:", err);
+    return { firstSemCount: 0, thirdSemCount: 0, maxLimit: MAX_TEAMS_PER_SEM };
+  }
+}
+
 /**
  * Public Server Action: Submit a team registration with 4 members and payment proof.
  */
@@ -94,11 +137,11 @@ export async function submitTeamRegistration(
     const teamName = String(formData.get("teamName") || "").trim();
     const track = String(formData.get("track") || "").trim();
 
-    // Leader info
+    // Leader info (VVCE exclusive)
     const leaderName = String(formData.get("leaderName") || "").trim();
     const leaderEmail = String(formData.get("leaderEmail") || "").trim().toLowerCase();
     const leaderPhone = String(formData.get("leaderPhone") || "").trim();
-    const leaderCollege = String(formData.get("leaderCollege") || "").trim();
+    const leaderCollege = "VVCE";
     const leaderUsn = String(formData.get("leaderUsn") || "").trim().toUpperCase();
     const leaderBranch = String(formData.get("leaderBranch") || "").trim();
     const leaderSem = String(formData.get("leaderSem") || "").trim();
@@ -121,6 +164,9 @@ export async function submitTeamRegistration(
     let members: TeamMemberInput[] = [];
     try {
       members = JSON.parse(membersRaw);
+      if (Array.isArray(members)) {
+        members = members.map((m) => ({ ...m, college: "VVCE" }));
+      }
     } catch {
       members = [];
     }
@@ -130,6 +176,22 @@ export async function submitTeamRegistration(
       return {
         success: false,
         message: "Details for all 4 team members (Leader + 3 Members) must be provided.",
+      };
+    }
+
+    // Enforce per-semester max limit (40 teams for 1st Sem, 40 teams for 3rd Sem)
+    const { firstSemCount, thirdSemCount, maxLimit } = await getSemesterRegistrationCounts();
+    const semLower = leaderSem.toLowerCase();
+    if ((semLower.includes("1st") || semLower === "1") && firstSemCount >= maxLimit) {
+      return {
+        success: false,
+        message: "1st Semester registration is LOCKED. The maximum limit of 40 teams has been reached.",
+      };
+    }
+    if ((semLower.includes("3rd") || semLower === "3") && thirdSemCount >= maxLimit) {
+      return {
+        success: false,
+        message: "3rd Semester registration is LOCKED. The maximum limit of 40 teams has been reached.",
       };
     }
 

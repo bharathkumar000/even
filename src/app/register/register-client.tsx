@@ -12,9 +12,9 @@ import {
   Check,
   CreditCard,
   FileCheck,
-  Zap,
   ShieldCheck,
   Users,
+  Lock,
 } from "lucide-react";
 import { submitTeamRegistration, TeamMemberInput } from "@/app/actions/team-registration";
 import RelayathonFooter from "@/components/RelayathonFooter";
@@ -34,9 +34,9 @@ const DEFAULT_DRIVER: DriverState = {
   email: "",
   phone: "",
   usn: "",
-  branch: "CSE",
+  branch: "Computer Science & Engg (CSE)",
   sem: "1st Semester",
-  college: "VVCE Mysore",
+  college: "VVCE",
 };
 
 const BRANCHES = [
@@ -48,7 +48,7 @@ const BRANCHES = [
   "Mechanical Engineering (MECH)",
   "Civil Engineering (CIVIL)",
   "Data Science / Computer Science & Business (CSBS)",
-  "Other / Outside College",
+  "Other Branch",
 ];
 
 const SEMESTERS = [
@@ -56,22 +56,22 @@ const SEMESTERS = [
   "3rd Semester",
 ];
 
-const TICKER_SQUADS = [
-  { name: "NEON_HUNTERS", track: "CYBER SECURITY" },
-  { name: "APEX_VELOCITY", track: "CSE / AIML" },
-  { name: "QUANTUM_GRID", track: "ECE / EEE" },
-  { name: "TURBO_KINETIX", track: "MECH / CIVIL" },
-  { name: "CYBER_DYNE", track: "OPEN INNOVATION" },
-];
-
-export default function RegisterClientView() {
+export default function RegisterClientView({
+  initialCounts = { firstSemCount: 0, thirdSemCount: 0, maxLimit: 40 },
+}: {
+  initialCounts?: { firstSemCount: number; thirdSemCount: number; maxLimit: number };
+}) {
   const [submitting, setSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successData, setSuccessData] = useState<{ teamName: string; refId: string } | null>(null);
 
-  // Live Squad Ticker State
-  const [tickerIndex, setTickerIndex] = useState(0);
-  const [registeredSquadsCount, setRegisteredSquadsCount] = useState(24);
+  // Live Semester Counts & Locking State (40 Teams Max per Semester)
+  const [semCounts, setSemCounts] = useState(initialCounts);
+  const maxLimit = semCounts.maxLimit || 40;
+  const isFirstSemLocked = semCounts.firstSemCount >= maxLimit;
+  const isThirdSemLocked = semCounts.thirdSemCount >= maxLimit;
+  const isAllLocked = isFirstSemLocked && isThirdSemLocked;
+  const defaultAvailableSem = isFirstSemLocked && !isThirdSemLocked ? "3rd Semester" : "1st Semester";
 
   // Squad / Team Identity
   const [teamName, setTeamName] = useState("");
@@ -80,27 +80,31 @@ export default function RegisterClientView() {
   // Driver 1 (Captain)
   const [driver1, setDriver1] = useState<DriverState>({
     ...DEFAULT_DRIVER,
+    sem: defaultAvailableSem,
     branch: "Computer Science & Engg (CSE)",
-    college: "",
+    college: "VVCE",
   });
 
   // Drivers 2, 3, 4
   const [driver2, setDriver2] = useState<DriverState>({
     ...DEFAULT_DRIVER,
+    sem: defaultAvailableSem,
     branch: "Computer Science & Engg (CSE)",
-    college: "",
+    college: "VVCE",
   });
 
   const [driver3, setDriver3] = useState<DriverState>({
     ...DEFAULT_DRIVER,
+    sem: defaultAvailableSem,
     branch: "Computer Science & Engg (CSE)",
-    college: "",
+    college: "VVCE",
   });
 
   const [driver4, setDriver4] = useState<DriverState>({
     ...DEFAULT_DRIVER,
+    sem: defaultAvailableSem,
     branch: "Computer Science & Engg (CSE)",
-    college: "",
+    college: "VVCE",
   });
 
   // Payment
@@ -111,14 +115,6 @@ export default function RegisterClientView() {
   const [paymentQrDataUrl, setPaymentQrDataUrl] = useState<string>("");
 
   const fileInputRef = useRef<HTMLInputElement>(null);
-
-  // Rotate ticker squad notifications every 4 seconds
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setTickerIndex((prev) => (prev + 1) % TICKER_SQUADS.length);
-    }, 4000);
-    return () => clearInterval(timer);
-  }, []);
 
   // Generate crisp UPI QR Code for payment
   useEffect(() => {
@@ -227,6 +223,24 @@ export default function RegisterClientView() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // Check Semester Slot Lock before validating
+    if (isAllLocked) {
+      setErrorMsg("REGISTRATION LOCKED: All 40 team slots for both 1st Semester and 3rd Semester are full.");
+      window.scrollTo({ top: 300, behavior: "smooth" });
+      return;
+    }
+    if (driver1.sem.includes("1st") && isFirstSemLocked) {
+      setErrorMsg("1st Semester registration is LOCKED (40/40 teams filled). Please select 3rd Semester if eligible.");
+      window.scrollTo({ top: 300, behavior: "smooth" });
+      return;
+    }
+    if (driver1.sem.includes("3rd") && isThirdSemLocked) {
+      setErrorMsg("3rd Semester registration is LOCKED (40/40 teams filled). Please select 1st Semester if eligible.");
+      window.scrollTo({ top: 300, behavior: "smooth" });
+      return;
+    }
+
     if (!validateForm()) {
       window.scrollTo({ top: 300, behavior: "smooth" });
       return;
@@ -287,6 +301,11 @@ export default function RegisterClientView() {
       const res = await submitTeamRegistration(formData);
 
       if (res.success) {
+        setSemCounts((prev) => ({
+          ...prev,
+          firstSemCount: driver1.sem.includes("1st") ? prev.firstSemCount + 1 : prev.firstSemCount,
+          thirdSemCount: driver1.sem.includes("3rd") ? prev.thirdSemCount + 1 : prev.thirdSemCount,
+        }));
         setSuccessData({
           teamName: teamName.trim(),
           refId: res.registrationId || "SQUAD-" + Date.now().toString().slice(-6),
@@ -302,8 +321,6 @@ export default function RegisterClientView() {
       setSubmitting(false);
     }
   };
-
-  const activeSquad = TICKER_SQUADS[tickerIndex];
 
   return (
     <div className="min-h-screen bg-[#020202] text-white font-sans selection:bg-red-600 selection:text-white pb-20">
@@ -414,33 +431,114 @@ export default function RegisterClientView() {
               </p>
             </div>
 
-            {/* LIVE SQUAD INTEGRATION TICKER */}
-            <div className="bg-[#080808] border border-red-900/40 rounded-xl p-4 mb-8 font-mono space-y-2 shadow-lg">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between text-xs gap-2">
-                <span className="flex items-center gap-2 text-red-500 font-bold tracking-wider">
-                  <span className="w-2.5 h-2.5 rounded-full bg-green-500 animate-pulse shadow-[0_0_8px_rgba(34,197,94,0.8)]" />
-                  LIVE SQUAD INTEGRATION
-                </span>
-                <span className="text-neutral-400 font-bold">
-                  {registeredSquadsCount} / 100 CREWS INFILTRATED
-                </span>
+            {/* SEMESTER REGISTRATION QUOTA CARDS (2 COLUMNS IN A SINGLE ROW) */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8 font-mono">
+              {/* Card 1: 1st Semester Teams */}
+              <div
+                className={`bg-[#080808] border rounded-xl p-5 space-y-3 shadow-lg transition-all ${
+                  isFirstSemLocked ? "border-red-600/70 bg-red-950/10" : "border-red-900/40"
+                }`}
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <span
+                      className={`w-2.5 h-2.5 rounded-full ${
+                        isFirstSemLocked
+                          ? "bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.8)]"
+                          : "bg-green-500 animate-pulse shadow-[0_0_8px_rgba(34,197,94,0.8)]"
+                      }`}
+                    />
+                    <span className="text-xs sm:text-sm font-black italic tracking-wider text-white uppercase">
+                      1ST SEMESTER TEAMS
+                    </span>
+                  </div>
+                  {isFirstSemLocked ? (
+                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded bg-red-600/20 border border-red-500/50 text-red-400 text-[10px] font-bold uppercase tracking-wider">
+                      <Lock size={11} /> LOCKED
+                    </span>
+                  ) : (
+                    <span className="px-2.5 py-0.5 rounded bg-green-500/10 border border-green-500/30 text-green-400 text-[10px] font-bold uppercase tracking-wider">
+                      OPEN
+                    </span>
+                  )}
+                </div>
+
+                <div className="flex items-baseline justify-between">
+                  <div className="text-2xl sm:text-3xl font-black text-white">
+                    {semCounts.firstSemCount}{" "}
+                    <span className="text-sm font-bold text-neutral-500">/ {maxLimit} TEAMS</span>
+                  </div>
+                  <span className="text-[11px] text-neutral-400 font-bold">
+                    {isFirstSemLocked
+                      ? "0 SLOTS LEFT"
+                      : `${Math.max(0, maxLimit - semCounts.firstSemCount)} SLOTS LEFT`}
+                  </span>
+                </div>
+
+                <div className="w-full bg-[#121212] rounded-full h-2 overflow-hidden border border-white/5">
+                  <div
+                    className={`h-full rounded-full transition-all duration-500 ${
+                      isFirstSemLocked
+                        ? "bg-red-600 shadow-[0_0_10px_rgba(239,68,68,0.8)]"
+                        : "bg-gradient-to-r from-red-600 to-orange-500 shadow-[0_0_10px_rgba(255,0,0,0.8)]"
+                    }`}
+                    style={{ width: `${Math.min((semCounts.firstSemCount / maxLimit) * 100, 100)}%` }}
+                  />
+                </div>
               </div>
 
-              {/* Glowing Progress bar */}
-              <div className="w-full bg-[#121212] rounded-full h-2 overflow-hidden border border-white/5">
-                <div
-                  className="bg-gradient-to-r from-red-600 to-orange-500 h-full rounded-full transition-all duration-500 shadow-[0_0_10px_rgba(255,0,0,0.8)]"
-                  style={{ width: `${Math.min(registeredSquadsCount, 100)}%` }}
-                />
-              </div>
+              {/* Card 2: 3rd Semester Teams */}
+              <div
+                className={`bg-[#080808] border rounded-xl p-5 space-y-3 shadow-lg transition-all ${
+                  isThirdSemLocked ? "border-red-600/70 bg-red-950/10" : "border-red-900/40"
+                }`}
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <span
+                      className={`w-2.5 h-2.5 rounded-full ${
+                        isThirdSemLocked
+                          ? "bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.8)]"
+                          : "bg-green-500 animate-pulse shadow-[0_0_8px_rgba(34,197,94,0.8)]"
+                      }`}
+                    />
+                    <span className="text-xs sm:text-sm font-black italic tracking-wider text-white uppercase">
+                      3RD SEMESTER TEAMS
+                    </span>
+                  </div>
+                  {isThirdSemLocked ? (
+                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded bg-red-600/20 border border-red-500/50 text-red-400 text-[10px] font-bold uppercase tracking-wider">
+                      <Lock size={11} /> LOCKED
+                    </span>
+                  ) : (
+                    <span className="px-2.5 py-0.5 rounded bg-green-500/10 border border-green-500/30 text-green-400 text-[10px] font-bold uppercase tracking-wider">
+                      OPEN
+                    </span>
+                  )}
+                </div>
 
-              {/* Ticker status */}
-              <div className="text-[11px] text-neutral-400 flex items-center gap-2 pt-0.5">
-                <Zap size={13} className="text-red-500 shrink-0" />
-                <span>
-                  <strong className="text-white">[RECRUITED] {activeSquad.name}</strong> has declared targets for{" "}
-                  <span className="text-red-400 font-bold">{activeSquad.track}</span>
-                </span>
+                <div className="flex items-baseline justify-between">
+                  <div className="text-2xl sm:text-3xl font-black text-white">
+                    {semCounts.thirdSemCount}{" "}
+                    <span className="text-sm font-bold text-neutral-500">/ {maxLimit} TEAMS</span>
+                  </div>
+                  <span className="text-[11px] text-neutral-400 font-bold">
+                    {isThirdSemLocked
+                      ? "0 SLOTS LEFT"
+                      : `${Math.max(0, maxLimit - semCounts.thirdSemCount)} SLOTS LEFT`}
+                  </span>
+                </div>
+
+                <div className="w-full bg-[#121212] rounded-full h-2 overflow-hidden border border-white/5">
+                  <div
+                    className={`h-full rounded-full transition-all duration-500 ${
+                      isThirdSemLocked
+                        ? "bg-red-600 shadow-[0_0_10px_rgba(239,68,68,0.8)]"
+                        : "bg-gradient-to-r from-red-600 to-orange-500 shadow-[0_0_10px_rgba(255,0,0,0.8)]"
+                    }`}
+                    style={{ width: `${Math.min((semCounts.thirdSemCount / maxLimit) * 100, 100)}%` }}
+                  />
+                </div>
               </div>
             </div>
 
@@ -583,25 +681,37 @@ export default function RegisterClientView() {
                       onChange={(e) => setDriver1({ ...driver1, sem: e.target.value })}
                       className="w-full bg-[#0a0a0a] border border-neutral-800 focus:border-red-500 text-white p-3 rounded outline-none text-xs"
                     >
-                      {SEMESTERS.map((s) => (
-                        <option key={s} value={s} className="bg-black text-white">
-                          {s}
-                        </option>
-                      ))}
+                      {SEMESTERS.map((s) => {
+                        const isSemLocked =
+                          (s.includes("1st") && isFirstSemLocked) ||
+                          (s.includes("3rd") && isThirdSemLocked);
+                        return (
+                          <option
+                            key={s}
+                            value={s}
+                            disabled={isSemLocked}
+                            className="bg-black text-white disabled:text-neutral-600"
+                          >
+                            {isSemLocked ? `${s} (LOCKED - FULL)` : s}
+                          </option>
+                        );
+                      })}
                     </select>
                   </div>
 
                   <div className="sm:col-span-2 space-y-1.5">
-                    <label className="block text-red-500 uppercase text-[11px] font-bold">
-                      COLLEGE / INSTITUTION <span className="text-red-500">*</span>
+                    <label className="flex items-center justify-between text-red-500 uppercase text-[11px] font-bold">
+                      <span>COLLEGE / INSTITUTION <span className="text-red-500">*</span></span>
+                      <span className="inline-flex items-center gap-1 text-[10px] text-neutral-400 font-normal">
+                        <Lock size={10} className="text-red-500" /> VVCE EXCLUSIVE
+                      </span>
                     </label>
                     <input
                       type="text"
                       required
-                      value={driver1.college}
-                      onChange={(e) => setDriver1({ ...driver1, college: e.target.value })}
-                      placeholder="ENTER COLLEGE NAME"
-                      className="w-full bg-[#0a0a0a] border border-neutral-800 focus:border-red-500 text-white p-3 rounded outline-none text-xs placeholder:text-neutral-600"
+                      readOnly
+                      value="VVCE"
+                      className="w-full bg-[#050505] border border-neutral-800/80 text-neutral-300 font-bold p-3 rounded outline-none text-xs cursor-not-allowed select-none"
                     />
                   </div>
                 </div>
@@ -696,25 +806,37 @@ export default function RegisterClientView() {
                       onChange={(e) => setDriver2({ ...driver2, sem: e.target.value })}
                       className="w-full bg-[#0a0a0a] border border-neutral-800 focus:border-red-500 text-white p-3 rounded outline-none text-xs"
                     >
-                      {SEMESTERS.map((s) => (
-                        <option key={s} value={s} className="bg-black text-white">
-                          {s}
-                        </option>
-                      ))}
+                      {SEMESTERS.map((s) => {
+                        const isSemLocked =
+                          (s.includes("1st") && isFirstSemLocked) ||
+                          (s.includes("3rd") && isThirdSemLocked);
+                        return (
+                          <option
+                            key={s}
+                            value={s}
+                            disabled={isSemLocked}
+                            className="bg-black text-white disabled:text-neutral-600"
+                          >
+                            {isSemLocked ? `${s} (LOCKED - FULL)` : s}
+                          </option>
+                        );
+                      })}
                     </select>
                   </div>
 
                   <div className="sm:col-span-2 space-y-1.5">
-                    <label className="block text-red-500 uppercase text-[11px] font-bold">
-                      COLLEGE_2 <span className="text-red-500">*</span>
+                    <label className="flex items-center justify-between text-red-500 uppercase text-[11px] font-bold">
+                      <span>COLLEGE_2 <span className="text-red-500">*</span></span>
+                      <span className="inline-flex items-center gap-1 text-[10px] text-neutral-400 font-normal">
+                        <Lock size={10} className="text-red-500" /> VVCE EXCLUSIVE
+                      </span>
                     </label>
                     <input
                       type="text"
                       required
-                      value={driver2.college}
-                      onChange={(e) => setDriver2({ ...driver2, college: e.target.value })}
-                      placeholder="ENTER COLLEGE NAME"
-                      className="w-full bg-[#0a0a0a] border border-neutral-800 focus:border-red-500 text-white p-3 rounded outline-none text-xs placeholder:text-neutral-600"
+                      readOnly
+                      value="VVCE"
+                      className="w-full bg-[#050505] border border-neutral-800/80 text-neutral-300 font-bold p-3 rounded outline-none text-xs cursor-not-allowed select-none"
                     />
                   </div>
                 </div>
@@ -809,25 +931,37 @@ export default function RegisterClientView() {
                       onChange={(e) => setDriver3({ ...driver3, sem: e.target.value })}
                       className="w-full bg-[#0a0a0a] border border-neutral-800 focus:border-red-500 text-white p-3 rounded outline-none text-xs"
                     >
-                      {SEMESTERS.map((s) => (
-                        <option key={s} value={s} className="bg-black text-white">
-                          {s}
-                        </option>
-                      ))}
+                      {SEMESTERS.map((s) => {
+                        const isSemLocked =
+                          (s.includes("1st") && isFirstSemLocked) ||
+                          (s.includes("3rd") && isThirdSemLocked);
+                        return (
+                          <option
+                            key={s}
+                            value={s}
+                            disabled={isSemLocked}
+                            className="bg-black text-white disabled:text-neutral-600"
+                          >
+                            {isSemLocked ? `${s} (LOCKED - FULL)` : s}
+                          </option>
+                        );
+                      })}
                     </select>
                   </div>
 
                   <div className="sm:col-span-2 space-y-1.5">
-                    <label className="block text-red-500 uppercase text-[11px] font-bold">
-                      COLLEGE_3 <span className="text-red-500">*</span>
+                    <label className="flex items-center justify-between text-red-500 uppercase text-[11px] font-bold">
+                      <span>COLLEGE_3 <span className="text-red-500">*</span></span>
+                      <span className="inline-flex items-center gap-1 text-[10px] text-neutral-400 font-normal">
+                        <Lock size={10} className="text-red-500" /> VVCE EXCLUSIVE
+                      </span>
                     </label>
                     <input
                       type="text"
                       required
-                      value={driver3.college}
-                      onChange={(e) => setDriver3({ ...driver3, college: e.target.value })}
-                      placeholder="ENTER COLLEGE NAME"
-                      className="w-full bg-[#0a0a0a] border border-neutral-800 focus:border-red-500 text-white p-3 rounded outline-none text-xs placeholder:text-neutral-600"
+                      readOnly
+                      value="VVCE"
+                      className="w-full bg-[#050505] border border-neutral-800/80 text-neutral-300 font-bold p-3 rounded outline-none text-xs cursor-not-allowed select-none"
                     />
                   </div>
                 </div>
@@ -922,25 +1056,37 @@ export default function RegisterClientView() {
                       onChange={(e) => setDriver4({ ...driver4, sem: e.target.value })}
                       className="w-full bg-[#0a0a0a] border border-neutral-800 focus:border-red-500 text-white p-3 rounded outline-none text-xs"
                     >
-                      {SEMESTERS.map((s) => (
-                        <option key={s} value={s} className="bg-black text-white">
-                          {s}
-                        </option>
-                      ))}
+                      {SEMESTERS.map((s) => {
+                        const isSemLocked =
+                          (s.includes("1st") && isFirstSemLocked) ||
+                          (s.includes("3rd") && isThirdSemLocked);
+                        return (
+                          <option
+                            key={s}
+                            value={s}
+                            disabled={isSemLocked}
+                            className="bg-black text-white disabled:text-neutral-600"
+                          >
+                            {isSemLocked ? `${s} (LOCKED - FULL)` : s}
+                          </option>
+                        );
+                      })}
                     </select>
                   </div>
 
                   <div className="sm:col-span-2 space-y-1.5">
-                    <label className="block text-red-500 uppercase text-[11px] font-bold">
-                      COLLEGE_4 <span className="text-red-500">*</span>
+                    <label className="flex items-center justify-between text-red-500 uppercase text-[11px] font-bold">
+                      <span>COLLEGE_4 <span className="text-red-500">*</span></span>
+                      <span className="inline-flex items-center gap-1 text-[10px] text-neutral-400 font-normal">
+                        <Lock size={10} className="text-red-500" /> VVCE EXCLUSIVE
+                      </span>
                     </label>
                     <input
                       type="text"
                       required
-                      value={driver4.college}
-                      onChange={(e) => setDriver4({ ...driver4, college: e.target.value })}
-                      placeholder="ENTER COLLEGE NAME"
-                      className="w-full bg-[#0a0a0a] border border-neutral-800 focus:border-red-500 text-white p-3 rounded outline-none text-xs placeholder:text-neutral-600"
+                      readOnly
+                      value="VVCE"
+                      className="w-full bg-[#050505] border border-neutral-800/80 text-neutral-300 font-bold p-3 rounded outline-none text-xs cursor-not-allowed select-none"
                     />
                   </div>
                 </div>
@@ -1138,20 +1284,39 @@ export default function RegisterClientView() {
                   </p>
                 </div>
 
-                <button
-                  type="submit"
-                  disabled={submitting}
-                  className="w-full py-4 sm:py-5 bg-red-600 hover:bg-red-500 disabled:opacity-50 text-white font-black italic uppercase tracking-widest text-base sm:text-lg rounded transition-all shadow-[0_0_30px_rgba(255,0,0,0.5)] cursor-pointer flex items-center justify-center gap-3"
-                >
-                  {submitting ? (
-                    <>
-                      <span className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                      <span>LOCKING IN GRID POSITION...</span>
-                    </>
-                  ) : (
-                    <span>LOCK IN GRID POSITION &gt;&gt;</span>
-                  )}
-                </button>
+                {(() => {
+                  const isSelectedSemLocked =
+                    isAllLocked ||
+                    (driver1.sem.includes("1st") && isFirstSemLocked) ||
+                    (driver1.sem.includes("3rd") && isThirdSemLocked);
+
+                  return (
+                    <button
+                      type="submit"
+                      disabled={submitting || isSelectedSemLocked}
+                      className="w-full py-4 sm:py-5 bg-red-600 hover:bg-red-500 disabled:bg-neutral-800 disabled:text-neutral-500 disabled:shadow-none disabled:cursor-not-allowed text-white font-black italic uppercase tracking-widest text-base sm:text-lg rounded transition-all shadow-[0_0_30px_rgba(255,0,0,0.5)] cursor-pointer flex items-center justify-center gap-3"
+                    >
+                      {submitting ? (
+                        <>
+                          <span className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                          <span>LOCKING IN GRID POSITION...</span>
+                        </>
+                      ) : isAllLocked ? (
+                        <>
+                          <Lock size={20} />
+                          <span>REGISTRATION LOCKED — ALL SLOTS FULL</span>
+                        </>
+                      ) : isSelectedSemLocked ? (
+                        <>
+                          <Lock size={20} />
+                          <span>{driver1.sem.toUpperCase()} SLOTS FULL (LOCKED)</span>
+                        </>
+                      ) : (
+                        <span>LOCK IN GRID POSITION &gt;&gt;</span>
+                      )}
+                    </button>
+                  );
+                })()}
 
                 {/* TRANSACTION VERIFICATION & CONTACT QUERIES NOTICE */}
                 <div className="mt-8 p-5 sm:p-6 bg-[#080808] border border-red-900/50 rounded-xl space-y-3 font-mono text-center shadow-lg">
