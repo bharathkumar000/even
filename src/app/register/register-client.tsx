@@ -423,13 +423,13 @@ export default function RegisterClientView({
               <h1 className="text-3xl sm:text-4xl font-black italic uppercase text-white tracking-wide">
                 {successData.isWaitlist
                   ? `ON THE WAITING LIST, ${successData.teamName}`
-                  : `WELCOME TO THE GRID, ${successData.teamName}`}
+                  : `WELCOME TO RELAYTHON, ${successData.teamName}`}
               </h1>
-              <p className="font-mono text-sm text-neutral-400 max-w-xl mx-auto">
-                {successData.isWaitlist
-                  ? "Your squad has been placed in the Waiting List. If any of the confirmed slot teams is unable to participate, our team will contact you for the payment procedure and participation."
-                  : "Your squad details, 12-digit UTR, and payment proof have been successfully registered into the Eventra database and Google Sheets."}
-              </p>
+              {successData.isWaitlist && (
+                <p className="font-mono text-sm text-neutral-400 max-w-xl mx-auto">
+                  Please note that registering on the waiting list does not guarantee participation. If any of the confirmed slot teams is unable to participate, our committee will contact you for the payment procedure and participation confirmation.
+                </p>
+              )}
             </div>
 
             <div className="p-4 bg-black/60 border border-red-600/40 rounded-lg max-w-md mx-auto font-mono text-xs space-y-2 text-left">
@@ -451,15 +451,27 @@ export default function RegisterClientView({
               </div>
             </div>
 
-            <div className="space-y-2 max-w-md mx-auto font-mono text-xs">
-              <p className="text-yellow-400 font-bold">
+            <div className="space-y-3 max-w-xl mx-auto font-mono">
+              <p className="text-yellow-400 font-bold text-xs sm:text-sm m-0">
                 Once the Transaction is verified, the login credentials will be shared to the Team Lead&apos;s email ({driver1.email}).
               </p>
-              <div className="pt-2 border-t border-neutral-800 text-[11px] text-neutral-400">
-                <span className="text-neutral-500 font-bold uppercase">For any queries contact:</span>{" "}
-                <span className="text-neutral-200">Moksh (+91 831 035 3103)</span> •{" "}
-                <span className="text-neutral-200">Parinitha (+91 63614 55193)</span> •{" "}
-                <span className="text-neutral-200">Monish (+91 95917 55995)</span>
+              <div className="pt-3 border-t border-neutral-800 text-center space-y-1.5">
+                <span className="text-neutral-400 font-bold uppercase tracking-wider text-xs block">
+                  For any queries contact:
+                </span>
+                <div className="flex flex-wrap justify-center items-center gap-x-4 gap-y-1 text-sm sm:text-base font-bold text-white">
+                  <a href="tel:+918310353103" className="text-red-400 hover:text-white transition-colors">
+                    Moksh (+91 831 035 3103)
+                  </a>
+                  <span className="text-neutral-600 hidden sm:inline">•</span>
+                  <a href="tel:+916361455193" className="text-red-400 hover:text-white transition-colors">
+                    Parinitha (+91 63614 55193)
+                  </a>
+                  <span className="text-neutral-600 hidden sm:inline">•</span>
+                  <a href="tel:+919591755995" className="text-red-400 hover:text-white transition-colors">
+                    Monish (+91 95917 55995)
+                  </a>
+                </div>
               </div>
             </div>
 
@@ -1200,7 +1212,7 @@ export default function RegisterClientView({
                     </div>
                   </div>
                   <p className="text-xs sm:text-sm text-neutral-200 leading-relaxed m-0">
-                    40 team slots are full, but you can register your team where you will be placed in the waiting list. If any of the confirmed slots team is unable to participate, waiting list team will be contacted for the payment procedure and participation.
+                    <strong className="text-yellow-400">Please note that registering on the waiting list does not guarantee a slot for participation.</strong> 40 team slots are full, but you can register your team where you will be placed on the waiting list. If any of the confirmed slots team is unable to participate, waiting list teams will be contacted for the payment procedure and participation.
                   </p>
                 </div>
               ) : isSelectedSemLocked ? null : (
