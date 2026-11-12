@@ -236,6 +236,15 @@ export default function RegisterClientView({
         setErrorMsg("GRAND PRIX ENTRY: Please upload your payment screenshot proof.");
         return false;
       }
+      const allowedTypes = ["image/png", "image/jpeg", "image/jpg"];
+      if (!allowedTypes.includes(paymentFile.type.toLowerCase())) {
+        setErrorMsg("PAYMENT PROOF: Only PNG, JPG, or JPEG images are permitted.");
+        return false;
+      }
+      if (paymentFile.size > 10 * 1024 * 1024) {
+        setErrorMsg("PAYMENT PROOF: Image file size must not exceed 10MB.");
+        return false;
+      }
     }
 
     return true;
@@ -288,6 +297,7 @@ export default function RegisterClientView({
         {
           name: driver2.name.trim(),
           email: driver2.email.trim().toLowerCase(),
+          phone: driver2.phone.trim(),
           usn: driver2.usn.trim() || "N/A",
           college: driver2.college.trim(),
           branch: driver2.branch,
@@ -296,6 +306,7 @@ export default function RegisterClientView({
         {
           name: driver3.name.trim(),
           email: driver3.email.trim().toLowerCase(),
+          phone: driver3.phone.trim(),
           usn: driver3.usn.trim() || "N/A",
           college: driver3.college.trim(),
           branch: driver3.branch,
@@ -304,6 +315,7 @@ export default function RegisterClientView({
         {
           name: driver4.name.trim(),
           email: driver4.email.trim().toLowerCase(),
+          phone: driver4.phone.trim(),
           usn: driver4.usn.trim() || "N/A",
           college: driver4.college.trim(),
           branch: driver4.branch,
