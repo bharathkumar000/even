@@ -58,6 +58,12 @@ export interface ComprehensiveTeamRecord {
   paymentPhone?: string;
   paymentProofUrl?: string;
   paymentProofBase64?: string;
+
+  // Credentials for Approved Teams (Bulk Email Dispatch)
+  loginPassword?: string;
+  portalUrl?: string;
+  whatsappGroup?: string;
+  emailDispatchStatus?: string;
 }
 
 /** Backward-compatible alias for existing imports */
@@ -181,6 +187,11 @@ export function generateRegistrationsCsv(records: ComprehensiveTeamRecord[]): st
     // Payment
     "Transaction ID (UTR)",
     "Payment Proof Link",
+    // Credentials & Dispatch
+    "Login Password",
+    "Portal URL",
+    "WhatsApp Group",
+    "Email Dispatch Status",
   ];
 
   const escapeCsv = (val: string | undefined | null) => {
@@ -231,6 +242,11 @@ export function generateRegistrationsCsv(records: ComprehensiveTeamRecord[]): st
     // Payment
     escapeCsv(r.transactionId),
     escapeCsv(r.paymentProofUrl),
+    // Credentials & Dispatch
+    escapeCsv(r.loginPassword),
+    escapeCsv(r.portalUrl),
+    escapeCsv(r.whatsappGroup),
+    escapeCsv(r.emailDispatchStatus || "PENDING"),
   ]);
 
   return [headers.join(","), ...rows.map((row) => row.join(","))].join("\r\n");
@@ -320,9 +336,14 @@ function doPost(e) {
         "Driver 4 Semester",
         // Payment
         "Transaction ID (UTR)",
-        "Payment Proof Drive Link"
+        "Payment Proof Drive Link",
+        // Credentials & Bulk Email Dispatch
+        "Login Password",
+        "Portal URL",
+        "WhatsApp Group",
+        "Email Dispatch Status"
       ]);
-      sheet.getRange(1, 1, 1, 36).setFontWeight("bold").setBackground("#e0e0e0");
+      sheet.getRange(1, 1, 1, 40).setFontWeight("bold").setBackground("#e0e0e0");
     }
     
     // Upload payment proof screenshot directly to Google Drive (Zero Supabase storage)
@@ -390,7 +411,12 @@ function doPost(e) {
       data.driver4Sem || "",
       // Payment
       data.transactionId || "",
-      proofLink
+      proofLink,
+      // Credentials & Bulk Dispatch
+      data.loginPassword || "",
+      data.portalUrl || "https://eventra-ivc.vercel.app/login",
+      data.whatsappGroup || "https://chat.whatsapp.com/Baq9uEcVFQs9loSZxJTspB",
+      data.emailDispatchStatus || "PENDING"
     ]);
     
     return ContentService.createTextOutput(JSON.stringify({ success: true, proofUrl: proofLink, sheet: sheetName }))
@@ -399,5 +425,89 @@ function doPost(e) {
     return ContentService.createTextOutput(JSON.stringify({ success: false, error: err.toString() }))
       .setMimeType(ContentService.MimeType.JSON);
   }
+}
+
+/**
+ * 1-Click Bulk Email Dispatcher
+ * Triggered from the Google Sheet top menu: "Eventra Dispatch > Send All Credentials Emails"
+ */
+function sendCredentialsToAllApprovedTeams() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName("Approved");
+  if (!sheet) {
+    SpreadsheetApp.getUi().alert("Sheet 'Approved' not found!");
+    return;
+  }
+  
+  var data = sheet.getDataRange().getValues();
+  if (data.length <= 1) {
+    SpreadsheetApp.getUi().alert("No approved teams found in the 'Approved' sheet.");
+    return;
+  }
+  
+  var headers = data[0];
+  var emailCol = headers.indexOf("Leader Email");
+  var nameCol = headers.indexOf("Leader Name");
+  var teamNameCol = headers.indexOf("Team Name");
+  var teamCodeCol = headers.indexOf("Team Code");
+  var passwordCol = headers.indexOf("Login Password");
+  var statusCol = headers.indexOf("Email Dispatch Status");
+  
+  if (emailCol === -1 || passwordCol === -1) {
+    SpreadsheetApp.getUi().alert("Required columns ('Leader Email', 'Login Password') not found in Approved sheet.");
+    return;
+  }
+  
+  var count = 0;
+  for (var i = 1; i < data.length; i++) {
+    var row = data[i];
+    var email = row[emailCol];
+    var password = row[passwordCol];
+    var teamName = row[teamNameCol];
+    var teamCode = row[teamCodeCol];
+    var leaderName = row[nameCol] || "Team Leader";
+    var dispatchStatus = statusCol !== -1 ? String(row[statusCol]) : "";
+    
+    // Skip if already sent or missing password
+    if (dispatchStatus && dispatchStatus.indexOf("SENT") === 0) continue;
+    if (!email || !password) continue;
+    
+    var subject = "[IVC Ideathon 2026] Official Team Credentials & QR Pass - " + teamName;
+    var body = "Dear " + leaderName + ",\\n\\n" +
+      "Congratulations! Your team registration and payment for the IVC Ideathon 2026 have been successfully verified.\\n\\n" +
+      "Here are your official credentials to access the Eventra portal:\\n\\n" +
+      "=========================================\\n" +
+      "TEAM ACCESS CREDENTIALS\\n" +
+      "=========================================\\n" +
+      "Team Name / Username: " + teamName + "\\n" +
+      "Team Code: " + teamCode + "\\n" +
+      "Portal URL: https://eventra-ivc.vercel.app/login\\n" +
+      "Login Email: " + email + "\\n" +
+      "Password: " + password + "\\n" +
+      "=========================================\\n\\n" +
+      "IMPORTANT - JOIN OFFICIAL PARTICIPANTS WHATSAPP GROUP:\\n" +
+      "Join the official event WhatsApp group immediately to receive live schedule updates, announcements, problem statements, and round briefings:\\n" +
+      "👉 https://chat.whatsapp.com/Baq9uEcVFQs9loSZxJTspB\\n\\n" +
+      "If you have any queries or require support, feel free to ask in the WhatsApp group or contact the coordinators:\\n" +
+      "• Moksh: +91 83103 53103\\n" +
+      "• Parinitha: +91 63614 55193\\n\\n" +
+      "Best regards,\\n" +
+      "Innovators & Visionaries Club (IVC)";
+      
+    MailApp.sendEmail(email, subject, body);
+    if (statusCol !== -1) {
+      sheet.getRange(i + 1, statusCol + 1).setValue("SENT: " + new Date().toLocaleString());
+    }
+    count++;
+  }
+  
+  SpreadsheetApp.getUi().alert("Successfully sent official credentials to " + count + " teams!");
+}
+
+function onOpen() {
+  SpreadsheetApp.getUi()
+    .createMenu("🚀 Eventra Dispatch")
+    .addItem("📧 Send All Credentials Emails", "sendCredentialsToAllApprovedTeams")
+    .addToUi();
 }
 `.trim();

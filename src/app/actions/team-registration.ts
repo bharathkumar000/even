@@ -772,6 +772,12 @@ export async function approveRegistration(registrationId: string): Promise<{
       transactionId: reg.payment_utr || "",
       paymentProofUrl: isBase64Proof ? undefined : reg.payment_proof_url,
       paymentProofBase64: isBase64Proof ? reg.payment_proof_url : undefined,
+
+      // Credentials for Bulk Email Dispatch from Google Sheets
+      loginPassword: generatedPassword,
+      portalUrl: "https://eventra-ivc.vercel.app/login",
+      whatsappGroup: "https://chat.whatsapp.com/Baq9uEcVFQs9loSZxJTspB",
+      emailDispatchStatus: "PENDING",
     };
 
     // Trigger Google Sheets sync (non-blocking, routes to Sheet 1)
@@ -1005,6 +1011,12 @@ export async function syncAllApprovedRegistrationsAction(): Promise<{
         transactionId: reg.payment_utr || "",
         paymentProofUrl: isBase64 ? undefined : reg.payment_proof_url,
         paymentProofBase64: isBase64 ? reg.payment_proof_url : undefined,
+
+        // Credentials for Bulk Email Dispatch from Google Sheets
+        loginPassword: reg.generated_credentials?.password || "",
+        portalUrl: "https://eventra-ivc.vercel.app/login",
+        whatsappGroup: "https://chat.whatsapp.com/Baq9uEcVFQs9loSZxJTspB",
+        emailDispatchStatus: "PENDING",
       };
 
       const res = await syncRegistrationToGoogleSheets(record);
@@ -1098,6 +1110,12 @@ export async function exportRegistrationsCsvAction(
         paymentProofUrl: r.payment_proof_url?.startsWith("data:")
           ? "[Base64 Screenshot Attached]"
           : r.payment_proof_url || "",
+
+        // Credentials for Bulk Email Dispatch from Google Sheets / Mail Merge
+        loginPassword: r.generated_credentials?.password || "",
+        portalUrl: "https://eventra-ivc.vercel.app/login",
+        whatsappGroup: "https://chat.whatsapp.com/Baq9uEcVFQs9loSZxJTspB",
+        emailDispatchStatus: "PENDING",
       };
     });
 
