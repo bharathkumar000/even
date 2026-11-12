@@ -126,7 +126,7 @@ export default function RegisterClientView({
     (driver1.sem.includes("1st") && isFirstSemLocked) ||
     (driver1.sem.includes("3rd") && isThirdSemLocked);
 
-  // Sync all squad members to the Captain's chosen academic cohort
+  // Sync all squad members to the Captain's chosen semester
   const handleCaptainSemChange = (newSem: string) => {
     setDriver1((prev) => ({ ...prev, sem: newSem }));
     setDriver2((prev) => ({ ...prev, sem: newSem }));
@@ -235,14 +235,14 @@ export default function RegisterClientView({
       return false;
     }
 
-    // Strict Academic Cohort Integrity (All 4 members must belong to the exact same semester)
+    // Strict Semester Integrity (All 4 members must belong to the exact same semester)
     const expectedSem = driver1.sem.trim().toLowerCase();
     if (
       driver2.sem.trim().toLowerCase() !== expectedSem ||
       driver3.sem.trim().toLowerCase() !== expectedSem ||
       driver4.sem.trim().toLowerCase() !== expectedSem
     ) {
-      setErrorMsg("ACADEMIC COHORT POLICY VIOLATION: All 4 squad members must belong to the exact same academic semester. Mixed senior-junior teams are strictly prohibited.");
+      setErrorMsg("SEMESTER ELIGIBILITY POLICY: All 4 squad members must belong to the exact same semester. Mixed semester and senior-junior teams are strictly prohibited.");
       return false;
     }
 
@@ -683,27 +683,27 @@ export default function RegisterClientView({
                 </div>
               </div>
 
-              {/* ACADEMIC COHORT COMPOSITION POLICY BANNER */}
+              {/* SEMESTER ELIGIBILITY & TEAM COMPOSITION POLICY BANNER */}
               <div className="p-4 sm:p-5 bg-red-950/20 border border-red-600/40 rounded-xl space-y-2 font-mono text-xs">
                 <div className="flex items-center gap-2 text-red-400 font-bold uppercase tracking-wider text-xs">
                   <ShieldAlert size={16} className="text-red-500 shrink-0" />
-                  <span>ACADEMIC COHORT ELIGIBILITY &amp; SQUAD INTEGRITY POLICY</span>
+                  <span>SEMESTER ELIGIBILITY &amp; TEAM COMPOSITION POLICY</span>
                 </div>
                 <p className="text-neutral-300 leading-relaxed text-[11px] sm:text-xs m-0">
-                  To ensure competitive fairness across all participating teams, each constructor squad must be composed exclusively of members belonging to the same academic cohort:
+                  To ensure fair competition across all participating squads, each team must consist strictly of members from the same semester:
                 </p>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
                   <div className="p-2.5 bg-black/60 border border-neutral-800 rounded">
-                    <span className="text-white font-bold block uppercase text-[11px]">1ST YEAR COHORT (40 TEAMS)</span>
-                    <span className="text-neutral-400 text-[10px]">All 4 squad members must be currently enrolled in 1st Semester.</span>
+                    <span className="text-white font-bold block uppercase text-[11px]">1ST YEAR TEAMS (40 SLOTS)</span>
+                    <span className="text-neutral-400 text-[10px]">All 4 members must be currently enrolled in 1st Semester.</span>
                   </div>
                   <div className="p-2.5 bg-black/60 border border-neutral-800 rounded">
-                    <span className="text-white font-bold block uppercase text-[11px]">2ND YEAR COHORT (40 TEAMS)</span>
-                    <span className="text-neutral-400 text-[10px]">All 4 squad members must be currently enrolled in 3rd Semester (2nd Year).</span>
+                    <span className="text-white font-bold block uppercase text-[11px]">2ND YEAR TEAMS (40 SLOTS)</span>
+                    <span className="text-neutral-400 text-[10px]">All 4 members must be currently enrolled in 3rd Semester (2nd Year).</span>
                   </div>
                 </div>
                 <p className="text-yellow-400 font-bold text-[10px] sm:text-[11px] m-0 pt-2 border-t border-red-900/40">
-                  ⚠ IMPORTANT: Cross-cohort squads and mixed senior-junior combinations are strictly prohibited. Selecting the Team Captain&apos;s semester automatically sets and locks the cohort for all 4 team members.
+                  ⚠ IMPORTANT: Mixed semester teams and senior-junior combinations are strictly prohibited. Selecting the Team Captain&apos;s semester automatically sets and locks the semester for all 4 team members.
                 </p>
               </div>
 
@@ -789,7 +789,7 @@ export default function RegisterClientView({
 
                   <div className="space-y-1.5">
                     <label className="block text-red-500 uppercase text-[11px] font-bold">
-                      ACADEMIC COHORT / SEMESTER <span className="text-red-500">*</span>
+                      SEMESTER <span className="text-red-500">*</span>
                     </label>
                     <select
                       value={driver1.sem}
@@ -923,7 +923,7 @@ export default function RegisterClientView({
                     <label className="flex items-center justify-between text-red-500 uppercase text-[11px] font-bold">
                       <span>SEMESTER_2 <span className="text-red-500">*</span></span>
                       <span className="inline-flex items-center gap-1 text-[10px] text-neutral-400 font-normal">
-                        <Lock size={10} className="text-red-500" /> SQUAD COHORT LOCKED
+                        <Lock size={10} className="text-red-500" /> SEMESTER LOCKED (MATCHES CAPTAIN)
                       </span>
                     </label>
                     <input
@@ -1037,7 +1037,7 @@ export default function RegisterClientView({
                     <label className="flex items-center justify-between text-red-500 uppercase text-[11px] font-bold">
                       <span>SEMESTER_3 <span className="text-red-500">*</span></span>
                       <span className="inline-flex items-center gap-1 text-[10px] text-neutral-400 font-normal">
-                        <Lock size={10} className="text-red-500" /> SQUAD COHORT LOCKED
+                        <Lock size={10} className="text-red-500" /> SEMESTER LOCKED (MATCHES CAPTAIN)
                       </span>
                     </label>
                     <input
@@ -1151,7 +1151,7 @@ export default function RegisterClientView({
                     <label className="flex items-center justify-between text-red-500 uppercase text-[11px] font-bold">
                       <span>SEMESTER_4 <span className="text-red-500">*</span></span>
                       <span className="inline-flex items-center gap-1 text-[10px] text-neutral-400 font-normal">
-                        <Lock size={10} className="text-red-500" /> SQUAD COHORT LOCKED
+                        <Lock size={10} className="text-red-500" /> SEMESTER LOCKED (MATCHES CAPTAIN)
                       </span>
                     </label>
                     <input
