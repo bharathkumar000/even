@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import RegisterClientView from "./register-client";
 import { getCanonicalUrl } from "@/lib/seo-config";
+import { getSemesterRegistrationCounts } from "@/app/actions/team-registration";
 
 export const dynamic = "force-dynamic";
 
@@ -16,7 +17,8 @@ export const metadata: Metadata = {
   },
 };
 
-export default function RegisterPage() {
-  return <RegisterClientView />;
+export default async function RegisterPage() {
+  const counts = await getSemesterRegistrationCounts();
+  return <RegisterClientView initialCounts={counts} />;
 }
 
