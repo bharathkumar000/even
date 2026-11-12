@@ -2,6 +2,7 @@
 
 import React from "react";
 import { Minus, Plus } from "lucide-react";
+import { HapticFeedback } from "@/lib/haptic";
 
 interface ScoringSliderProps {
   criterionId: string;
@@ -28,11 +29,13 @@ export default function ScoringSlider({
 
   const handleDecrement = () => {
     if (disabled || currentVal <= 0) return;
+    HapticFeedback.tap();
     onChange(criterionId, Math.max(0, currentVal - 1), maxMarks);
   };
 
   const handleIncrement = () => {
     if (disabled || currentVal >= maxMarks) return;
+    HapticFeedback.tap();
     onChange(criterionId, Math.min(maxMarks, currentVal + 1), maxMarks);
   };
 

@@ -1,22 +1,68 @@
 {
-  "name": "IVC-EVENTRA Hackathon Portal",
-  "short_name": "EVENTRA",
-  "description": "Enterprise Event Management & Realtime Jury Evaluation Portal",
+  "id": "/",
+  "name": "Eventra | IVC Grand Prix Portal",
+  "short_name": "Eventra",
+  "description": "Official IVC Eventra Ideathon, QR Badges, Scanner Desk & Judging Portal",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
-  "background_color": "#050508",
-  "theme_color": "#00f0ff",
+  "display_override": ["window-controls-overlay", "standalone", "minimal-ui"],
   "orientation": "portrait-primary",
+  "background_color": "#050508",
+  "theme_color": "#050508",
+  "categories": ["productivity", "education", "utilities", "events"],
   "icons": [
     {
-      "src": "/ivc-logo-transparent.png",
-      "sizes": "192x192 512x512",
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/apple-touch-icon.png",
+      "sizes": "180x180",
       "type": "image/png"
     },
     {
-      "src": "/favicon.ico",
-      "sizes": "64x64 32x32 24x24 16x16",
-      "type": "image/x-icon"
+      "src": "/ivc-logo-transparent.png",
+      "sizes": "256x256",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Event QR Pass",
+      "short_name": "My Pass",
+      "description": "Access your official team QR badge for desk check-ins",
+      "url": "/team/qr",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "QR Scanner Desk",
+      "short_name": "Scanner",
+      "description": "Scan participant badges for check-in, kits and meals",
+      "url": "/ops/scanner",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Team Console",
+      "short_name": "Dashboard",
+      "description": "View team status, roster and deliverables",
+      "url": "/team",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
     }
   ]
 }

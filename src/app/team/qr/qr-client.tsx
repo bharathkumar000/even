@@ -19,6 +19,7 @@ import {
 import { getTeamScanStatus } from "@/app/actions/operations";
 import Image from "next/image";
 import { createClient } from "@/lib/supabase/client";
+import { HapticFeedback } from "@/lib/haptic";
 
 interface TeamQrClientViewProps {
   teamId: string;
@@ -101,6 +102,7 @@ export default function TeamQrClientView({
 
       if (!prevGoodies && nextGoodies) {
         setJustClaimedAlert("Goodies & Welcome Kit successfully claimed from Operations Desk!");
+        HapticFeedback.success();
       } else if (prevGoodies && !nextGoodies) {
         setJustClaimedAlert(null);
       }
@@ -432,11 +434,11 @@ export default function TeamQrClientView({
 
             {/* Download Action */}
             {qrUrl && (
-              <div className="pt-2 space-y-2">
+              <div className="pt-2 space-y-2.5">
                 <button
                   type="button"
                   onClick={handleDownloadFullBadge}
-                  className="w-full inline-flex items-center justify-center gap-2 px-5 py-3 bg-accent-primary hover:bg-accent-primary/80 text-black font-bold uppercase text-xs rounded transition-all shadow-[0_0_20px_rgba(255,215,0,0.2)] cursor-pointer"
+                  className="w-full inline-flex items-center justify-center gap-2 px-5 py-3.5 bg-accent-primary hover:bg-accent-primary/80 text-black font-bold uppercase text-xs rounded transition-all shadow-[0_0_20px_rgba(255,215,0,0.2)] cursor-pointer min-h-[44px]"
                 >
                   <Download size={15} />
                   <span>Save Badge Card to Photos</span>
@@ -444,7 +446,7 @@ export default function TeamQrClientView({
                 <a
                   href={qrUrl}
                   download={`team-${teamName.toLowerCase().replace(/\s+/g, "-")}-qr.png`}
-                  className="w-full inline-flex items-center justify-center gap-1.5 py-1 text-[11px] font-mono text-text-secondary hover:text-white underline cursor-pointer transition-colors"
+                  className="w-full inline-flex items-center justify-center gap-1.5 py-2 text-[11px] font-mono text-text-secondary hover:text-white underline cursor-pointer transition-colors min-h-[36px]"
                 >
                   Download Raw QR Code Only
                 </a>

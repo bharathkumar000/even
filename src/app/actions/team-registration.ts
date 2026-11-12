@@ -42,6 +42,7 @@ export interface GeneratedCredentials {
   teamCode: string;
   email: string;
   leaderName?: string;
+  leaderPhone?: string;
   username: string;
   password: string;
   qrPayload: string;
@@ -208,6 +209,19 @@ export async function submitTeamRegistration(
         success: false,
         message: "Details for all 4 team members (Leader + 3 Members) must be provided.",
       };
+    }
+
+    // Strict Academic Cohort Integrity: Cross-cohort / mixed senior-junior teams are strictly prohibited.
+    // 1st Year category must be exclusively 1st Semester; 2nd Year category must be exclusively 3rd Semester.
+    const expectedSem = leaderSem.trim().toLowerCase();
+    for (let i = 0; i < members.length; i++) {
+      const memberSem = (members[i].sem || "").trim().toLowerCase();
+      if (memberSem !== expectedSem) {
+        return {
+          success: false,
+          message: "ACADEMIC COHORT POLICY VIOLATION: All 4 squad members must belong to the exact same academic semester. Cross-cohort and senior-junior combination teams are strictly prohibited.",
+        };
+      }
     }
 
     // Check semester counts: 40 confirmed + 10 waiting list max (50 total per semester)
@@ -696,6 +710,7 @@ export async function approveRegistration(registrationId: string): Promise<{
       teamCode,
       email: leaderEmail,
       leaderName,
+      leaderPhone: reg.leader_phone || reg.payment_phone || "",
       username: teamName,
       password: generatedPassword,
       qrPayload,
@@ -770,6 +785,12 @@ export async function approveRegistration(registrationId: string): Promise<{
       transactionId: reg.payment_utr || "",
       paymentProofUrl: isBase64Proof ? undefined : reg.payment_proof_url,
       paymentProofBase64: isBase64Proof ? reg.payment_proof_url : undefined,
+
+      // Credentials for Bulk Email Dispatch from Google Sheets
+      loginPassword: generatedPassword,
+      portalUrl: "https://eventra-ivc.vercel.app/login",
+      whatsappGroup: "https://chat.whatsapp.com/Baq9uEcVFQs9loSZxJTspB",
+      emailDispatchStatus: "PENDING",
     };
 
     // Trigger Google Sheets sync (non-blocking, routes to Sheet 1)
@@ -1003,6 +1024,12 @@ export async function syncAllApprovedRegistrationsAction(): Promise<{
         transactionId: reg.payment_utr || "",
         paymentProofUrl: isBase64 ? undefined : reg.payment_proof_url,
         paymentProofBase64: isBase64 ? reg.payment_proof_url : undefined,
+
+        // Credentials for Bulk Email Dispatch from Google Sheets
+        loginPassword: reg.generated_credentials?.password || "",
+        portalUrl: "https://eventra-ivc.vercel.app/login",
+        whatsappGroup: "https://chat.whatsapp.com/Baq9uEcVFQs9loSZxJTspB",
+        emailDispatchStatus: "PENDING",
       };
 
       const res = await syncRegistrationToGoogleSheets(record);
@@ -1096,6 +1123,12 @@ export async function exportRegistrationsCsvAction(
         paymentProofUrl: r.payment_proof_url?.startsWith("data:")
           ? "[Base64 Screenshot Attached]"
           : r.payment_proof_url || "",
+
+        // Credentials for Bulk Email Dispatch from Google Sheets / Mail Merge
+        loginPassword: r.generated_credentials?.password || "",
+        portalUrl: "https://eventra-ivc.vercel.app/login",
+        whatsappGroup: "https://chat.whatsapp.com/Baq9uEcVFQs9loSZxJTspB",
+        emailDispatchStatus: "PENDING",
       };
     });
 

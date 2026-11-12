@@ -29,6 +29,7 @@ import {
   deleteOfflineDraft,
 } from "@/lib/offline-storage";
 import { withCsrfToken } from "@/lib/csrf-client";
+import { HapticFeedback } from "@/lib/haptic";
 
 export interface TeamDetail {
   id: string;
@@ -207,6 +208,7 @@ export default function EvaluateClientView({
         },
       });
       setPitchCallSent(true);
+      HapticFeedback.success();
       setTimeout(() => setPitchCallSent(false), 5000);
     } catch (err) {
       console.warn("Pitch call broadcast notice:", err);
@@ -266,6 +268,11 @@ export default function EvaluateClientView({
           ? "Draft saved successfully to cloud."
           : "Evaluation officially submitted and recorded!"
       );
+      if (isDraft) {
+        HapticFeedback.tap();
+      } else {
+        HapticFeedback.confirm();
+      }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err || "");
       console.error("[Evaluation submit error]:", {
@@ -606,25 +613,25 @@ export default function EvaluateClientView({
           </p>
 
           {!isLocked && (
-            <div className="flex items-center gap-3 w-full sm:w-auto justify-end">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full sm:w-auto justify-end">
               <button
                 type="button"
                 onClick={() => handleSave(true)}
                 disabled={loading}
-                className="flex items-center gap-2 px-4 py-2.5 bg-surface-color-light border border-border-color hover:border-text-secondary text-text-primary font-tech font-bold uppercase text-xs transition-colors"
+                className="flex items-center justify-center gap-2 px-4 py-3 sm:py-2.5 bg-surface-color-light border border-border-color hover:border-text-secondary text-text-primary font-tech font-bold uppercase text-xs transition-colors min-h-[44px] rounded"
               >
                 <Save size={15} />
-                Save Draft
+                <span>Save Draft</span>
               </button>
 
               <button
                 type="button"
                 onClick={() => handleSave(false)}
                 disabled={loading}
-                className="flex items-center gap-2 px-5 py-2.5 bg-accent-secondary hover:bg-accent-secondary/80 text-white font-tech font-bold uppercase text-xs transition-colors shadow-lg shadow-accent-secondary/20"
+                className="flex items-center justify-center gap-2 px-5 py-3 sm:py-2.5 bg-accent-secondary hover:bg-accent-secondary/80 text-white font-tech font-bold uppercase text-xs transition-colors shadow-lg shadow-accent-secondary/20 min-h-[44px] rounded"
               >
                 <Send size={15} />
-                Submit Final Evaluation
+                <span>Submit Final Evaluation</span>
               </button>
             </div>
           )}

@@ -38,6 +38,8 @@ import {
   type DeskProgressSummary,
 } from "@/app/actions/operations";
 import type { ActionType } from "@/lib/validations/operations";
+import { HapticFeedback } from "@/lib/haptic";
+import PullToRefresh from "@/components/mobile/PullToRefresh";
 import { CSRF_CONSTANTS } from "@/lib/csrf-constants";
 import ScannerDesk from "@/components/ops/ScannerDesk";
 import RecentlyScannedTeams from "@/components/ops/RecentlyScannedTeams";
@@ -622,6 +624,8 @@ export default function ScannerClientView() {
           };
         });
 
+        HapticFeedback.success();
+
         setScanFeedback({
           status: "success",
           title: `${res.action_type.toUpperCase()} RECORDED`,
@@ -791,8 +795,9 @@ export default function ScannerClientView() {
   }, [csrfToken, scanPurpose]);
 
   return (
-    <div className="space-y-6">
-      {/* 1. OPERATION SELECTOR (Determines exactly what happens on scan) */}
+    <PullToRefresh onRefresh={fetchLiveStream}>
+      <div className="space-y-6">
+        {/* 1. OPERATION SELECTOR (Determines exactly what happens on scan) */}
       <div className="glass-panel p-4 border border-border-color space-y-3 font-tech">
         <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-3 border-b border-border-color pb-3">
           <div>
@@ -1284,5 +1289,6 @@ export default function ScannerClientView() {
       {/* 5. RECENTLY SCANNED TEAMS AUDIT FEED */}
       <RecentlyScannedTeams limit={3} />
     </div>
+    </PullToRefresh>
   );
 }

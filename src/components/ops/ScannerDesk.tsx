@@ -33,32 +33,32 @@ export default React.memo(function ScannerDesk({
   return (
     <div className="grid grid-cols-1 gap-6">
       {/* Camera Box */}
-      <div className="glass-panel p-4 sm:p-6 border border-border-color space-y-4 min-w-0">
-        <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
-          <div className="flex items-center gap-2.5 flex-wrap">
-            <h2 className="font-heading text-lg text-text-primary uppercase m-0 flex items-center gap-2 shrink-0">
+      <div className="glass-panel p-3.5 sm:p-6 border border-border-color space-y-4 min-w-0 rounded-xl">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-2 flex-wrap">
+            <h2 className="font-heading text-base sm:text-lg text-text-primary uppercase m-0 flex items-center gap-2 shrink-0">
               <Camera className="text-accent-tertiary" size={18} />
               Live Camera Scanner
             </h2>
             {scanning && (
-              <span className="flex items-center gap-1.5 px-2.5 py-0.5 rounded text-[10px] font-mono font-bold bg-status-success/15 text-status-success border border-status-success/40">
+              <span className="flex items-center gap-1.5 px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-status-success/15 text-status-success border border-status-success/40">
                 <span className="w-1.5 h-1.5 rounded-full bg-status-success animate-ping" />
-                Continuous Mode Active
+                Live Mode
               </span>
             )}
             {continuousScanCount > 0 && (
-              <span className="px-2.5 py-0.5 rounded text-[10px] font-mono font-bold bg-accent-primary/15 text-accent-primary border border-accent-primary/40">
+              <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-accent-primary/15 text-accent-primary border border-accent-primary/40">
                 {continuousScanCount} Scanned
               </span>
             )}
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 w-full sm:w-auto">
             {scanning && onClearBadgeLock && (
               <button
                 type="button"
                 onClick={onClearBadgeLock}
                 title="Reset badge deduplication lock to scan same QR code immediately"
-                className="px-2.5 py-1.5 font-tech uppercase text-[11px] font-bold text-text-secondary hover:text-white bg-surface-color border border-border-color hover:border-accent-primary rounded transition-colors"
+                className="flex-1 sm:flex-initial px-3 py-2 font-tech uppercase text-[11px] font-bold text-text-secondary hover:text-white bg-surface-color border border-border-color hover:border-accent-primary rounded-lg transition-colors text-center"
               >
                 Reset Lock
               </button>
@@ -66,7 +66,7 @@ export default React.memo(function ScannerDesk({
             <button
               type="button"
               onClick={scanning ? onStopScanner : onStartScanner}
-              className={`px-3 py-1.5 font-tech font-bold uppercase text-xs transition-colors shrink-0 rounded ${
+              className={`flex-1 sm:flex-initial px-4 py-2 font-tech font-bold uppercase text-xs transition-colors shrink-0 rounded-lg text-center ${
                 scanning
                   ? "bg-status-error hover:bg-status-error/80 text-white"
                   : "bg-accent-tertiary hover:bg-accent-tertiary/80 text-black"
@@ -77,14 +77,14 @@ export default React.memo(function ScannerDesk({
           </div>
         </div>
 
-        <div className="relative w-full min-h-[420px] lg:min-h-[500px] lg:max-h-[650px] bg-surface-color border border-dashed border-border-color overflow-hidden rounded flex items-center justify-center">
+        <div className="relative w-full min-h-[260px] sm:min-h-[380px] lg:min-h-[480px] max-h-[550px] bg-surface-color border border-dashed border-border-color overflow-hidden rounded-xl flex items-center justify-center">
           {/* html5-qrcode attaches and mutates DOM directly in this dedicated div. React must NOT have children here */}
           <div id="qr-reader-container" className="w-full h-full" />
 
           {!scanning && (
             <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none text-center text-text-secondary font-tech p-4 bg-surface-color/90">
-              <QrCode size={48} className="mx-auto mb-2 opacity-50" />
-              <p className="text-xs m-0">Click &quot;Launch Camera&quot; to scan QR badges</p>
+              <QrCode size={40} className="mx-auto mb-2 opacity-50 text-accent-tertiary" />
+              <p className="text-xs m-0 font-bold text-text-primary">Tap &quot;Launch Camera&quot; to scan QR badges</p>
               <p className="text-[10px] text-text-secondary/70 mt-1">Multi-scan enabled: scan one badge after another seamlessly</p>
             </div>
           )}

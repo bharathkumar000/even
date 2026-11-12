@@ -15,6 +15,7 @@ import {
   ShieldCheck,
   Users,
   Lock,
+  ShieldAlert,
 } from "lucide-react";
 import { submitTeamRegistration, TeamMemberInput } from "@/app/actions/team-registration";
 import RelayathonFooter from "@/components/RelayathonFooter";
@@ -125,6 +126,14 @@ export default function RegisterClientView({
     (driver1.sem.includes("1st") && isFirstSemLocked) ||
     (driver1.sem.includes("3rd") && isThirdSemLocked);
 
+  // Sync all squad members to the Captain's chosen academic cohort
+  const handleCaptainSemChange = (newSem: string) => {
+    setDriver1((prev) => ({ ...prev, sem: newSem }));
+    setDriver2((prev) => ({ ...prev, sem: newSem }));
+    setDriver3((prev) => ({ ...prev, sem: newSem }));
+    setDriver4((prev) => ({ ...prev, sem: newSem }));
+  };
+
   // Payment
   const [paymentUtr, setPaymentUtr] = useState("");
   const [paymentFile, setPaymentFile] = useState<File | null>(null);
@@ -223,6 +232,17 @@ export default function RegisterClientView({
     }
     if (!driver4.email.includes("@")) {
       setErrorMsg("// DRIVER 4 (TELEMETRY): Enter a valid email address.");
+      return false;
+    }
+
+    // Strict Academic Cohort Integrity (All 4 members must belong to the exact same semester)
+    const expectedSem = driver1.sem.trim().toLowerCase();
+    if (
+      driver2.sem.trim().toLowerCase() !== expectedSem ||
+      driver3.sem.trim().toLowerCase() !== expectedSem ||
+      driver4.sem.trim().toLowerCase() !== expectedSem
+    ) {
+      setErrorMsg("ACADEMIC COHORT POLICY VIOLATION: All 4 squad members must belong to the exact same academic semester. Mixed senior-junior teams are strictly prohibited.");
       return false;
     }
 
@@ -465,11 +485,11 @@ export default function RegisterClientView({
         ) : (
           <>
             {/* HERO TITLE */}
-            <div className="text-center my-8 sm:my-12 space-y-3">
-              <h1 className="text-5xl sm:text-7xl md:text-8xl font-black italic tracking-wider text-white uppercase m-0 leading-none drop-shadow-[0_0_35px_rgba(255,0,0,0.3)]">
+            <div className="text-center my-6 sm:my-12 space-y-2 sm:space-y-3">
+              <h1 className="text-3xl sm:text-6xl md:text-8xl font-black italic tracking-wider text-white uppercase m-0 leading-tight drop-shadow-[0_0_35px_rgba(255,0,0,0.3)] break-words">
                 ENTER THE GRAND PRIX
               </h1>
-              <p className="font-mono text-xs sm:text-sm text-neutral-400 uppercase tracking-[3px]">
+              <p className="font-mono text-[10px] sm:text-sm text-neutral-400 uppercase tracking-[2px] sm:tracking-[3px]">
                 OFFICIAL 4-DRIVER CONSTRUCTOR SQUAD REGISTRATION PORTAL
               </p>
             </div>
@@ -631,7 +651,7 @@ export default function RegisterClientView({
             )}
 
             {/* MAIN RED BORDERED FORM */}
-            <form onSubmit={handleSubmit} className="border-2 border-red-600/80 bg-[#060606] rounded-xl p-5 sm:p-8 md:p-10 shadow-[0_0_40px_rgba(255,0,0,0.15)] space-y-10">
+            <form onSubmit={handleSubmit} className="border-2 border-red-600/80 bg-[#060606] rounded-xl p-3.5 sm:p-8 md:p-10 shadow-[0_0_40px_rgba(255,0,0,0.15)] space-y-7 sm:space-y-10">
               {/* SECTION 1: CREW IDENTIFIER & CAPACITY */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6 font-mono text-xs">
                 {/* Team Capacity Dropdown */}
@@ -661,6 +681,30 @@ export default function RegisterClientView({
                     className="w-full bg-[#0a0a0a] border border-red-900/60 focus:border-red-500 focus:ring-1 focus:ring-red-500 text-white p-3.5 rounded outline-none font-mono text-xs tracking-wider placeholder:text-neutral-600"
                   />
                 </div>
+              </div>
+
+              {/* ACADEMIC COHORT COMPOSITION POLICY BANNER */}
+              <div className="p-4 sm:p-5 bg-red-950/20 border border-red-600/40 rounded-xl space-y-2 font-mono text-xs">
+                <div className="flex items-center gap-2 text-red-400 font-bold uppercase tracking-wider text-xs">
+                  <ShieldAlert size={16} className="text-red-500 shrink-0" />
+                  <span>ACADEMIC COHORT ELIGIBILITY &amp; SQUAD INTEGRITY POLICY</span>
+                </div>
+                <p className="text-neutral-300 leading-relaxed text-[11px] sm:text-xs m-0">
+                  To ensure competitive fairness across all participating teams, each constructor squad must be composed exclusively of members belonging to the same academic cohort:
+                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
+                  <div className="p-2.5 bg-black/60 border border-neutral-800 rounded">
+                    <span className="text-white font-bold block uppercase text-[11px]">1ST YEAR COHORT (40 TEAMS)</span>
+                    <span className="text-neutral-400 text-[10px]">All 4 squad members must be currently enrolled in 1st Semester.</span>
+                  </div>
+                  <div className="p-2.5 bg-black/60 border border-neutral-800 rounded">
+                    <span className="text-white font-bold block uppercase text-[11px]">2ND YEAR COHORT (40 TEAMS)</span>
+                    <span className="text-neutral-400 text-[10px]">All 4 squad members must be currently enrolled in 3rd Semester (2nd Year).</span>
+                  </div>
+                </div>
+                <p className="text-yellow-400 font-bold text-[10px] sm:text-[11px] m-0 pt-2 border-t border-red-900/40">
+                  ⚠ IMPORTANT: Cross-cohort squads and mixed senior-junior combinations are strictly prohibited. Selecting the Team Captain&apos;s semester automatically sets and locks the cohort for all 4 team members.
+                </p>
               </div>
 
               {/* SECTION 2: DRIVER 1 (CAPTAIN) */}
@@ -745,11 +789,11 @@ export default function RegisterClientView({
 
                   <div className="space-y-1.5">
                     <label className="block text-red-500 uppercase text-[11px] font-bold">
-                      SEMESTER <span className="text-red-500">*</span>
+                      ACADEMIC COHORT / SEMESTER <span className="text-red-500">*</span>
                     </label>
                     <select
                       value={driver1.sem}
-                      onChange={(e) => setDriver1({ ...driver1, sem: e.target.value })}
+                      onChange={(e) => handleCaptainSemChange(e.target.value)}
                       className="w-full bg-[#0a0a0a] border border-neutral-800 focus:border-red-500 text-white p-3 rounded outline-none text-xs"
                     >
                       {SEMESTERS.map((s) => {
@@ -876,37 +920,19 @@ export default function RegisterClientView({
                   </div>
 
                   <div className="space-y-1.5">
-                    <label className="block text-red-500 uppercase text-[11px] font-bold">
-                      SEMESTER_2 <span className="text-red-500">*</span>
+                    <label className="flex items-center justify-between text-red-500 uppercase text-[11px] font-bold">
+                      <span>SEMESTER_2 <span className="text-red-500">*</span></span>
+                      <span className="inline-flex items-center gap-1 text-[10px] text-neutral-400 font-normal">
+                        <Lock size={10} className="text-red-500" /> SQUAD COHORT LOCKED
+                      </span>
                     </label>
-                    <select
-                      value={driver2.sem}
-                      onChange={(e) => setDriver2({ ...driver2, sem: e.target.value })}
-                      className="w-full bg-[#0a0a0a] border border-neutral-800 focus:border-red-500 text-white p-3 rounded outline-none text-xs"
-                    >
-                      {SEMESTERS.map((s) => {
-                        const isSemWaitlist =
-                          (s.includes("1st") && isFirstSemWaitlist) ||
-                          (s.includes("3rd") && isThirdSemWaitlist);
-                        const isSemLocked =
-                          (s.includes("1st") && isFirstSemLocked) ||
-                          (s.includes("3rd") && isThirdSemLocked);
-                        return (
-                          <option
-                            key={s}
-                            value={s}
-                            disabled={isSemLocked}
-                            className="bg-black text-white disabled:text-neutral-600"
-                          >
-                            {isSemLocked
-                              ? `${s} (LOCKED - FULL)`
-                              : isSemWaitlist
-                                ? `${s} (WAITLIST OPEN)`
-                                : s}
-                          </option>
-                        );
-                      })}
-                    </select>
+                    <input
+                      type="text"
+                      required
+                      readOnly
+                      value={driver1.sem}
+                      className="w-full bg-[#050505] border border-neutral-800/80 text-neutral-300 font-bold p-3 rounded outline-none text-xs cursor-not-allowed select-none"
+                    />
                   </div>
 
                   <div className="sm:col-span-2 space-y-1.5">
@@ -1008,37 +1034,19 @@ export default function RegisterClientView({
                   </div>
 
                   <div className="space-y-1.5">
-                    <label className="block text-red-500 uppercase text-[11px] font-bold">
-                      SEMESTER_3 <span className="text-red-500">*</span>
+                    <label className="flex items-center justify-between text-red-500 uppercase text-[11px] font-bold">
+                      <span>SEMESTER_3 <span className="text-red-500">*</span></span>
+                      <span className="inline-flex items-center gap-1 text-[10px] text-neutral-400 font-normal">
+                        <Lock size={10} className="text-red-500" /> SQUAD COHORT LOCKED
+                      </span>
                     </label>
-                    <select
-                      value={driver3.sem}
-                      onChange={(e) => setDriver3({ ...driver3, sem: e.target.value })}
-                      className="w-full bg-[#0a0a0a] border border-neutral-800 focus:border-red-500 text-white p-3 rounded outline-none text-xs"
-                    >
-                      {SEMESTERS.map((s) => {
-                        const isSemWaitlist =
-                          (s.includes("1st") && isFirstSemWaitlist) ||
-                          (s.includes("3rd") && isThirdSemWaitlist);
-                        const isSemLocked =
-                          (s.includes("1st") && isFirstSemLocked) ||
-                          (s.includes("3rd") && isThirdSemLocked);
-                        return (
-                          <option
-                            key={s}
-                            value={s}
-                            disabled={isSemLocked}
-                            className="bg-black text-white disabled:text-neutral-600"
-                          >
-                            {isSemLocked
-                              ? `${s} (LOCKED - FULL)`
-                              : isSemWaitlist
-                                ? `${s} (WAITLIST OPEN)`
-                                : s}
-                          </option>
-                        );
-                      })}
-                    </select>
+                    <input
+                      type="text"
+                      required
+                      readOnly
+                      value={driver1.sem}
+                      className="w-full bg-[#050505] border border-neutral-800/80 text-neutral-300 font-bold p-3 rounded outline-none text-xs cursor-not-allowed select-none"
+                    />
                   </div>
 
                   <div className="sm:col-span-2 space-y-1.5">
@@ -1140,37 +1148,19 @@ export default function RegisterClientView({
                   </div>
 
                   <div className="space-y-1.5">
-                    <label className="block text-red-500 uppercase text-[11px] font-bold">
-                      SEMESTER_4 <span className="text-red-500">*</span>
+                    <label className="flex items-center justify-between text-red-500 uppercase text-[11px] font-bold">
+                      <span>SEMESTER_4 <span className="text-red-500">*</span></span>
+                      <span className="inline-flex items-center gap-1 text-[10px] text-neutral-400 font-normal">
+                        <Lock size={10} className="text-red-500" /> SQUAD COHORT LOCKED
+                      </span>
                     </label>
-                    <select
-                      value={driver4.sem}
-                      onChange={(e) => setDriver4({ ...driver4, sem: e.target.value })}
-                      className="w-full bg-[#0a0a0a] border border-neutral-800 focus:border-red-500 text-white p-3 rounded outline-none text-xs"
-                    >
-                      {SEMESTERS.map((s) => {
-                        const isSemWaitlist =
-                          (s.includes("1st") && isFirstSemWaitlist) ||
-                          (s.includes("3rd") && isThirdSemWaitlist);
-                        const isSemLocked =
-                          (s.includes("1st") && isFirstSemLocked) ||
-                          (s.includes("3rd") && isThirdSemLocked);
-                        return (
-                          <option
-                            key={s}
-                            value={s}
-                            disabled={isSemLocked}
-                            className="bg-black text-white disabled:text-neutral-600"
-                          >
-                            {isSemLocked
-                              ? `${s} (LOCKED - FULL)`
-                              : isSemWaitlist
-                                ? `${s} (WAITLIST OPEN)`
-                                : s}
-                          </option>
-                        );
-                      })}
-                    </select>
+                    <input
+                      type="text"
+                      required
+                      readOnly
+                      value={driver1.sem}
+                      className="w-full bg-[#050505] border border-neutral-800/80 text-neutral-300 font-bold p-3 rounded outline-none text-xs cursor-not-allowed select-none"
+                    />
                   </div>
 
                   <div className="sm:col-span-2 space-y-1.5">
@@ -1290,7 +1280,7 @@ export default function RegisterClientView({
 
                       <div className="flex flex-col sm:flex-row sm:items-center justify-between p-2.5 bg-black/60 border border-neutral-800/80 rounded gap-1">
                         <span className="text-neutral-500 text-[11px]">OFFICIAL RECEIVING UPI ID:</span>
-                        <span className="text-yellow-400 font-mono font-bold text-xs">6361455193@okbizaxis</span>
+                        <span className="text-yellow-400 font-mono font-bold text-xs break-all">6361455193@okbizaxis</span>
                       </div>
 
                       <div className="flex flex-col sm:flex-row sm:items-center justify-between p-2.5 bg-black/60 border border-neutral-800/80 rounded gap-1">
