@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import Image from "next/image";
 import QRCode from "qrcode";
 import {
@@ -11,6 +12,7 @@ import {
   Search,
   ExternalLink,
   Eye,
+  EyeOff,
   KeyRound,
   Copy,
   Check,
@@ -61,6 +63,12 @@ export default function RegistrationsClientView({
   const [syncingSheets, setSyncingSheets] = useState(false);
   const [showScriptModal, setShowScriptModal] = useState(false);
   const [copiedScript, setCopiedScript] = useState(false);
+  const [expandedProofId, setExpandedProofId] = useState<string | null>(null);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   // Generate local QR code base64 URL whenever modal opens
   useEffect(() => {
@@ -548,16 +556,25 @@ Log in to the portal to view your squad's active QR Pass for check-in and meals!
                     <button
                       type="button"
                       onClick={() =>
-                        setActiveProofUrl({
-                          url: item.payment_proof_url,
-                          team: item.team_name,
-                          utr: item.payment_utr,
-                        })
+                        setExpandedProofId((prev) => (prev === item.id ? null : item.id))
                       }
-                      className="px-3.5 py-2 bg-pink-500/10 hover:bg-pink-500/20 border border-pink-500/40 text-pink-400 font-tech text-xs uppercase rounded-xl flex items-center gap-1.5 transition-all"
+                      className={`px-3.5 py-2 font-tech text-xs uppercase rounded-xl flex items-center gap-1.5 transition-all ${
+                        expandedProofId === item.id
+                          ? "bg-pink-500 text-black border border-pink-400 font-bold shadow-[0_0_15px_rgba(255,0,127,0.4)]"
+                          : "bg-pink-500/10 hover:bg-pink-500/20 border border-pink-500/40 text-pink-400"
+                      }`}
                     >
-                      <Eye className="w-3.5 h-3.5" />
-                      View Proof
+                      {expandedProofId === item.id ? (
+                        <>
+                          <EyeOff className="w-3.5 h-3.5" />
+                          Hide Proof
+                        </>
+                      ) : (
+                        <>
+                          <Eye className="w-3.5 h-3.5" />
+                          View Proof
+                        </>
+                      )}
                     </button>
 
                     {/* Approved: View Credentials */}
@@ -608,6 +625,71 @@ Log in to the portal to view your squad's active QR Pass for check-in and meals!
                   </div>
                 </div>
 
+                {/* Inline Proof Preview (Situated directly inside the clicked card right where cursor is clicked) */}
+                {expandedProofId === item.id && (
+                  <div className="mt-4 p-4 rounded-xl bg-black/85 border border-pink-500/40 shadow-[0_0_25px_rgba(255,0,127,0.15)] animate-fade-in space-y-3">
+                    <div className="flex items-center justify-between pb-2.5 border-b border-white/10 flex-wrap gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-tech text-xs uppercase font-bold text-pink-400 flex items-center gap-1.5">
+                          <Eye className="w-3.5 h-3.5" /> Payment Proof Screenshot
+                        </span>
+                        <span className="text-[11px] font-mono text-cyan-400 bg-cyan-950/40 border border-cyan-500/30 px-2 py-0.5 rounded font-bold">
+                          UTR: {item.payment_utr}
+                        </span>
+                        <span className="text-[11px] font-mono text-text-secondary">
+                          Payer: {item.payment_phone}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setActiveProofUrl({
+                              url: item.payment_proof_url,
+                              team: item.team_name,
+                              utr: item.payment_utr,
+                            })
+                          }
+                          className="px-2.5 py-1 text-[11px] font-tech text-cyan-400 hover:text-white bg-white/5 hover:bg-white/10 rounded border border-white/10 transition-colors flex items-center gap-1"
+                          title="Open in fullscreen lightbox modal"
+                        >
+                          <ExternalLink className="w-3 h-3" />
+                          <span>Fullscreen</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setExpandedProofId(null)}
+                          className="px-2.5 py-1 text-[11px] font-tech text-text-secondary hover:text-white bg-white/5 hover:bg-white/10 rounded border border-white/10 transition-colors flex items-center gap-1"
+                        >
+                          <X className="w-3 h-3" />
+                          <span>Hide</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="max-h-[500px] overflow-auto flex items-center justify-center bg-black/60 rounded-lg p-2 border border-white/10">
+                      <img
+                        src={item.payment_proof_url}
+                        alt={`Payment Proof for ${item.team_name}`}
+                        className="max-h-[460px] w-auto max-w-full object-contain rounded-md cursor-pointer hover:opacity-95 transition-opacity"
+                        onClick={() => window.open(item.payment_proof_url, "_blank")}
+                        title="Click to open original full-size image in new tab"
+                      />
+                    </div>
+                    <div className="flex items-center justify-between text-[11px] font-tech text-text-secondary">
+                      <span>Click image to open in full size in a new tab</span>
+                      <a
+                        href={item.payment_proof_url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-cyan-400 hover:underline flex items-center gap-1"
+                      >
+                        Open Original Tab <ExternalLink className="w-3 h-3" />
+                      </a>
+                    </div>
+                  </div>
+                )}
+
                 {/* Payment summary footer */}
                 <div className="pt-3 flex flex-wrap items-center justify-between text-xs font-tech text-text-secondary">
                   <div className="flex items-center gap-4">
@@ -629,9 +711,9 @@ Log in to the portal to view your squad's active QR Pass for check-in and meals!
         </div>
       )}
 
-      {/* MODAL 1: PAYMENT PROOF LIGHTBOX */}
-      {activeProofUrl && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
+      {/* MODAL 1: PAYMENT PROOF LIGHTBOX (Teleported to document.body to prevent scroll container offset) */}
+      {mounted && typeof document !== "undefined" && activeProofUrl && createPortal(
+        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4">
           <div className="bg-surface-color border border-cyan-500/40 rounded-2xl max-w-2xl w-full p-6 relative shadow-[0_0_50px_rgba(0,245,255,0.2)] animate-scale-in">
             <div className="flex items-center justify-between pb-3 mb-4 border-b border-border-color">
               <div>
@@ -677,12 +759,13 @@ Log in to the portal to view your squad's active QR Pass for check-in and meals!
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* MODAL 2: 4 MEMBERS ROSTER */}
-      {activeMembersModal && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
+      {mounted && typeof document !== "undefined" && activeMembersModal && createPortal(
+        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4">
           <div className="bg-surface-color border border-border-color rounded-2xl max-w-3xl w-full p-6 relative shadow-2xl animate-scale-in max-h-[85vh] overflow-y-auto">
             <div className="flex items-center justify-between pb-3 mb-4 border-b border-border-color">
               <div>
@@ -769,12 +852,13 @@ Log in to the portal to view your squad's active QR Pass for check-in and meals!
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* MODAL 3: CREDENTIALS & OFFICIAL QR PASS */}
-      {activeCredentialsModal && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
+      {mounted && typeof document !== "undefined" && activeCredentialsModal && createPortal(
+        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4">
           <div className="bg-[#0a0a10] border border-cyan-500/50 rounded-2xl max-w-lg w-full p-6 text-center relative shadow-[0_0_50px_rgba(0,245,255,0.25)] animate-scale-in">
             <button
               onClick={() => setActiveCredentialsModal(null)}
@@ -880,11 +964,12 @@ Log in to the portal to view your squad's active QR Pass for check-in and meals!
               </div>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Google Sheets Setup Instructions Modal */}
-      {showScriptModal && (
+      {mounted && typeof document !== "undefined" && showScriptModal && createPortal(
         <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4 animate-fade-in">
           <div className="bg-surface-color border border-cyan-500/40 rounded-2xl max-w-2xl w-full p-6 text-left relative shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
             <button
@@ -948,7 +1033,8 @@ Log in to the portal to view your squad's active QR Pass for check-in and meals!
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
