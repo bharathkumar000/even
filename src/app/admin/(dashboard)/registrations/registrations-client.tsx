@@ -170,6 +170,11 @@ Login Email: ${creds.email}
 Password: ${creds.password}
 ============================================
 Official WhatsApp Group: ${OFFICIAL_WHATSAPP_GROUP}
+
+Coordinators for queries:
+• Moksh: +91 83103 53103
+• Parinitha: +91 63614 55193
+============================================
 Official QR Code is activated for Registration Check-in & Meals.
     `.trim();
 
@@ -201,18 +206,12 @@ IMPORTANT - JOIN OFFICIAL PARTICIPANTS WHATSAPP GROUP:
 Join the official event WhatsApp group immediately to receive live schedule updates, announcements, problem statements, and round briefings:
 👉 ${OFFICIAL_WHATSAPP_GROUP}
 
-NEXT STEPS:
-1. Join the official WhatsApp group (${OFFICIAL_WHATSAPP_GROUP}) right away.
-2. Log in to the Eventra portal (https://eventra-ivc.vercel.app/login) using your email and password above.
-3. Go to the "Team QR" tab to access your squad's official live QR badge.
-4. Present this QR badge at the desk for Registration Check-in, Goodies / Kit collection, and Meals during the event.
-5. Problem statements and submission guidelines are now unlocked in your dashboard.
-
-If you have any questions or require support, feel free to reply to this email or ask in the WhatsApp group.
+If you have any queries or require support, feel free to ask in the WhatsApp group or contact the coordinators:
+• Moksh: +91 83103 53103
+• Parinitha: +91 63614 55193
 
 Best regards,
-Innovators & Visionaries Club (IVC)
-Event Organizing Committee`;
+Innovators & Visionaries Club (IVC)`;
 
     return { subject, body };
   };
@@ -248,6 +247,10 @@ Hello ${creds.leaderName || "Team Leader"}, your registration has been verified!
 
 👉 *Join Official WhatsApp Group:*
 ${OFFICIAL_WHATSAPP_GROUP}
+
+*Coordinators for queries:*
+• Moksh: +91 83103 53103
+• Parinitha: +91 63614 55193
 
 Log in to the portal to view your squad's active QR Pass for check-in and meals!`;
 
@@ -864,6 +867,10 @@ Log in to the portal to view your squad's active QR Pass for check-in and meals!
                   <MessageCircle className="w-3.5 h-3.5" />
                   Join Group &gt;&gt;
                 </a>
+              </div>
+              <div className="flex justify-between items-center pt-1 border-t border-white/5 text-[11px]">
+                <span className="text-text-secondary">Coordinators:</span>
+                <span className="text-neutral-300 font-mono">Moksh (+91 83103 53103) · Parinitha (+91 63614 55193)</span>
               </div>
             </div>
 
