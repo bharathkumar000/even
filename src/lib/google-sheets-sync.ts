@@ -494,7 +494,13 @@ function sendCredentialsToAllApprovedTeams() {
       "Best regards,\\n" +
       "Innovators & Visionaries Club (IVC)";
       
-    MailApp.sendEmail(email, subject, body);
+    MailApp.sendEmail({
+      to: email,
+      subject: subject,
+      body: body,
+      name: "Innovators & Visionaries Club (IVC)",
+      replyTo: "ivcofficial@vvce.ac.in"
+    });
     if (statusCol !== -1) {
       sheet.getRange(i + 1, statusCol + 1).setValue("SENT: " + new Date().toLocaleString());
     }

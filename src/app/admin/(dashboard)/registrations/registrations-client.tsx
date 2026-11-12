@@ -560,38 +560,16 @@ Log in to the portal to view your squad's active QR Pass for check-in and meals!
                       View Proof
                     </button>
 
-                    {/* Approved: View Credentials & Quick Email / WhatsApp */}
+                    {/* Approved: View Credentials */}
                     {isApproved && creds && (
-                      <>
-                        <button
-                          type="button"
-                          onClick={() => setActiveCredentialsModal(creds)}
-                          className="px-3.5 py-2 bg-cyan-500/20 hover:bg-cyan-500/30 border border-cyan-500/50 text-cyan-300 font-tech text-xs uppercase rounded-xl flex items-center gap-1.5 transition-all shadow-[0_0_15px_rgba(0,245,255,0.2)]"
-                        >
-                          <KeyRound className="w-3.5 h-3.5 text-cyan-400" />
-                          View Credentials
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => handleOpenGmail(creds)}
-                          title="Open pre-formatted email draft in Gmail Web"
-                          className="px-3.5 py-2 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/40 text-rose-300 font-tech text-xs uppercase rounded-xl flex items-center gap-1.5 transition-all"
-                        >
-                          <Send className="w-3.5 h-3.5 text-rose-400" />
-                          Email Lead
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => handleSendWhatsApp(creds)}
-                          title="Send credentials and WhatsApp group link via WhatsApp"
-                          className="px-3.5 py-2 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 font-tech text-xs uppercase rounded-xl flex items-center gap-1.5 transition-all"
-                        >
-                          <MessageCircle className="w-3.5 h-3.5 text-emerald-400" />
-                          WhatsApp
-                        </button>
-                      </>
+                      <button
+                        type="button"
+                        onClick={() => setActiveCredentialsModal(creds)}
+                        className="px-3.5 py-2 bg-cyan-500/20 hover:bg-cyan-500/30 border border-cyan-500/50 text-cyan-300 font-tech text-xs uppercase rounded-xl flex items-center gap-1.5 transition-all shadow-[0_0_15px_rgba(0,245,255,0.2)]"
+                      >
+                        <KeyRound className="w-3.5 h-3.5 text-cyan-400" />
+                        View Credentials
+                      </button>
                     )}
 
                     {/* Pending: Approve & Reject */}
@@ -874,37 +852,8 @@ Log in to the portal to view your squad's active QR Pass for check-in and meals!
               </div>
             </div>
 
-            {/* Quick Email, WhatsApp & Copy Buttons */}
-            <div className="space-y-2">
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                <button
-                  type="button"
-                  onClick={() => handleOpenGmail(activeCredentialsModal)}
-                  className="py-2.5 px-3 bg-gradient-to-r from-red-500 to-rose-600 hover:from-red-400 hover:to-rose-500 text-white font-tech font-bold uppercase tracking-wider text-xs rounded-xl flex items-center justify-center gap-1.5 transition-all shadow-[0_0_15px_rgba(244,63,94,0.3)]"
-                >
-                  <Send className="w-4 h-4" />
-                  Gmail Web
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => handleSendWhatsApp(activeCredentialsModal)}
-                  className="py-2.5 px-3 bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-500 hover:to-green-500 text-white font-tech font-bold uppercase tracking-wider text-xs rounded-xl flex items-center justify-center gap-1.5 transition-all shadow-[0_0_15px_rgba(16,185,129,0.3)]"
-                >
-                  <MessageCircle className="w-4 h-4" />
-                  WhatsApp
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => handleSendMailto(activeCredentialsModal)}
-                  className="py-2.5 px-3 bg-white/10 hover:bg-white/15 border border-white/20 text-text-primary font-tech font-bold uppercase tracking-wider text-xs rounded-xl flex items-center justify-center gap-1.5 transition-all"
-                >
-                  <Mail className="w-4 h-4 text-cyan-400" />
-                  Mail App
-                </button>
-              </div>
-
+            {/* Actions & Copy */}
+            <div className="space-y-3">
               <div className="flex gap-2">
                 <button
                   type="button"
@@ -912,16 +861,22 @@ Log in to the portal to view your squad's active QR Pass for check-in and meals!
                   className="flex-1 py-2.5 bg-cyan-500 hover:bg-cyan-400 text-black font-tech font-bold uppercase tracking-wider text-xs rounded-xl flex items-center justify-center gap-1.5 transition-all shadow-[0_0_15px_rgba(0,245,255,0.25)]"
                 >
                   {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-                  {copied ? "Copied to Clipboard!" : "Copy All Credentials & WhatsApp Link"}
+                  {copied ? "Copied to Clipboard!" : "Copy Credentials & WhatsApp Link"}
                 </button>
 
                 <button
                   type="button"
                   onClick={() => setActiveCredentialsModal(null)}
-                  className="px-5 py-2.5 bg-white/10 hover:bg-white/20 text-text-primary font-tech text-xs uppercase rounded-xl"
+                  className="px-6 py-2.5 bg-white/10 hover:bg-white/20 text-text-primary font-tech text-xs uppercase rounded-xl"
                 >
                   Done
                 </button>
+              </div>
+
+              <div className="p-3 bg-emerald-950/20 border border-emerald-500/30 rounded-xl text-left">
+                <p className="font-tech text-[11px] text-emerald-300 m-0 leading-relaxed">
+                  💡 <strong>Batch Dispatch Enabled:</strong> This team&apos;s credentials have been synced to Google Sheet (Sheet 2: <em>Approved</em>). You can send emails to all confirmed teams at once from your club&apos;s official email using <strong>🚀 Eventra Dispatch &gt; 📧 Send All Credentials Emails</strong> in the Google Sheet.
+                </p>
               </div>
             </div>
           </div>
