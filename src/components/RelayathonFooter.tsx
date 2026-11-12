@@ -168,8 +168,8 @@ export default function RelayathonFooter() {
                 <div className="text-white font-bold text-xs uppercase mb-1">
                   // SECURE INTEL EMAIL
                 </div>
-                <a href="mailto:ivc@vvce.ac.in" className="text-red-500 hover:text-red-400 transition-colors text-xs">
-                  ivc@vvce.ac.in
+                <a href="mailto:ivcofficial@vvce.ac.in" className="text-red-500 hover:text-red-400 transition-colors text-xs">
+                  ivcofficial@vvce.ac.in
                 </a>
               </li>
               <li>

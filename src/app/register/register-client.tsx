@@ -35,7 +35,7 @@ const DEFAULT_DRIVER: DriverState = {
   phone: "",
   usn: "",
   branch: "CSE",
-  sem: "5th Sem",
+  sem: "1st Semester",
   college: "VVCE Mysore",
 };
 
@@ -53,13 +53,7 @@ const BRANCHES = [
 
 const SEMESTERS = [
   "1st Semester",
-  "2nd Semester",
   "3rd Semester",
-  "4th Semester",
-  "5th Semester",
-  "6th Semester",
-  "7th Semester",
-  "8th Semester",
 ];
 
 const TICKER_SQUADS = [
@@ -1129,13 +1123,6 @@ export default function RegisterClientView() {
                         )}
                       </div>
                     </div>
-                  </div>
-
-                  <div className="p-3 bg-blue-950/20 border border-blue-900/40 rounded text-[11px] text-blue-300/90 flex items-start gap-2">
-                    <span className="text-blue-400 shrink-0 font-bold">ℹ</span>
-                    <span>
-                      Both your 12-digit UTR and payment screenshot will be recorded in Google Sheets. Organizers will manually cross-verify and approve your squad.
-                    </span>
                   </div>
                 </div>
               </div>
