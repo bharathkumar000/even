@@ -84,7 +84,8 @@ async function requireAdminUser() {
   return { user, profile };
 }
 
-const MAX_TEAMS_PER_SEM = 40;
+const MAX_CONFIRMED_PER_SEM = 40;
+const MAX_WAITLIST_PER_SEM = 10;
 
 /**
  * Public Server Action: Fetch total submitted teams count per semester
@@ -94,6 +95,7 @@ export async function getSemesterRegistrationCounts(): Promise<{
   firstSemCount: number;
   thirdSemCount: number;
   maxLimit: number;
+  waitlistLimit: number;
 }> {
   try {
     const { data, error } = await supabaseAdmin
@@ -101,7 +103,12 @@ export async function getSemesterRegistrationCounts(): Promise<{
       .select("leader_sem");
 
     if (error || !data) {
-      return { firstSemCount: 0, thirdSemCount: 0, maxLimit: MAX_TEAMS_PER_SEM };
+      return {
+        firstSemCount: 0,
+        thirdSemCount: 0,
+        maxLimit: MAX_CONFIRMED_PER_SEM,
+        waitlistLimit: MAX_WAITLIST_PER_SEM,
+      };
     }
 
     let firstSemCount = 0;
@@ -119,44 +126,46 @@ export async function getSemesterRegistrationCounts(): Promise<{
     return {
       firstSemCount,
       thirdSemCount,
-      maxLimit: MAX_TEAMS_PER_SEM,
+      maxLimit: MAX_CONFIRMED_PER_SEM,
+      waitlistLimit: MAX_WAITLIST_PER_SEM,
     };
   } catch (err) {
     console.error("getSemesterRegistrationCounts error:", err);
-    return { firstSemCount: 0, thirdSemCount: 0, maxLimit: MAX_TEAMS_PER_SEM };
+    return {
+      firstSemCount: 0,
+      thirdSemCount: 0,
+      maxLimit: MAX_CONFIRMED_PER_SEM,
+      waitlistLimit: MAX_WAITLIST_PER_SEM,
+    };
   }
 }
 
 /**
- * Public Server Action: Submit a team registration with 4 members and payment proof.
+ * Public Server Action: Submit a team registration with 4 members and payment proof (or waitlist entry).
  */
 export async function submitTeamRegistration(
   formData: FormData
-): Promise<{ success: boolean; message: string; registrationId?: string }> {
+): Promise<{ success: boolean; message: string; registrationId?: string; isWaitlist?: boolean }> {
   try {
     const teamName = String(formData.get("teamName") || "").trim();
     const track = String(formData.get("track") || "").trim();
 
-    // Leader info (VVCE exclusive)
+    // Leader info (Vidya Vardhaka College Of Engineering exclusive)
     const leaderName = String(formData.get("leaderName") || "").trim();
     const leaderEmail = String(formData.get("leaderEmail") || "").trim().toLowerCase();
     const leaderPhone = String(formData.get("leaderPhone") || "").trim();
-    const leaderCollege = "VVCE";
+    const leaderCollege = "Vidya Vardhaka College Of Engineering";
     const leaderUsn = String(formData.get("leaderUsn") || "").trim().toUpperCase();
     const leaderBranch = String(formData.get("leaderBranch") || "").trim();
     const leaderSem = String(formData.get("leaderSem") || "").trim();
 
     // Payment info
     const paymentUtr = String(formData.get("paymentUtr") || "").trim();
-    const paymentPhone = String(formData.get("paymentPhone") || "").trim();
+    const paymentPhone = String(formData.get("paymentPhone") || "").trim() || leaderPhone;
     const paymentFile = formData.get("paymentProof") as File | null;
 
-    if (!teamName || !track || !leaderName || !leaderEmail || !leaderPhone || !paymentUtr) {
-      return { success: false, message: "Please fill in all required team and payment fields." };
-    }
-
-    if (!paymentFile || paymentFile.size === 0) {
-      return { success: false, message: "Payment proof screenshot is required." };
+    if (!teamName || !track || !leaderName || !leaderEmail || !leaderPhone) {
+      return { success: false, message: "Please fill in all required team and leader fields." };
     }
 
     // Parse the other 3 members from form data
@@ -165,7 +174,7 @@ export async function submitTeamRegistration(
     try {
       members = JSON.parse(membersRaw);
       if (Array.isArray(members)) {
-        members = members.map((m) => ({ ...m, college: "VVCE" }));
+        members = members.map((m) => ({ ...m, college: "Vidya Vardhaka College Of Engineering" }));
       }
     } catch {
       members = [];
@@ -179,27 +188,44 @@ export async function submitTeamRegistration(
       };
     }
 
-    // Enforce per-semester max limit (40 teams for 1st Sem, 40 teams for 3rd Sem)
-    const { firstSemCount, thirdSemCount, maxLimit } = await getSemesterRegistrationCounts();
+    // Check semester counts: 40 confirmed + 10 waiting list max (50 total per semester)
+    const { firstSemCount, thirdSemCount, maxLimit, waitlistLimit } = await getSemesterRegistrationCounts();
+    const maxTotalPerSem = maxLimit + waitlistLimit;
     const semLower = leaderSem.toLowerCase();
-    if ((semLower.includes("1st") || semLower === "1") && firstSemCount >= maxLimit) {
+    const isFirstSem = semLower.includes("1st") || semLower === "1";
+    const isThirdSem = semLower.includes("3rd") || semLower === "3";
+    const currentSemCount = isFirstSem ? firstSemCount : isThirdSem ? thirdSemCount : 0;
+
+    if (currentSemCount >= maxTotalPerSem) {
       return {
         success: false,
-        message: "1st Semester registration is LOCKED. The maximum limit of 40 teams has been reached.",
-      };
-    }
-    if ((semLower.includes("3rd") || semLower === "3") && thirdSemCount >= maxLimit) {
-      return {
-        success: false,
-        message: "3rd Semester registration is LOCKED. The maximum limit of 40 teams has been reached.",
+        message: `${leaderSem} registration is COMPLETELY LOCKED. All ${maxLimit} confirmed slots and ${waitlistLimit} waiting list slots are full.`,
       };
     }
 
-    // 1. Encode payment proof to base64 so ZERO files are stored in Supabase Storage
-    // The image is saved directly into Google Drive via Google Sheets integration on admin decision
-    const fileBuffer = Buffer.from(await paymentFile.arrayBuffer());
-    const paymentProofBase64 = `data:${paymentFile.type || "image/jpeg"};base64,${fileBuffer.toString("base64")}`;
-    const paymentProofUrl = paymentProofBase64;
+    const isWaitlist = currentSemCount >= maxLimit;
+
+    // Require payment proof & UTR only for confirmed slots (< 40)
+    if (!isWaitlist) {
+      if (!paymentUtr) {
+        return { success: false, message: "12-digit UPI Reference / UTR Number is required." };
+      }
+      if (!paymentFile || paymentFile.size === 0) {
+        return { success: false, message: "Payment proof screenshot is required." };
+      }
+    }
+
+    // 1. Encode payment proof to base64 for confirmed slots (Zero Supabase Storage usage)
+    let paymentProofUrl = "WAITLIST (Payment Pending Contact)";
+    let finalPaymentUtr = paymentUtr;
+
+    if (isWaitlist) {
+      const waitlistNum = currentSemCount - maxLimit + 1;
+      finalPaymentUtr = `WAITLIST-#${waitlistNum}`;
+    } else if (paymentFile) {
+      const fileBuffer = Buffer.from(await paymentFile.arrayBuffer());
+      paymentProofUrl = `data:${paymentFile.type || "image/jpeg"};base64,${fileBuffer.toString("base64")}`;
+    }
 
     // 2. Insert into team_registrations table
     const registrationPayload = {
@@ -213,7 +239,7 @@ export async function submitTeamRegistration(
       leader_branch: leaderBranch,
       leader_sem: leaderSem,
       members: members,
-      payment_utr: paymentUtr,
+      payment_utr: finalPaymentUtr,
       payment_phone: paymentPhone,
       payment_proof_url: paymentProofUrl,
       status: "pending",
@@ -277,7 +303,7 @@ export async function submitTeamRegistration(
       sheetName: "Registrations",
       teamName: teamName,
       track: track,
-      status: "Pending",
+      status: isWaitlist ? "Waitlist" : "Pending",
       decisionAt: new Date().toISOString(),
 
       // Driver 1 (Leader)
@@ -317,7 +343,7 @@ export async function submitTeamRegistration(
       driver4Sem: d4.sem || "",
 
       // Payment
-      transactionId: paymentUtr,
+      transactionId: finalPaymentUtr,
       paymentPhone: paymentPhone,
       paymentProofUrl: isBase64Proof ? undefined : paymentProofUrl,
       paymentProofBase64: isBase64Proof ? paymentProofUrl : undefined,
@@ -342,7 +368,10 @@ export async function submitTeamRegistration(
 
     return {
       success: true,
-      message: "Registration submitted successfully! Your payment is under verification by IVC admins.",
+      isWaitlist,
+      message: isWaitlist
+        ? "Team added to the Waiting List! If a confirmed slot becomes available, we will contact you for payment."
+        : "Registration submitted successfully! Your payment is under verification by IVC admins.",
       registrationId: insertData.id,
     };
   } catch (err: unknown) {
