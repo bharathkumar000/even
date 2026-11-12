@@ -102,19 +102,41 @@ export async function getSemesterRegistrationCounts(): Promise<{
       .from("team_registrations")
       .select("leader_sem");
 
-    if (error || !data) {
+    let firstSemCount = 0;
+    let thirdSemCount = 0;
+
+    if (error) {
+      // Fallback: if team_registrations table is not created yet, count from teams.dietary_preference
+      if (error.message?.includes("Could not find the table") || error.code === "PGRST205") {
+        const { data: teamsData } = await supabaseAdmin
+          .from("teams")
+          .select("dietary_preference");
+
+        for (const t of teamsData || []) {
+          if (!t.dietary_preference) continue;
+          try {
+            const parsed = JSON.parse(t.dietary_preference);
+            const sem = String(parsed.leaderSem || "").toLowerCase();
+            if (sem.includes("1st") || sem === "1") {
+              firstSemCount++;
+            } else if (sem.includes("3rd") || sem === "3") {
+              thirdSemCount++;
+            }
+          } catch {
+            // ignore non-JSON dietary_preference
+          }
+        }
+      }
+
       return {
-        firstSemCount: 0,
-        thirdSemCount: 0,
+        firstSemCount,
+        thirdSemCount,
         maxLimit: MAX_CONFIRMED_PER_SEM,
         waitlistLimit: MAX_WAITLIST_PER_SEM,
       };
     }
 
-    let firstSemCount = 0;
-    let thirdSemCount = 0;
-
-    for (const row of data) {
+    for (const row of data || []) {
       const sem = String(row.leader_sem || "").toLowerCase();
       if (sem.includes("1st") || sem === "1") {
         firstSemCount++;
