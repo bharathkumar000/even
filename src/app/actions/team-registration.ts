@@ -6,6 +6,7 @@ import { revalidatePath } from "next/cache";
 import { generateQrSignature } from "@/lib/qr-signature";
 import {
   syncRegistrationToGoogleSheets,
+  syncCredentialsToGoogleSheets,
   GoogleSheetRegistrationRecord,
   ComprehensiveTeamRecord,
   generateRegistrationsCsv,
@@ -1011,7 +1012,7 @@ export async function approveRegistration(registrationId: string): Promise<{
       emailDispatchStatus: "PENDING",
     };
 
-    // Trigger Google Sheets sync (non-blocking, routes to Sheet 1)
+    // Trigger Google Sheets sync (non-blocking, routes to Sheet 2 "Approved")
     syncRegistrationToGoogleSheets(sheetRecord).then(async (res) => {
       if (res.proofUrl && isBase64Proof) {
         try {
@@ -1025,6 +1026,22 @@ export async function approveRegistration(registrationId: string): Promise<{
       }
     }).catch((e) =>
       console.error("[approveRegistration] Background Google Sheets sync error:", e)
+    );
+
+    // Sync approved team credentials to dedicated "Credentials" Sheet tab
+    syncCredentialsToGoogleSheets({
+      teamName: teamName,
+      loginEmail: leaderEmail,
+      loginPassword: generatedPassword,
+      teamId: teamId,
+      teamCode: teamCode,
+      leaderName: leaderName,
+      leaderPhone: reg.leader_phone || reg.payment_phone || "",
+      driver2Name: d2.name || "",
+      driver2Phone: d2.phone || d2.email || "",
+      decisionAt: nowIso,
+    }).catch((e) =>
+      console.error("[approveRegistration] Credentials sheet sync error:", e)
     );
 
     revalidatePath("/admin/registrations");
@@ -1269,11 +1286,27 @@ export async function syncAllApprovedRegistrationsAction(): Promise<{
 
       const res = await syncRegistrationToGoogleSheets(record);
       if (res.success) syncedCount++;
+
+      // Also sync to "Credentials" sheet
+      await syncCredentialsToGoogleSheets({
+        teamName: reg.team_name,
+        loginEmail: reg.leader_email,
+        loginPassword: pass,
+        teamId: reg.team_id || "",
+        teamCode: code,
+        leaderName: reg.leader_name,
+        leaderPhone: reg.leader_phone || reg.payment_phone || "",
+        driver2Name: d2.name || "",
+        driver2Phone: d2.phone || d2.email || "",
+        decisionAt: reg.approved_at || reg.created_at,
+      }).catch((e) =>
+        console.error("[syncAllApprovedRegistrations] Credentials sheet sync error:", e)
+      );
     }
 
     return {
       success: true,
-      message: `Synced ${syncedCount}/${approvedList.length} verified teams to Google Sheet 2 ("Approved").`,
+      message: `Synced ${syncedCount}/${approvedList.length} verified teams to Google Sheets ("Approved" & "Credentials").`,
       count: syncedCount,
     };
   } catch (err: unknown) {

@@ -8,10 +8,11 @@
  */
 
 export interface ComprehensiveTeamRecord {
-  sheetName?: "Registrations" | "Approved" | "Waiting list" | "Rejected" | string;
+  sheetName?: "Registrations" | "Approved" | "Waiting list" | "Rejected" | "Credentials" | string;
   teamName: string;
   track?: string;
   teamCode?: string;
+  teamId?: string;
   status: "Pending" | "Waitlist" | "Approved" | "Rejected" | string;
   decisionAt: string;
   decisionBy?: string;
@@ -61,6 +62,7 @@ export interface ComprehensiveTeamRecord {
 
   // Credentials for Approved Teams (Bulk Email Dispatch)
   loginPassword?: string;
+  loginEmail?: string;
   portalUrl?: string;
   whatsappGroup?: string;
   emailDispatchStatus?: string;
@@ -144,6 +146,72 @@ export async function syncRegistrationToGoogleSheets(
       sheet: targetTab,
     };
   }
+}
+
+export interface TeamCredentialsRecord {
+  teamName: string;
+  loginEmail: string;
+  loginPassword?: string;
+  teamId?: string;
+  teamCode?: string;
+  leaderName: string;
+  leaderPhone?: string;
+  driver2Name?: string;
+  driver2Phone?: string;
+  driver2Email?: string;
+  decisionAt?: string;
+}
+
+/**
+ * Sync approved team credentials to the dedicated "Credentials" Google Sheet tab.
+ * Contains only: Team Name, Login Email ID, Password, Team ID, Team Code, Team Lead, Member Contact.
+ */
+export async function syncCredentialsToGoogleSheets(
+  record: TeamCredentialsRecord
+): Promise<{ success: boolean; message: string; sheet?: string }> {
+  return syncRegistrationToGoogleSheets({
+    sheetName: "Credentials",
+    teamName: record.teamName,
+    teamId: record.teamId,
+    teamCode: record.teamCode,
+    status: "Approved",
+    decisionAt: record.decisionAt || new Date().toISOString(),
+
+    loginPassword: record.loginPassword,
+    loginEmail: record.loginEmail,
+
+    leaderName: record.leaderName,
+    leaderEmail: record.loginEmail,
+    leaderPhone: record.leaderPhone || "",
+    leaderCollege: "Vidya Vardhaka College Of Engineering",
+    leaderUsn: "",
+    leaderBranch: "",
+    leaderSem: "",
+
+    driver2Name: record.driver2Name || "",
+    driver2Email: record.driver2Email || "",
+    driver2Phone: record.driver2Phone || "",
+    driver2College: "",
+    driver2Usn: "",
+    driver2Branch: "",
+    driver2Sem: "",
+
+    driver3Name: "",
+    driver3Email: "",
+    driver3College: "",
+    driver3Usn: "",
+    driver3Branch: "",
+    driver3Sem: "",
+
+    driver4Name: "",
+    driver4Email: "",
+    driver4College: "",
+    driver4Usn: "",
+    driver4Branch: "",
+    driver4Sem: "",
+
+    transactionId: "",
+  });
 }
 
 /**
@@ -282,7 +350,7 @@ function doPost(e) {
       }
     }
     
-    // Determine target sheet: Registrations (Sheet 1), Approved (Sheet 2), Waiting list (Sheet 3), Rejected (Sheet 4)
+    // Determine target sheet: Registrations (Sheet 1), Approved (Sheet 2), Waiting list (Sheet 3), Rejected (Sheet 4), Credentials (Sheet 5)
     var sheetName = "Registrations";
     if (data.sheetName) {
       sheetName = data.sheetName;
@@ -299,6 +367,45 @@ function doPost(e) {
     var sheet = ss.getSheetByName(sheetName);
     if (!sheet) {
       sheet = ss.insertSheet(sheetName);
+    }
+    
+    // Dedicated compact layout for "Credentials" Sheet (Approved Teams only)
+    if (sheetName === "Credentials") {
+      if (sheet.getLastRow() === 0) {
+        sheet.appendRow([
+          "Timestamp",
+          "Team Name",
+          "Login Email ID",
+          "Password",
+          "Team ID",
+          "Team Code",
+          "Team Lead",
+          "One Member Contact Info (Driver 2)"
+        ]);
+        sheet.getRange(1, 1, 1, 8).setFontWeight("bold").setBackground("#d9ead3");
+      }
+      
+      var leadContact = data.leaderName || data.teamLead || "";
+      var leadPhone = data.leaderPhone || data.teamLeadPhone || "";
+      if (leadPhone) leadContact += " (" + leadPhone + ")";
+      
+      var memberContact = data.driver2Name || data.member2Name || "";
+      var memberPhone = data.driver2Phone || data.member2Phone || data.driver2Email || "";
+      if (memberPhone) memberContact += " (" + memberPhone + ")";
+      
+      sheet.appendRow([
+        data.decisionAt || new Date().toISOString(),
+        data.teamName || "",
+        data.loginEmail || data.leaderEmail || "",
+        data.loginPassword || data.password || "",
+        data.teamId || "",
+        data.teamCode || "",
+        leadContact,
+        memberContact
+      ]);
+      
+      return ContentService.createTextOutput(JSON.stringify({ success: true, sheet: "Credentials" }))
+        .setMimeType(ContentService.MimeType.JSON);
     }
     
     // Auto-create 36-column Header if sheet is new or empty
