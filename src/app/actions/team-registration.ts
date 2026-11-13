@@ -120,7 +120,7 @@ export async function getSemesterRegistrationCounts(): Promise<{
             const sem = String(parsed.leaderSem || "").toLowerCase();
             if (sem.includes("1st") || sem === "1") {
               firstSemCount++;
-            } else if (sem.includes("3rd") || sem === "3") {
+            } else if (sem.includes("3rd") || sem === "3" || sem.includes("2nd") || sem === "2") {
               thirdSemCount++;
             }
           } catch {
@@ -141,7 +141,7 @@ export async function getSemesterRegistrationCounts(): Promise<{
       const sem = String(row.leader_sem || "").toLowerCase();
       if (sem.includes("1st") || sem === "1") {
         firstSemCount++;
-      } else if (sem.includes("3rd") || sem === "3") {
+      } else if (sem.includes("3rd") || sem === "3" || sem.includes("2nd") || sem === "2") {
         thirdSemCount++;
       }
     }
@@ -229,7 +229,7 @@ export async function submitTeamRegistration(
     const maxTotalPerSem = maxLimit + waitlistLimit;
     const semLower = leaderSem.toLowerCase();
     const isFirstSem = semLower.includes("1st") || semLower === "1";
-    const isThirdSem = semLower.includes("3rd") || semLower === "3";
+    const isThirdSem = semLower.includes("3rd") || semLower === "3" || semLower.includes("2nd") || semLower === "2";
     const currentSemCount = isFirstSem ? firstSemCount : isThirdSem ? thirdSemCount : 0;
 
     if (currentSemCount >= maxTotalPerSem) {

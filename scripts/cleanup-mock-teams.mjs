@@ -19,7 +19,7 @@ async function cleanup() {
   const { data: teamsDeleted, error: err1 } = await supabase
     .from("teams")
     .delete()
-    .ilike("name", "MOCK_TEST_TEAM_%")
+    .ilike("name", "MOCK_%")
     .select("id, name");
 
   console.log(`Deleted from teams table: ${teamsDeleted?.length || 0} teams.`);
@@ -29,7 +29,7 @@ async function cleanup() {
   const { data: regsDeleted, error: err2 } = await supabase
     .from("team_registrations")
     .delete()
-    .ilike("team_name", "MOCK_TEST_TEAM_%")
+    .ilike("team_name", "MOCK_%")
     .select("id, team_name");
 
   console.log(`Deleted from team_registrations table: ${regsDeleted?.length || 0} teams.`);
