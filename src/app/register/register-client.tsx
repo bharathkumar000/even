@@ -414,19 +414,6 @@ export default function RegisterClientView({
               // RELAYATHON 2026
             </span>
           </Link>
-
-          {/* Top Right: Login Button */}
-          <div className="flex items-center gap-2.5">
-            <span className="hidden sm:inline font-mono text-xs text-neutral-400">
-              Already Registered?
-            </span>
-            <Link
-              href="/login"
-              className="px-4 py-1.5 border border-red-600/70 hover:border-red-500 bg-red-600/15 hover:bg-red-600 text-red-400 hover:text-white font-mono text-xs uppercase font-bold tracking-wider rounded transition-all shadow-[0_0_15px_rgba(255,0,0,0.2)]"
-            >
-              LOGIN &gt;
-            </Link>
-          </div>
         </div>
       </header>
 
