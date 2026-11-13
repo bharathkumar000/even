@@ -8,11 +8,11 @@
  */
 
 export interface ComprehensiveTeamRecord {
-  sheetName?: "Registrations" | "Approved" | "Rejected";
+  sheetName?: "Registrations" | "Approved" | "Waiting list" | "Rejected" | string;
   teamName: string;
   track?: string;
   teamCode?: string;
-  status: "Pending" | "Waitlist" | "Approved" | "Rejected";
+  status: "Pending" | "Waitlist" | "Approved" | "Rejected" | string;
   decisionAt: string;
   decisionBy?: string;
   rejectionReason?: string;
@@ -88,7 +88,13 @@ export async function syncRegistrationToGoogleSheets(
 
   const targetTab =
     record.sheetName ||
-    (record.status === "Approved" ? "Approved" : record.status === "Rejected" ? "Rejected" : "Registrations");
+    (record.status === "Approved"
+      ? "Approved"
+      : record.status === "Waitlist" || record.status === "Waiting list"
+      ? "Waiting list"
+      : record.status === "Rejected"
+      ? "Rejected"
+      : "Registrations");
 
   if (!webhookUrl) {
     console.info(
@@ -276,12 +282,14 @@ function doPost(e) {
       }
     }
     
-    // Determine target sheet: Registrations (Sheet 1), Approved (Sheet 2), Rejected (Sheet 3)
+    // Determine target sheet: Registrations (Sheet 1), Approved (Sheet 2), Waiting list (Sheet 3), Rejected (Sheet 4)
     var sheetName = "Registrations";
     if (data.sheetName) {
       sheetName = data.sheetName;
     } else if (data.status === "Approved") {
       sheetName = "Approved";
+    } else if (data.status === "Waitlist" || data.status === "Waiting list") {
+      sheetName = "Waiting list";
     } else if (data.status === "Rejected") {
       sheetName = "Rejected";
     } else {

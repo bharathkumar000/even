@@ -241,50 +241,125 @@ export async function submitTeamRegistration(
 
     const isWaitlist = currentSemCount >= maxLimit;
 
-    // Require payment proof & UTR only for confirmed slots (< 40)
-    if (!isWaitlist) {
-      if (!paymentUtr || paymentUtr.length < 6) {
-        return { success: false, message: "Valid 12-digit UPI Reference / UTR Number is required." };
-      }
-      if (!paymentFile || paymentFile.size === 0) {
-        return { success: false, message: "Payment proof screenshot is required." };
-      }
-      const allowedMimeTypes = ["image/png", "image/jpeg", "image/jpg"];
-      if (!allowedMimeTypes.includes((paymentFile.type || "").toLowerCase())) {
-        return { success: false, message: "Invalid payment proof format. Only PNG, JPG, or JPEG images are allowed." };
-      }
-      if (paymentFile.size > 10 * 1024 * 1024) {
-        return { success: false, message: "Payment proof image must be smaller than 10MB." };
+    // =========================================================================
+    // WAITING LIST TEAMS: DO NOT SAVE IN SUPABASE!
+    // Stream directly to Google Sheets in the 3rd sheet named "Waiting list"
+    // =========================================================================
+    if (isWaitlist) {
+      const waitlistNum = currentSemCount - maxLimit + 1;
+      const d2 = members[0] || {};
+      const d3 = members[1] || {};
+      const d4 = members[2] || {};
+
+      const waitlistSheetRecord: ComprehensiveTeamRecord = {
+        sheetName: "Waiting list",
+        teamName: teamName,
+        track: track,
+        teamCode: `WAITLIST-#${waitlistNum}`,
+        status: "Waitlist",
+        decisionAt: new Date().toISOString(),
+        decisionBy: "Waiting List Submission",
+
+        // Driver 1 (Leader)
+        leaderName: leaderName,
+        leaderEmail: leaderEmail,
+        leaderPhone: leaderPhone,
+        leaderCollege: leaderCollege,
+        leaderUsn: leaderUsn,
+        leaderBranch: leaderBranch,
+        leaderSem: leaderSem,
+
+        // Driver 2
+        driver2Name: d2.name || "",
+        driver2Email: d2.email || "",
+        driver2Phone: d2.phone || "",
+        driver2College: d2.college || "",
+        driver2Usn: d2.usn || "",
+        driver2Branch: d2.branch || "",
+        driver2Sem: d2.sem || "",
+
+        // Driver 3
+        driver3Name: d3.name || "",
+        driver3Email: d3.email || "",
+        driver3Phone: d3.phone || "",
+        driver3College: d3.college || "",
+        driver3Usn: d3.usn || "",
+        driver3Branch: d3.branch || "",
+        driver3Sem: d3.sem || "",
+
+        // Driver 4
+        driver4Name: d4.name || "",
+        driver4Email: d4.email || "",
+        driver4Phone: d4.phone || "",
+        driver4College: d4.college || "",
+        driver4Usn: d4.usn || "",
+        driver4Branch: d4.branch || "",
+        driver4Sem: d4.sem || "",
+
+        // Payment (Waitlist: no payment required)
+        transactionId: `WAITLIST-#${waitlistNum} (Payment NOT required right now)`,
+        paymentPhone: paymentPhone,
+        paymentProofUrl: "WAITLIST (Payment pending slot availability)",
+
+        // Credentials
+        loginPassword: "",
+        portalUrl: "",
+        whatsappGroup: "https://chat.whatsapp.com/Baq9uEcVFQs9loSZxJTspB",
+        emailDispatchStatus: "WAITLIST",
+      };
+
+      try {
+        await syncRegistrationToGoogleSheets(waitlistSheetRecord);
+      } catch (err) {
+        console.error("Waitlist Google Sheets sync error:", err);
       }
 
-      // Prevent duplicate UTR reuse across registrations (both in team_registrations and teams table)
-      const { data: dupRegs } = await supabaseAdmin
-        .from("team_registrations")
-        .select("id")
-        .eq("payment_utr", paymentUtr)
-        .limit(1);
-      if (dupRegs && dupRegs.length > 0) {
-        return { success: false, message: "This UTR / Transaction Reference Number has already been submitted." };
-      }
+      return {
+        success: true,
+        isWaitlist: true,
+        message: "Your team has been successfully registered on the Waiting List! Details have been saved to Google Sheets (Waiting list). If any confirmed team is unable to participate, we will contact you.",
+      };
+    }
 
-      const { data: dupTeams } = await supabaseAdmin
-        .from("teams")
-        .select("id")
-        .eq("table_number", paymentUtr)
-        .limit(1);
-      if (dupTeams && dupTeams.length > 0) {
-        return { success: false, message: "This UTR / Transaction Reference Number has already been submitted." };
-      }
+    // Require payment proof & UTR for confirmed slots (< 40)
+    if (!paymentUtr || paymentUtr.length < 6) {
+      return { success: false, message: "Valid 12-digit UPI Reference / UTR Number is required." };
+    }
+    if (!paymentFile || paymentFile.size === 0) {
+      return { success: false, message: "Payment proof screenshot is required." };
+    }
+    const allowedMimeTypes = ["image/png", "image/jpeg", "image/jpg"];
+    if (!allowedMimeTypes.includes((paymentFile.type || "").toLowerCase())) {
+      return { success: false, message: "Invalid payment proof format. Only PNG, JPG, or JPEG images are allowed." };
+    }
+    if (paymentFile.size > 10 * 1024 * 1024) {
+      return { success: false, message: "Payment proof image must be smaller than 10MB." };
+    }
+
+    // Prevent duplicate UTR reuse across registrations (both in team_registrations and teams table)
+    const { data: dupRegs } = await supabaseAdmin
+      .from("team_registrations")
+      .select("id")
+      .eq("payment_utr", paymentUtr)
+      .limit(1);
+    if (dupRegs && dupRegs.length > 0) {
+      return { success: false, message: "This UTR / Transaction Reference Number has already been submitted." };
+    }
+
+    const { data: dupTeams } = await supabaseAdmin
+      .from("teams")
+      .select("id")
+      .eq("table_number", paymentUtr)
+      .limit(1);
+    if (dupTeams && dupTeams.length > 0) {
+      return { success: false, message: "This UTR / Transaction Reference Number has already been submitted." };
     }
 
     // 1. Encode payment proof to base64 for confirmed slots (Zero Supabase Storage usage)
-    let paymentProofUrl = "WAITLIST (Payment Pending Contact)";
+    let paymentProofUrl = "";
     let finalPaymentUtr = paymentUtr;
 
-    if (isWaitlist) {
-      const waitlistNum = currentSemCount - maxLimit + 1;
-      finalPaymentUtr = `WAITLIST-#${waitlistNum}`;
-    } else if (paymentFile) {
+    if (paymentFile) {
       const fileBuffer = Buffer.from(await paymentFile.arrayBuffer());
       paymentProofUrl = `data:${paymentFile.type || "image/jpeg"};base64,${fileBuffer.toString("base64")}`;
     }
@@ -313,7 +388,7 @@ export async function submitTeamRegistration(
     };
 
     // 3. Insert into team_registrations table with explicit credential columns
-    const registrationPayload = {
+    let registrationPayload: any = {
       team_name: teamName,
       track: track,
       leader_name: leaderName,
@@ -328,7 +403,6 @@ export async function submitTeamRegistration(
       payment_phone: paymentPhone,
       payment_proof_url: paymentProofUrl,
       status: "pending",
-      // Persist credentials in Supabase
       login_username: cleanUsername,
       login_email: leaderEmail,
       login_password: generatedPassword,
@@ -336,11 +410,39 @@ export async function submitTeamRegistration(
       generated_credentials: credentials,
     };
 
-    const { data: insertData, error: insertError } = await supabaseAdmin
+    let { data: insertData, error: insertError } = await supabaseAdmin
       .from("team_registrations")
       .insert(registrationPayload)
       .select("id")
       .single();
+
+    // If new columns are not yet in remote schema cache, retry with base columns only
+    if (insertError && (insertError.message.includes("column") || insertError.code === "PGRST204")) {
+      const basicPayload = {
+        team_name: teamName,
+        track: track,
+        leader_name: leaderName,
+        leader_email: leaderEmail,
+        leader_phone: leaderPhone,
+        leader_college: leaderCollege,
+        leader_usn: leaderUsn,
+        leader_branch: leaderBranch,
+        leader_sem: leaderSem,
+        members: members,
+        payment_utr: finalPaymentUtr,
+        payment_phone: paymentPhone,
+        payment_proof_url: paymentProofUrl,
+        status: "pending",
+        generated_credentials: credentials,
+      };
+      const retryResult = await supabaseAdmin
+        .from("team_registrations")
+        .insert(basicPayload)
+        .select("id")
+        .single();
+      insertData = retryResult.data;
+      insertError = retryResult.error;
+    }
 
     let insertedRegId = "";
     let isFallback = false;
@@ -354,7 +456,6 @@ export async function submitTeamRegistration(
           name: teamName,
           track: track,
           leader_name: leaderName,
-          leader_email: leaderEmail,
           status: "pending_verification",
           table_number: finalPaymentUtr,
           lab_room: paymentPhone,
@@ -366,7 +467,6 @@ export async function submitTeamRegistration(
             leaderSem,
             members,
             paymentProofUrl,
-            isWaitlist,
             loginPassword: generatedPassword,
             loginUsername: cleanUsername,
             teamCode: provisionalTeamCode,
@@ -388,7 +488,7 @@ export async function submitTeamRegistration(
         return { success: false, message: `Failed to record registration: ${insertError.message}` };
       }
     } else {
-      insertedRegId = insertData.id;
+      insertedRegId = insertData?.id || "";
     }
 
     // 4. Automatically stream registration to Sheet 1 ("Registrations") with generated credentials

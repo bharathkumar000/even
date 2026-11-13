@@ -66,3 +66,4 @@ WHERE login_email IS NULL;
 CREATE INDEX IF NOT EXISTS idx_team_reg_login_username ON public.team_registrations(lower(login_username));
 CREATE INDEX IF NOT EXISTS idx_team_reg_login_email ON public.team_registrations(lower(login_email));
 CREATE INDEX IF NOT EXISTS idx_team_reg_team_code ON public.team_registrations(team_code);
+
