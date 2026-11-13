@@ -176,7 +176,6 @@ Team Code: ${creds.teamCode}
 Login Email: ${creds.email}
 Password: ${creds.password}
 ============================================
-Note: The portal website link will be provided directly at the venue on the event day.
 Official WhatsApp Group: ${OFFICIAL_WHATSAPP_GROUP}
 
 Coordinators for queries:
@@ -209,11 +208,8 @@ Login Email: ${creds.email}
 Generated Password: ${creds.password}
 =========================================
 
-PLEASE NOTE:
-The Eventra portal website link will be provided directly at the venue on the event day.
-
 IMPORTANT - JOIN OFFICIAL PARTICIPANTS WHATSAPP GROUP:
-Join the official event WhatsApp group immediately to receive live schedule updates, announcements, problem statements, and round briefings:
+Join the official event WhatsApp group immediately to receive live schedule updates, announcements, and round briefings:
 👉 ${OFFICIAL_WHATSAPP_GROUP}
 
 For any queries or assistance, contact the student coordinators:
@@ -254,8 +250,6 @@ Hello ${creds.leaderName || "Team Leader"}, your team registration has been veri
 *Team Code:* ${creds.teamCode}
 *Login Email:* ${creds.email}
 *Password:* ${creds.password}
-
-_Note: The Eventra portal link will be provided on the event day at the venue._
 
 👉 *Join Official WhatsApp Group:*
 ${OFFICIAL_WHATSAPP_GROUP}

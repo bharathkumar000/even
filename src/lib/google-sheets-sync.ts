@@ -494,10 +494,8 @@ function sendCredentialsToAllApprovedTeams() {
       "Login Email: " + email + "\\n" +
       "Generated Password: " + password + "\\n" +
       "=========================================\\n\\n" +
-      "PLEASE NOTE:\\n" +
-      "The Eventra portal website link will be provided directly at the venue on the event day.\\n\\n" +
       "IMPORTANT - JOIN OFFICIAL PARTICIPANTS WHATSAPP GROUP:\\n" +
-      "Join the official event WhatsApp group immediately to receive live schedule updates, announcements, problem statements, and round briefings:\\n" +
+      "Join the official event WhatsApp group immediately to receive live schedule updates, announcements, and round briefings:\\n" +
       "👉 " + whatsappUrl + "\\n\\n" +
       "For any queries or assistance, contact the student coordinators:\\n" +
       "• Moksh: +91 831 035 3103\\n" +

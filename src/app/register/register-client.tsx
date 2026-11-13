@@ -478,7 +478,7 @@ export default function RegisterClientView({
               </h2>
 
               <p className="font-mono text-xs sm:text-sm text-neutral-300 leading-relaxed max-w-lg mx-auto">
-                All live race briefings, schedule updates, track announcements, problem statements, and pit-stop instructions will be broadcasted exclusively in this group. All team members must join!
+                All live race briefings, schedule updates, track announcements, and pit-stop instructions will be broadcasted exclusively in this group. All team members must join!
               </p>
 
               <a
@@ -509,7 +509,7 @@ export default function RegisterClientView({
             <div className="space-y-4 max-w-xl mx-auto font-mono">
               {!successData.isWaitlist && (
                 <div className="p-3.5 bg-neutral-950 border border-neutral-800 rounded-xl text-neutral-300 text-xs leading-relaxed">
-                  💡 <strong>Next Steps:</strong> Once the UTR is verified by Race Control, your squad&apos;s official credentials will be dispatched to the Team Lead&apos;s email (<span className="text-white font-bold">{driver1.email}</span>). The Eventra portal link will be handed out on race day directly at the venue.
+                  💡 <strong>Next Steps:</strong> Once the UTR is verified by Race Control, your squad&apos;s official credentials will be dispatched to the Team Lead&apos;s email (<span className="text-white font-bold">{driver1.email}</span>).
                 </div>
               )}
 
