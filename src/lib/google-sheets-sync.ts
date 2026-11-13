@@ -548,50 +548,59 @@ function doPost(e) {
  */
 function sendCredentialsToAllApprovedTeams() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
-  var sheet = ss.getSheetByName("Approved");
+  // Support both "Credentials" and "Approved" sheets
+  var sheet = ss.getSheetByName("Credentials") || ss.getSheetByName("Approved");
   if (!sheet) {
-    SpreadsheetApp.getUi().alert("Sheet 'Approved' not found!");
+    SpreadsheetApp.getUi().alert("Sheet 'Credentials' or 'Approved' not found!");
     return;
   }
   
   var data = sheet.getDataRange().getValues();
   if (data.length <= 1) {
-    SpreadsheetApp.getUi().alert("No approved teams found in the 'Approved' sheet.");
+    SpreadsheetApp.getUi().alert("No teams found in sheet: " + sheet.getName());
     return;
   }
   
   var headers = data[0];
-  var emailCol = headers.indexOf("Leader Email");
-  var nameCol = headers.indexOf("Leader Name");
+  var emailCol = headers.indexOf("Login Email ID") !== -1 ? headers.indexOf("Login Email ID") : headers.indexOf("Leader Email");
+  var nameCol = headers.indexOf("Team Lead") !== -1 ? headers.indexOf("Team Lead") : headers.indexOf("Leader Name");
   var teamNameCol = headers.indexOf("Team Name");
   var teamCodeCol = headers.indexOf("Team Code");
-  var passwordCol = headers.indexOf("Login Password");
+  var passwordCol = headers.indexOf("Password") !== -1 ? headers.indexOf("Password") : headers.indexOf("Login Password");
   var whatsappCol = headers.indexOf("WhatsApp Group");
   var statusCol = headers.indexOf("Email Dispatch Status");
   
   if (emailCol === -1 || passwordCol === -1) {
-    SpreadsheetApp.getUi().alert("Required columns ('Leader Email', 'Login Password') not found in Approved sheet.");
+    SpreadsheetApp.getUi().alert("Required email and password columns not found in sheet: " + sheet.getName());
     return;
+  }
+  
+  // Ensure 'Email Dispatch Status' column exists to track sent emails
+  if (statusCol === -1) {
+    statusCol = headers.length;
+    sheet.getRange(1, statusCol + 1).setValue("Email Dispatch Status").setFontWeight("bold").setBackground("#e0e0e0");
   }
   
   var count = 0;
   for (var i = 1; i < data.length; i++) {
     var row = data[i];
-    var email = row[emailCol];
-    var password = row[passwordCol];
-    var teamName = row[teamNameCol];
-    var teamCode = row[teamCodeCol];
-    var leaderName = row[nameCol] || "Team Leader";
+    var email = String(row[emailCol] || "").trim();
+    var password = String(row[passwordCol] || "").trim();
+    var teamName = String(row[teamNameCol] || "Grand Prix Squad").trim();
+    var teamCode = teamCodeCol !== -1 ? String(row[teamCodeCol] || "") : "";
+    var leaderNameRaw = nameCol !== -1 ? String(row[nameCol] || "") : "Team Leader";
+    // Strip phone numbers from "Name (+91...)" if present
+    var leaderName = leaderNameRaw.replace(/\\s*\\([^)]*\\)/g, "").trim() || "Team Leader";
     var whatsappUrl = (whatsappCol !== -1 && row[whatsappCol]) ? String(row[whatsappCol]) : "https://chat.whatsapp.com/Baq9uEcVFQs9loSZxJTspB";
-    var dispatchStatus = statusCol !== -1 ? String(row[statusCol]) : "";
+    var dispatchStatus = statusCol !== -1 ? String(row[statusCol] || "") : "";
     
-    // Skip if already sent or missing password
+    // Skip if already sent or missing credentials
     if (dispatchStatus && dispatchStatus.indexOf("SENT") === 0) continue;
     if (!email || !password) continue;
     
     var subject = "[IVC Relaython 2026] Official Team Credentials & WhatsApp Group - " + teamName;
     var body = "Dear " + leaderName + ",\\n\\n" +
-      "Congratulations! Your team registration and payment for the IVC Relaython 2026 have been successfully verified.\\n\\n" +
+      "Congratulations! Your team registration and payment for IVC Relaython 2026 have been successfully verified.\\n\\n" +
       "Here are your official team credentials:\\n\\n" +
       "=========================================\\n" +
       "TEAM ACCESS CREDENTIALS\\n" +
@@ -611,17 +620,19 @@ function sendCredentialsToAllApprovedTeams() {
       "Best regards,\\n" +
       "Innovators & Visionaries Club (IVC)";
       
-    MailApp.sendEmail({
-      to: email,
-      subject: subject,
-      body: body,
-      name: "Innovators & Visionaries Club (IVC)",
-      replyTo: "ivcofficial@vvce.ac.in"
-    });
-    if (statusCol !== -1) {
+    try {
+      MailApp.sendEmail({
+        to: email,
+        subject: subject,
+        body: body,
+        name: "Innovators & Visionaries Club (IVC)",
+        replyTo: "ivcofficial@vvce.ac.in"
+      });
       sheet.getRange(i + 1, statusCol + 1).setValue("SENT: " + new Date().toLocaleString());
+      count++;
+    } catch (mailErr) {
+      sheet.getRange(i + 1, statusCol + 1).setValue("ERROR: " + mailErr.toString());
     }
-    count++;
   }
   
   SpreadsheetApp.getUi().alert("Successfully sent official credentials to " + count + " teams!");
