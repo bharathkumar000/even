@@ -414,7 +414,7 @@ function doPost(e) {
       proofLink,
       // Credentials & Bulk Dispatch
       data.loginPassword || "",
-      data.portalUrl || "https://eventra-ivc.vercel.app/login",
+      data.portalUrl || "",
       data.whatsappGroup || "https://chat.whatsapp.com/Baq9uEcVFQs9loSZxJTspB",
       data.emailDispatchStatus || "PENDING"
     ]);
@@ -451,6 +451,7 @@ function sendCredentialsToAllApprovedTeams() {
   var teamNameCol = headers.indexOf("Team Name");
   var teamCodeCol = headers.indexOf("Team Code");
   var passwordCol = headers.indexOf("Login Password");
+  var whatsappCol = headers.indexOf("WhatsApp Group");
   var statusCol = headers.indexOf("Email Dispatch Status");
   
   if (emailCol === -1 || passwordCol === -1) {
@@ -466,31 +467,34 @@ function sendCredentialsToAllApprovedTeams() {
     var teamName = row[teamNameCol];
     var teamCode = row[teamCodeCol];
     var leaderName = row[nameCol] || "Team Leader";
+    var whatsappUrl = (whatsappCol !== -1 && row[whatsappCol]) ? String(row[whatsappCol]) : "https://chat.whatsapp.com/Baq9uEcVFQs9loSZxJTspB";
     var dispatchStatus = statusCol !== -1 ? String(row[statusCol]) : "";
     
     // Skip if already sent or missing password
     if (dispatchStatus && dispatchStatus.indexOf("SENT") === 0) continue;
     if (!email || !password) continue;
     
-    var subject = "[IVC Ideathon 2026] Official Team Credentials & QR Pass - " + teamName;
+    var subject = "[IVC Relaython 2026] Official Team Credentials & WhatsApp Group - " + teamName;
     var body = "Dear " + leaderName + ",\\n\\n" +
-      "Congratulations! Your team registration and payment for the IVC Ideathon 2026 have been successfully verified.\\n\\n" +
-      "Here are your official credentials to access the Eventra portal:\\n\\n" +
+      "Congratulations! Your team registration and payment for the IVC Relaython 2026 have been successfully verified.\\n\\n" +
+      "Here are your official team credentials:\\n\\n" +
       "=========================================\\n" +
       "TEAM ACCESS CREDENTIALS\\n" +
       "=========================================\\n" +
       "Team Name / Username: " + teamName + "\\n" +
       "Team Code: " + teamCode + "\\n" +
-      "Portal URL: https://eventra-ivc.vercel.app/login\\n" +
       "Login Email: " + email + "\\n" +
-      "Password: " + password + "\\n" +
+      "Generated Password: " + password + "\\n" +
       "=========================================\\n\\n" +
+      "PLEASE NOTE:\\n" +
+      "The Eventra portal website link will be provided directly at the venue on the event day.\\n\\n" +
       "IMPORTANT - JOIN OFFICIAL PARTICIPANTS WHATSAPP GROUP:\\n" +
       "Join the official event WhatsApp group immediately to receive live schedule updates, announcements, problem statements, and round briefings:\\n" +
-      "👉 https://chat.whatsapp.com/Baq9uEcVFQs9loSZxJTspB\\n\\n" +
-      "If you have any queries or require support, feel free to ask in the WhatsApp group or contact the coordinators:\\n" +
-      "• Moksh: +91 83103 53103\\n" +
-      "• Parinitha: +91 63614 55193\\n\\n" +
+      "👉 " + whatsappUrl + "\\n\\n" +
+      "For any queries or assistance, contact the student coordinators:\\n" +
+      "• Moksh: +91 831 035 3103\\n" +
+      "• Parinitha: +91 63614 55193\\n" +
+      "• Monish: +91 95917 55995\\n\\n" +
       "Best regards,\\n" +
       "Innovators & Visionaries Club (IVC)";
       

@@ -289,7 +289,30 @@ export async function submitTeamRegistration(
       paymentProofUrl = `data:${paymentFile.type || "image/jpeg"};base64,${fileBuffer.toString("base64")}`;
     }
 
-    // 2. Insert into team_registrations table
+    // 2. Generate secure credentials upfront so they are immediately preserved in Supabase & Google Sheets
+    const generatedPassword = generateSecurePassword();
+    const cleanUsername = teamName.toLowerCase().replace(/[^a-z0-9]/g, "");
+
+    // Determine provisional team code (e.g. IVC-VV-001)
+    const { count: regCount } = await supabaseAdmin
+      .from("team_registrations")
+      .select("*", { count: "exact", head: true });
+    const provisionalTeamCode = `IVC-VV-${String((regCount || 0) + 1).padStart(3, "0")}`;
+
+    const credentials: GeneratedCredentials = {
+      teamId: "",
+      teamName,
+      teamCode: provisionalTeamCode,
+      email: leaderEmail,
+      leaderName,
+      leaderPhone: leaderPhone || paymentPhone,
+      username: cleanUsername,
+      password: generatedPassword,
+      qrPayload: "",
+      approvedAt: "",
+    };
+
+    // 3. Insert into team_registrations table with explicit credential columns
     const registrationPayload = {
       team_name: teamName,
       track: track,
@@ -305,6 +328,12 @@ export async function submitTeamRegistration(
       payment_phone: paymentPhone,
       payment_proof_url: paymentProofUrl,
       status: "pending",
+      // Persist credentials in Supabase
+      login_username: cleanUsername,
+      login_email: leaderEmail,
+      login_password: generatedPassword,
+      team_code: provisionalTeamCode,
+      generated_credentials: credentials,
     };
 
     const { data: insertData, error: insertError } = await supabaseAdmin
@@ -325,6 +354,7 @@ export async function submitTeamRegistration(
           name: teamName,
           track: track,
           leader_name: leaderName,
+          leader_email: leaderEmail,
           status: "pending_verification",
           table_number: finalPaymentUtr,
           lab_room: paymentPhone,
@@ -337,6 +367,9 @@ export async function submitTeamRegistration(
             members,
             paymentProofUrl,
             isWaitlist,
+            loginPassword: generatedPassword,
+            loginUsername: cleanUsername,
+            teamCode: provisionalTeamCode,
           }),
         };
 
@@ -358,7 +391,7 @@ export async function submitTeamRegistration(
       insertedRegId = insertData.id;
     }
 
-    // 3. Automatically stream registration to Sheet 1 ("Registrations") irrespective of approval status
+    // 4. Automatically stream registration to Sheet 1 ("Registrations") with generated credentials
     const d2 = members[0] || {};
     const d3 = members[1] || {};
     const d4 = members[2] || {};
@@ -368,6 +401,7 @@ export async function submitTeamRegistration(
       sheetName: "Registrations",
       teamName: teamName,
       track: track,
+      teamCode: provisionalTeamCode,
       status: isWaitlist ? "Waitlist" : "Pending",
       decisionAt: new Date().toISOString(),
 
@@ -412,6 +446,12 @@ export async function submitTeamRegistration(
       paymentPhone: paymentPhone,
       paymentProofUrl: isBase64Proof ? undefined : paymentProofUrl,
       paymentProofBase64: isBase64Proof ? paymentProofUrl : undefined,
+
+      // Credentials for Bulk Dispatch (Login Password is ALWAYS populated; Portal URL is omitted before event day)
+      loginPassword: generatedPassword,
+      portalUrl: "",
+      whatsappGroup: "https://chat.whatsapp.com/Baq9uEcVFQs9loSZxJTspB",
+      emailDispatchStatus: "PENDING",
     };
 
     // Non-blocking background sync to Sheet 1 ("Registrations")
@@ -504,6 +544,49 @@ export async function getRegistrations(statusFilter?: "all" | "pending" | "appro
       throw error;
     }
 
+    // Auto-backfill any registrations in Supabase that are missing generated passwords
+    if (data && data.length > 0) {
+      for (const item of data) {
+        if (!item.login_password && !item.generated_credentials?.password) {
+          const pass = generateSecurePassword();
+          const cleanUname = (item.team_name || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+          const code = item.team_code || `IVC-VV-${String(data.indexOf(item) + 1).padStart(3, "0")}`;
+          const creds: GeneratedCredentials = {
+            teamId: item.team_id || "",
+            teamName: item.team_name,
+            teamCode: code,
+            email: item.leader_email,
+            leaderName: item.leader_name,
+            leaderPhone: item.leader_phone || item.payment_phone || "",
+            username: cleanUname,
+            password: pass,
+            qrPayload: "",
+            approvedAt: item.approved_at || "",
+          };
+
+          item.login_username = cleanUname;
+          item.login_email = item.leader_email;
+          item.login_password = pass;
+          item.team_code = code;
+          item.generated_credentials = creds;
+
+          // Asynchronously update Supabase record
+          supabaseAdmin
+            .from("team_registrations")
+            .update({
+              login_username: cleanUname,
+              login_email: item.leader_email,
+              login_password: pass,
+              team_code: code,
+              generated_credentials: creds,
+            })
+            .eq("id", item.id)
+            .then(() => {})
+            .catch(() => {});
+        }
+      }
+    }
+
     return { success: true, registrations: data || [], tableFallback: false };
   } catch (err: any) {
     console.error("getRegistrations error:", err);
@@ -573,15 +656,26 @@ export async function approveRegistration(registrationId: string): Promise<{
     const track = reg.track || "Innovation";
     const members: TeamMemberInput[] = Array.isArray(reg.members) ? reg.members : [];
 
-    // 2. Generate unique password and team code
-    const generatedPassword = generateSecurePassword();
+    // 2. Use existing credentials if already generated, or generate fresh secure password
+    const generatedPassword =
+      reg.login_password ||
+      reg.generated_credentials?.password ||
+      generateSecurePassword();
+
+    const username =
+      reg.login_username ||
+      reg.generated_credentials?.username ||
+      teamName.toLowerCase().replace(/[^a-z0-9]/g, "");
 
     // Generate readable team code (e.g. IVC-VV-042)
     const { count: teamCount } = await supabaseAdmin
       .from("teams")
       .select("*", { count: "exact", head: true });
 
-    const teamCode = `IVC-VV-${String((teamCount || 0) + 1).padStart(3, "0")}`;
+    const teamCode =
+      reg.team_code ||
+      reg.generated_credentials?.teamCode ||
+      `IVC-VV-${String((teamCount || 0) + 1).padStart(3, "0")}`;
 
     // 3. Create or find User in Supabase Auth
     let authUserId: string | null = null;
@@ -594,6 +688,7 @@ export async function approveRegistration(registrationId: string): Promise<{
         full_name: leaderName,
         role: "leader",
         team_name: teamName,
+        username: username,
       },
     });
 
@@ -606,9 +701,15 @@ export async function approveRegistration(registrationId: string): Promise<{
         );
         if (existing) {
           authUserId = existing.id;
-          // Update password for existing user so they can login
+          // Update password and metadata for existing user so they can login
           await supabaseAdmin.auth.admin.updateUserById(existing.id, {
             password: generatedPassword,
+            user_metadata: {
+              full_name: leaderName,
+              role: "leader",
+              team_name: teamName,
+              username: username,
+            },
           });
         }
       } else {
@@ -622,12 +723,13 @@ export async function approveRegistration(registrationId: string): Promise<{
       return { success: false, message: "Could not resolve or create Supabase user ID." };
     }
 
-    // 4. Upsert Leader in `profiles` table
+    // 4. Upsert Leader in `profiles` table with username and 'leader' role
     await supabaseAdmin.from("profiles").upsert({
       id: authUserId,
       email: leaderEmail,
       full_name: leaderName,
-      role: "participant",
+      username: username,
+      role: "leader",
     });
 
     // 5. Create or Update Team in `teams` table
@@ -646,6 +748,7 @@ export async function approveRegistration(registrationId: string): Promise<{
           code: teamCode,
           track: track,
           leader_name: leaderName,
+          leader_email: leaderEmail,
           status: "active",
         })
         .eq("id", teamId);
@@ -657,6 +760,7 @@ export async function approveRegistration(registrationId: string): Promise<{
           code: teamCode,
           track: track,
           leader_name: leaderName,
+          leader_email: leaderEmail,
           status: "active",
         })
         .select("id")
@@ -711,13 +815,13 @@ export async function approveRegistration(registrationId: string): Promise<{
       email: leaderEmail,
       leaderName,
       leaderPhone: reg.leader_phone || reg.payment_phone || "",
-      username: teamName,
+      username: username,
       password: generatedPassword,
       qrPayload,
       approvedAt: nowIso,
     };
 
-    // 8. Update team_registrations status to 'approved'
+    // 8. Update team_registrations status to 'approved' and persist credentials directly in Supabase columns
     await supabaseAdmin
       .from("team_registrations")
       .update({
@@ -725,6 +829,10 @@ export async function approveRegistration(registrationId: string): Promise<{
         team_id: teamId,
         approved_at: nowIso,
         approved_by: adminUser.id,
+        login_username: username,
+        login_email: leaderEmail,
+        login_password: generatedPassword,
+        team_code: teamCode,
         generated_credentials: credentials,
       })
       .eq("id", registrationId);
@@ -786,9 +894,9 @@ export async function approveRegistration(registrationId: string): Promise<{
       paymentProofUrl: isBase64Proof ? undefined : reg.payment_proof_url,
       paymentProofBase64: isBase64Proof ? reg.payment_proof_url : undefined,
 
-      // Credentials for Bulk Email Dispatch from Google Sheets
+      // Credentials for Bulk Email Dispatch from Google Sheets (No premature Portal URL)
       loginPassword: generatedPassword,
-      portalUrl: "https://eventra-ivc.vercel.app/login",
+      portalUrl: "",
       whatsappGroup: "https://chat.whatsapp.com/Baq9uEcVFQs9loSZxJTspB",
       emailDispatchStatus: "PENDING",
     };
@@ -976,11 +1084,28 @@ export async function syncAllApprovedRegistrationsAction(): Promise<{
       const d4 = membersList[2] || {};
       const isBase64 = typeof reg.payment_proof_url === "string" && reg.payment_proof_url.startsWith("data:");
 
+      const pass = reg.login_password || reg.generated_credentials?.password || generateSecurePassword();
+      const code = reg.team_code || reg.generated_credentials?.teamCode || `IVC-VV-${String(approvedList.indexOf(reg) + 1).padStart(3, "0")}`;
+      const uname = reg.login_username || reg.generated_credentials?.username || reg.team_name.toLowerCase().replace(/[^a-z0-9]/g, "");
+
+      // If missing password or credentials in Supabase columns, backfill now
+      if (!reg.login_password) {
+        await supabaseAdmin
+          .from("team_registrations")
+          .update({
+            login_username: uname,
+            login_email: reg.leader_email,
+            login_password: pass,
+            team_code: code,
+          })
+          .eq("id", reg.id);
+      }
+
       const record: GoogleSheetRegistrationRecord = {
         sheetName: "Approved",
         teamName: reg.team_name,
         track: reg.track || "GRAND PRIX",
-        teamCode: reg.generated_credentials?.teamCode || "",
+        teamCode: code,
         status: "Approved",
         decisionAt: reg.approved_at || reg.created_at,
 
@@ -1025,9 +1150,9 @@ export async function syncAllApprovedRegistrationsAction(): Promise<{
         paymentProofUrl: isBase64 ? undefined : reg.payment_proof_url,
         paymentProofBase64: isBase64 ? reg.payment_proof_url : undefined,
 
-        // Credentials for Bulk Email Dispatch from Google Sheets
-        loginPassword: reg.generated_credentials?.password || "",
-        portalUrl: "https://eventra-ivc.vercel.app/login",
+        // Credentials for Bulk Email Dispatch from Google Sheets (No premature Portal URL)
+        loginPassword: pass,
+        portalUrl: "",
         whatsappGroup: "https://chat.whatsapp.com/Baq9uEcVFQs9loSZxJTspB",
         emailDispatchStatus: "PENDING",
       };
@@ -1124,9 +1249,9 @@ export async function exportRegistrationsCsvAction(
           ? "[Base64 Screenshot Attached]"
           : r.payment_proof_url || "",
 
-        // Credentials for Bulk Email Dispatch from Google Sheets / Mail Merge
-        loginPassword: r.generated_credentials?.password || "",
-        portalUrl: "https://eventra-ivc.vercel.app/login",
+        // Credentials for Bulk Email Dispatch from Google Sheets / Mail Merge (No premature portal URL)
+        loginPassword: r.login_password || r.generated_credentials?.password || "",
+        portalUrl: "",
         whatsappGroup: "https://chat.whatsapp.com/Baq9uEcVFQs9loSZxJTspB",
         emailDispatchStatus: "PENDING",
       };

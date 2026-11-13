@@ -173,17 +173,17 @@ export default function RegistrationsClientView({
 === EVENTRA 2026 - TEAM LOGIN CREDENTIALS ===
 Team Name: ${creds.teamName}
 Team Code: ${creds.teamCode}
-Portal URL: https://eventra-ivc.vercel.app/login
 Login Email: ${creds.email}
 Password: ${creds.password}
 ============================================
+Note: The portal website link will be provided directly at the venue on the event day.
 Official WhatsApp Group: ${OFFICIAL_WHATSAPP_GROUP}
 
 Coordinators for queries:
-• Moksh: +91 83103 53103
+• Moksh: +91 831 035 3103
 • Parinitha: +91 63614 55193
+• Monish: +91 95917 55995
 ============================================
-Official QR Code is activated for Registration Check-in & Meals.
     `.trim();
 
     navigator.clipboard.writeText(text);
@@ -193,30 +193,33 @@ Official QR Code is activated for Registration Check-in & Meals.
 
   const getEmailContent = (creds: GeneratedCredentials) => {
     const leader = creds.leaderName || "Team Leader";
-    const subject = `[IVC Ideathon 2026] Official Team Credentials & QR Pass - ${creds.teamName}`;
+    const subject = `[IVC Relaython 2026] Official Team Credentials & WhatsApp Group - ${creds.teamName}`;
     const body = `Dear ${leader},
 
-Congratulations! Your team registration and payment for the IVC Ideathon 2026 have been successfully verified.
+Congratulations! Your team registration and payment for IVC Relaython 2026 have been successfully verified.
 
-Here are your official credentials to access the Eventra portal:
+Here are your official team credentials:
 
 =========================================
 TEAM ACCESS CREDENTIALS
 =========================================
 Team Name / Username: ${creds.teamName}
 Team Code: ${creds.teamCode}
-Portal URL: https://eventra-ivc.vercel.app/login
 Login Email: ${creds.email}
-Password: ${creds.password}
+Generated Password: ${creds.password}
 =========================================
+
+PLEASE NOTE:
+The Eventra portal website link will be provided directly at the venue on the event day.
 
 IMPORTANT - JOIN OFFICIAL PARTICIPANTS WHATSAPP GROUP:
 Join the official event WhatsApp group immediately to receive live schedule updates, announcements, problem statements, and round briefings:
 👉 ${OFFICIAL_WHATSAPP_GROUP}
 
-If you have any queries or require support, feel free to ask in the WhatsApp group or contact the coordinators:
-• Moksh: +91 83103 53103
+For any queries or assistance, contact the student coordinators:
+• Moksh: +91 831 035 3103
 • Parinitha: +91 63614 55193
+• Monish: +91 95917 55995
 
 Best regards,
 Innovators & Visionaries Club (IVC)`;
@@ -243,24 +246,24 @@ Innovators & Visionaries Club (IVC)`;
   const handleSendWhatsApp = (creds: GeneratedCredentials) => {
     const cleanPhone = (creds.leaderPhone || "").replace(/\D/g, "");
     const phoneWithCountry = cleanPhone.length === 10 ? `91${cleanPhone}` : cleanPhone;
-    const msg = `*EVENTRA 2026 - OFFICIAL SQUAD ACCESS PASS*
+    const msg = `*RELAYTHON 2026 - OFFICIAL SQUAD CREDENTIALS*
 
-Hello ${creds.leaderName || "Team Leader"}, your registration has been verified!
+Hello ${creds.leaderName || "Team Leader"}, your team registration has been verified!
 
-*Team:* ${creds.teamName}
+*Team Name:* ${creds.teamName}
 *Team Code:* ${creds.teamCode}
-*Portal URL:* https://eventra-ivc.vercel.app/login
 *Login Email:* ${creds.email}
 *Password:* ${creds.password}
+
+_Note: The Eventra portal link will be provided on the event day at the venue._
 
 👉 *Join Official WhatsApp Group:*
 ${OFFICIAL_WHATSAPP_GROUP}
 
 *Coordinators for queries:*
-• Moksh: +91 83103 53103
+• Moksh: +91 831 035 3103
 • Parinitha: +91 63614 55193
-
-Log in to the portal to view your squad's active QR Pass for check-in and meals!`;
+• Monish: +91 95917 55995`;
 
     const waUrl = phoneWithCountry
       ? `https://api.whatsapp.com/send?phone=${phoneWithCountry}&text=${encodeURIComponent(msg)}`
