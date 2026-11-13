@@ -16,6 +16,10 @@ import {
   Users,
   Lock,
   ShieldAlert,
+  MessageCircle,
+  ExternalLink,
+  Flag,
+  Zap,
 } from "lucide-react";
 import { submitTeamRegistration, TeamMemberInput } from "@/app/actions/team-registration";
 import RelayathonFooter from "@/components/RelayathonFooter";
@@ -407,57 +411,111 @@ export default function RegisterClientView({
 
       {/* Main Form Content */}
       <main className="max-w-5xl mx-auto px-4 sm:px-6 pt-8 sm:pt-12">
-        {/* SUCCESS CONFIRMATION MODAL / SCREEN */}
+        {/* SUCCESS CONFIRMATION MODAL / SCREEN (F1 PADDOCK & RACE CONTROL STYLED) */}
         {successData ? (
-          <div className="border-2 border-red-600 bg-[#080808] p-8 sm:p-12 rounded-xl text-center space-y-6 shadow-[0_0_50px_rgba(255,0,0,0.25)] animate-fade-in my-10">
-            <div className="w-16 h-16 bg-red-600/20 text-red-500 border border-red-500 rounded-full flex items-center justify-center mx-auto shadow-[0_0_20px_rgba(255,0,0,0.3)]">
-              <CheckCircle2 size={36} />
+          <div className="border-2 border-red-600 bg-[#080808] p-6 sm:p-12 rounded-2xl text-center space-y-6 sm:space-y-8 shadow-[0_0_60px_rgba(255,0,0,0.3)] animate-fade-in my-8 sm:my-12 relative overflow-hidden">
+            {/* Top Chequered Track Border */}
+            <div className="absolute top-0 left-0 right-0 h-2 bg-[repeating-linear-gradient(45deg,#ff0000,#ff0000_12px,#000000_12px,#000000_24px)] opacity-80" />
+
+            {/* Glowing F1 Status Badge */}
+            <div className="inline-flex items-center gap-2 px-4 py-1.5 bg-red-600/15 border border-red-500/50 rounded-full text-red-400 font-mono text-[11px] sm:text-xs uppercase font-bold tracking-[3px] shadow-[0_0_20px_rgba(255,0,0,0.25)]">
+              <span className="w-2 h-2 rounded-full bg-red-500 animate-ping" />
+              <span>
+                {successData.isWaitlist
+                  ? "🏎️ PIT LANE WAITING LIST // ENTRY LOGGED"
+                  : "🏁 PADDOCK ACCESS GRANTED // FORMULA 1 GRID POSITION LOCKED"}
+              </span>
             </div>
 
+            {/* Main F1 Title */}
             <div className="space-y-2">
-              <span className="font-mono text-xs uppercase text-red-400 tracking-[3px] font-bold">
-                {successData.isWaitlist
-                  ? "WAITING LIST CONFIRMED // ENTRY LOGGED"
-                  : "GRID POSITION LOCKED // REGISTRATION SUBMITTED"}
-              </span>
-              <h1 className="text-3xl sm:text-4xl font-black italic uppercase text-white tracking-wide">
+              <h1 className="text-3xl sm:text-5xl font-black italic uppercase text-white tracking-wide leading-tight drop-shadow-[0_0_30px_rgba(255,0,0,0.35)]">
                 {successData.isWaitlist
                   ? `ON THE WAITING LIST, ${successData.teamName}`
-                  : `WELCOME TO RELAYTHON, ${successData.teamName}`}
+                  : `WELCOME TO THE GRID, ${successData.teamName}`}
               </h1>
+              <p className="font-mono text-xs sm:text-sm text-neutral-400 max-w-xl mx-auto uppercase tracking-wider">
+                {successData.isWaitlist
+                  ? "Your squad details have been logged with Race Control into the Waiting List."
+                  : "Your 4-driver constructor crew has been locked into the official Relaython 2026 grid."}
+              </p>
               {successData.isWaitlist && (
-                <p className="font-mono text-sm text-neutral-400 max-w-xl mx-auto">
-                  Please note that registering on the waiting list does not guarantee participation. If any of the confirmed slot teams is unable to participate, our committee will contact you for the payment procedure and participation confirmation.
-                </p>
+                <div className="p-3 bg-yellow-500/10 border border-yellow-500/30 rounded-xl text-yellow-300 font-mono text-xs max-w-xl mx-auto leading-relaxed mt-2">
+                  ⚠️ <strong>Please Note:</strong> Registering on the waiting list does not guarantee a slot for participation. If any confirmed slot becomes available, our Race Stewards will reach out to the Team Lead for payment and participation confirmation.
+                </div>
               )}
             </div>
 
-            <div className="p-4 bg-black/60 border border-red-600/40 rounded-lg max-w-md mx-auto font-mono text-xs space-y-2 text-left">
-              <div className="flex justify-between">
-                <span className="text-neutral-500">CONSTRUCTOR SQUAD:</span>
+            {/* F1 Race Control Telemetry Box */}
+            <div className="p-4 sm:p-5 bg-black/80 border border-red-600/40 rounded-xl max-w-md mx-auto font-mono text-xs space-y-2.5 text-left shadow-inner">
+              <div className="flex justify-between items-center pb-2 border-b border-white/10">
+                <span className="text-neutral-500 uppercase tracking-wider">CONSTRUCTOR SQUAD:</span>
                 <span className="text-white font-bold">{successData.teamName}</span>
               </div>
-              <div className="flex justify-between">
-                <span className="text-neutral-500">REGISTRATION REF:</span>
-                <span className="text-red-400 font-bold">{successData.refId}</span>
+              <div className="flex justify-between items-center pb-2 border-b border-white/10">
+                <span className="text-neutral-500 uppercase tracking-wider">RACE CONTROL REF:</span>
+                <span className="text-red-400 font-bold font-mono">{successData.refId}</span>
               </div>
-              <div className="flex justify-between">
-                <span className="text-neutral-500">STATUS:</span>
-                <span className="text-yellow-400 font-bold">
+              <div className="flex justify-between items-center">
+                <span className="text-neutral-500 uppercase tracking-wider">TELEMETRY STATUS:</span>
+                <span className={`font-bold ${successData.isWaitlist ? "text-yellow-400" : "text-emerald-400"}`}>
                   {successData.isWaitlist
-                    ? "Waiting List (Payment Pending Slot Opening)"
-                    : "Manual UTR Cross-Check In Progress"}
+                    ? "Waiting List Slot Logged"
+                    : "Manual Telemetry & UTR Verification In Progress"}
                 </span>
               </div>
             </div>
 
-            <div className="space-y-3 max-w-xl mx-auto font-mono">
-              <p className="text-yellow-400 font-bold text-xs sm:text-sm m-0">
-                Once the Transaction is verified, the login credentials will be shared to the Team Lead&apos;s email ({driver1.email}).
+            {/* MANDATORY OFFICIAL WHATSAPP GROUP CARD */}
+            <div className="p-6 sm:p-7 bg-gradient-to-b from-[#0a1f14] via-[#05130b] to-black border-2 border-emerald-500 rounded-2xl max-w-xl mx-auto text-center space-y-4 shadow-[0_0_40px_rgba(16,185,129,0.3)]">
+              <div className="inline-flex items-center gap-2 px-3 py-1 bg-emerald-500/20 border border-emerald-500/40 rounded-full text-emerald-400 font-mono text-xs uppercase font-bold tracking-widest">
+                <MessageCircle className="w-4 h-4 text-emerald-400" />
+                <span>Mandatory Step // All 4 Drivers</span>
+              </div>
+
+              <h2 className="text-2xl sm:text-3xl font-black italic uppercase text-white tracking-wide">
+                Join The Official WhatsApp Group
+              </h2>
+
+              <p className="font-mono text-xs sm:text-sm text-neutral-300 leading-relaxed max-w-lg mx-auto">
+                All live race briefings, schedule updates, track announcements, problem statements, and pit-stop instructions will be broadcasted exclusively in this group. All team members must join!
               </p>
+
+              <a
+                href="https://chat.whatsapp.com/Baq9uEcVFQs9loSZxJTspB"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center justify-center gap-2.5 px-8 py-4 bg-emerald-500 hover:bg-emerald-400 text-black font-black uppercase italic tracking-wider text-sm sm:text-base rounded-xl transition-all shadow-[0_0_30px_rgba(16,185,129,0.5)] hover:scale-105 active:scale-95"
+              >
+                <MessageCircle className="w-5 h-5 fill-black" />
+                <span>JOIN OFFICIAL WHATSAPP GROUP &gt;&gt;</span>
+                <ExternalLink className="w-4 h-4" />
+              </a>
+
+              <div className="pt-2 text-[11px] font-mono text-neutral-400 break-all">
+                Direct Link:{" "}
+                <a
+                  href="https://chat.whatsapp.com/Baq9uEcVFQs9loSZxJTspB"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-emerald-400 underline hover:text-emerald-300"
+                >
+                  https://chat.whatsapp.com/Baq9uEcVFQs9loSZxJTspB
+                </a>
+              </div>
+            </div>
+
+            {/* Race Day Credentials & Helplines */}
+            <div className="space-y-4 max-w-xl mx-auto font-mono">
+              {!successData.isWaitlist && (
+                <div className="p-3.5 bg-neutral-950 border border-neutral-800 rounded-xl text-neutral-300 text-xs leading-relaxed">
+                  💡 <strong>Next Steps:</strong> Once the UTR is verified by Race Control, your squad&apos;s official credentials will be dispatched to the Team Lead&apos;s email (<span className="text-white font-bold">{driver1.email}</span>). The Eventra portal link will be handed out on race day directly at the venue.
+                </div>
+              )}
+
               <div className="pt-3 border-t border-neutral-800 text-center space-y-1.5">
                 <span className="text-neutral-400 font-bold uppercase tracking-wider text-xs block">
-                  For any queries contact:
+                  Race Control Coordinators:
                 </span>
                 <div className="flex flex-wrap justify-center items-center gap-x-4 gap-y-1 text-sm sm:text-base font-bold text-white">
                   <a href="tel:+918310353103" className="text-red-400 hover:text-white transition-colors">
@@ -475,20 +533,15 @@ export default function RegisterClientView({
               </div>
             </div>
 
-            <div className="pt-4 flex flex-col sm:flex-row gap-3 justify-center">
-              <Link
-                href="/login"
-                className="px-6 py-3 bg-red-600 hover:bg-red-500 text-white font-black italic uppercase tracking-wider text-sm rounded transition-all shadow-[0_0_20px_rgba(255,0,0,0.4)]"
-              >
-                PROCEED TO SQUAD LOGIN &gt;&gt;
-              </Link>
+            {/* Bottom Actions */}
+            <div className="pt-2 flex justify-center">
               <button
                 type="button"
                 onClick={() => {
                   setSuccessData(null);
                   window.location.reload();
                 }}
-                className="px-6 py-3 bg-transparent border border-neutral-700 hover:border-neutral-500 text-neutral-400 hover:text-white font-mono text-xs uppercase font-bold tracking-wider rounded transition-colors"
+                className="px-6 py-3 bg-transparent border border-neutral-700 hover:border-neutral-500 text-neutral-400 hover:text-white font-mono text-xs uppercase font-bold tracking-wider rounded-xl transition-colors"
               >
                 REGISTER ANOTHER CREW
               </button>
