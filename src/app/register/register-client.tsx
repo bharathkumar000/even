@@ -466,44 +466,55 @@ export default function RegisterClientView({
               </div>
             </div>
 
-            {/* MANDATORY OFFICIAL WHATSAPP GROUP CARD */}
-            <div className="p-6 sm:p-7 bg-gradient-to-b from-[#0a1f14] via-[#05130b] to-black border-2 border-emerald-500 rounded-2xl max-w-xl mx-auto text-center space-y-4 shadow-[0_0_40px_rgba(16,185,129,0.3)]">
-              <div className="inline-flex items-center gap-2 px-3 py-1 bg-emerald-500/20 border border-emerald-500/40 rounded-full text-emerald-400 font-mono text-xs uppercase font-bold tracking-widest">
-                <MessageCircle className="w-4 h-4 text-emerald-400" />
-                <span>Mandatory Step // All 4 Drivers</span>
-              </div>
+            {/* MANDATORY OFFICIAL WHATSAPP GROUP CARD (CONFIRMED SLOTS ONLY — NOT FOR WAITING LIST) */}
+            {!successData.isWaitlist ? (
+              <div className="p-6 sm:p-7 bg-gradient-to-b from-[#0a1f14] via-[#05130b] to-black border-2 border-emerald-500 rounded-2xl max-w-xl mx-auto text-center space-y-4 shadow-[0_0_40px_rgba(16,185,129,0.3)]">
+                <div className="inline-flex items-center gap-2 px-3 py-1 bg-emerald-500/20 border border-emerald-500/40 rounded-full text-emerald-400 font-mono text-xs uppercase font-bold tracking-widest">
+                  <MessageCircle className="w-4 h-4 text-emerald-400" />
+                  <span>Mandatory Step // All 4 Drivers</span>
+                </div>
 
-              <h2 className="text-2xl sm:text-3xl font-black italic uppercase text-white tracking-wide">
-                Join The Official WhatsApp Group
-              </h2>
+                <h2 className="text-2xl sm:text-3xl font-black italic uppercase text-white tracking-wide">
+                  Join The Official WhatsApp Group
+                </h2>
 
-              <p className="font-mono text-xs sm:text-sm text-neutral-300 leading-relaxed max-w-lg mx-auto">
-                All live race briefings, schedule updates, track announcements, and pit-stop instructions will be broadcasted exclusively in this group. All team members must join!
-              </p>
+                <p className="font-mono text-xs sm:text-sm text-neutral-300 leading-relaxed max-w-lg mx-auto">
+                  All live race briefings, schedule updates, track announcements, and pit-stop instructions will be broadcasted exclusively in this group. All team members must join!
+                </p>
 
-              <a
-                href="https://chat.whatsapp.com/Baq9uEcVFQs9loSZxJTspB"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center justify-center gap-2.5 px-8 py-4 bg-emerald-500 hover:bg-emerald-400 text-black font-black uppercase italic tracking-wider text-sm sm:text-base rounded-xl transition-all shadow-[0_0_30px_rgba(16,185,129,0.5)] hover:scale-105 active:scale-95"
-              >
-                <MessageCircle className="w-5 h-5 fill-black" />
-                <span>JOIN OFFICIAL WHATSAPP GROUP &gt;&gt;</span>
-                <ExternalLink className="w-4 h-4" />
-              </a>
-
-              <div className="pt-2 text-[11px] font-mono text-neutral-400 break-all">
-                Direct Link:{" "}
                 <a
                   href="https://chat.whatsapp.com/Baq9uEcVFQs9loSZxJTspB"
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-emerald-400 underline hover:text-emerald-300"
+                  className="inline-flex items-center justify-center gap-2.5 px-8 py-4 bg-emerald-500 hover:bg-emerald-400 text-black font-black uppercase italic tracking-wider text-sm sm:text-base rounded-xl transition-all shadow-[0_0_30px_rgba(16,185,129,0.5)] hover:scale-105 active:scale-95"
                 >
-                  https://chat.whatsapp.com/Baq9uEcVFQs9loSZxJTspB
+                  <MessageCircle className="w-5 h-5 fill-black" />
+                  <span>JOIN OFFICIAL WHATSAPP GROUP &gt;&gt;</span>
+                  <ExternalLink className="w-4 h-4" />
                 </a>
+
+                <div className="pt-2 text-[11px] font-mono text-neutral-400 break-all">
+                  Direct Link:{" "}
+                  <a
+                    href="https://chat.whatsapp.com/Baq9uEcVFQs9loSZxJTspB"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-emerald-400 underline hover:text-emerald-300"
+                  >
+                    https://chat.whatsapp.com/Baq9uEcVFQs9loSZxJTspB
+                  </a>
+                </div>
               </div>
-            </div>
+            ) : (
+              <div className="p-4 sm:p-5 bg-yellow-500/10 border-2 border-yellow-500/40 rounded-2xl max-w-xl mx-auto text-center space-y-2 shadow-[0_0_25px_rgba(234,179,8,0.15)]">
+                <div className="inline-flex items-center gap-2 text-yellow-400 font-mono text-xs uppercase font-bold tracking-widest">
+                  <span>⚠️ Waiting List Status</span>
+                </div>
+                <p className="font-mono text-xs sm:text-sm text-neutral-300 leading-relaxed max-w-lg mx-auto">
+                  Official WhatsApp community onboarding and credentials are strictly reserved for confirmed teams. If a confirmed team slot opens, our Race Stewards will reach out directly to your Team Lead for payment and WhatsApp onboarding.
+                </p>
+              </div>
+            )}
 
             {/* Race Day Credentials & Helplines */}
             <div className="space-y-4 max-w-xl mx-auto font-mono">

@@ -304,7 +304,7 @@ export async function submitTeamRegistration(
         // Credentials
         loginPassword: "",
         portalUrl: "",
-        whatsappGroup: "https://chat.whatsapp.com/Baq9uEcVFQs9loSZxJTspB",
+        whatsappGroup: "",
         emailDispatchStatus: "WAITLIST",
       };
 
