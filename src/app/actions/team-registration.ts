@@ -86,7 +86,9 @@ async function requireAdminUser() {
 }
 
 const MAX_CONFIRMED_PER_SEM = 40;
-const MAX_WAITLIST_PER_SEM = 10;
+const FIRST_SEM_WAITLIST_LIMIT = 20;
+const THIRD_SEM_WAITLIST_LIMIT = 10;
+const MAX_WAITLIST_PER_SEM = 10; // backwards-compatible default
 
 /**
  * Public Server Action: Fetch total submitted teams count per semester
@@ -97,6 +99,8 @@ export async function getSemesterRegistrationCounts(): Promise<{
   thirdSemCount: number;
   maxLimit: number;
   waitlistLimit: number;
+  firstSemWaitlistLimit: number;
+  thirdSemWaitlistLimit: number;
 }> {
   try {
     const { data, error } = await supabaseAdmin
@@ -133,7 +137,9 @@ export async function getSemesterRegistrationCounts(): Promise<{
         firstSemCount,
         thirdSemCount,
         maxLimit: MAX_CONFIRMED_PER_SEM,
-        waitlistLimit: MAX_WAITLIST_PER_SEM,
+        waitlistLimit: THIRD_SEM_WAITLIST_LIMIT,
+        firstSemWaitlistLimit: FIRST_SEM_WAITLIST_LIMIT,
+        thirdSemWaitlistLimit: THIRD_SEM_WAITLIST_LIMIT,
       };
     }
 
@@ -150,7 +156,9 @@ export async function getSemesterRegistrationCounts(): Promise<{
       firstSemCount,
       thirdSemCount,
       maxLimit: MAX_CONFIRMED_PER_SEM,
-      waitlistLimit: MAX_WAITLIST_PER_SEM,
+      waitlistLimit: THIRD_SEM_WAITLIST_LIMIT,
+      firstSemWaitlistLimit: FIRST_SEM_WAITLIST_LIMIT,
+      thirdSemWaitlistLimit: THIRD_SEM_WAITLIST_LIMIT,
     };
   } catch (err) {
     console.error("getSemesterRegistrationCounts error:", err);
@@ -158,7 +166,9 @@ export async function getSemesterRegistrationCounts(): Promise<{
       firstSemCount: 0,
       thirdSemCount: 0,
       maxLimit: MAX_CONFIRMED_PER_SEM,
-      waitlistLimit: MAX_WAITLIST_PER_SEM,
+      waitlistLimit: THIRD_SEM_WAITLIST_LIMIT,
+      firstSemWaitlistLimit: FIRST_SEM_WAITLIST_LIMIT,
+      thirdSemWaitlistLimit: THIRD_SEM_WAITLIST_LIMIT,
     };
   }
 }
@@ -224,18 +234,19 @@ export async function submitTeamRegistration(
       }
     }
 
-    // Check semester counts: 40 confirmed + 10 waiting list max (50 total per semester)
-    const { firstSemCount, thirdSemCount, maxLimit, waitlistLimit } = await getSemesterRegistrationCounts();
-    const maxTotalPerSem = maxLimit + waitlistLimit;
+    // Check semester counts: 40 confirmed + waitlist (20 for 1st sem, 10 for 3rd sem)
+    const { firstSemCount, thirdSemCount, maxLimit, firstSemWaitlistLimit, thirdSemWaitlistLimit } = await getSemesterRegistrationCounts();
     const semLower = leaderSem.toLowerCase();
     const isFirstSem = semLower.includes("1st") || semLower === "1";
     const isThirdSem = semLower.includes("3rd") || semLower === "3" || semLower.includes("2nd") || semLower === "2";
     const currentSemCount = isFirstSem ? firstSemCount : isThirdSem ? thirdSemCount : 0;
+    const currentWaitlistLimit = isFirstSem ? firstSemWaitlistLimit : thirdSemWaitlistLimit;
+    const maxTotalPerSem = maxLimit + currentWaitlistLimit;
 
     if (currentSemCount >= maxTotalPerSem) {
       return {
         success: false,
-        message: `${leaderSem} registration is COMPLETELY LOCKED. All ${maxLimit} confirmed slots and ${waitlistLimit} waiting list slots are full.`,
+        message: `${leaderSem} registration is COMPLETELY LOCKED. All ${maxLimit} confirmed slots and ${currentWaitlistLimit} waiting list slots are full.`,
       };
     }
 
@@ -681,8 +692,7 @@ export async function getRegistrations(statusFilter?: "all" | "pending" | "appro
               generated_credentials: creds,
             })
             .eq("id", item.id)
-            .then(() => {})
-            .catch(() => {});
+            .then(() => {}, () => {});
         }
       }
     }

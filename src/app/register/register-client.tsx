@@ -62,29 +62,48 @@ const SEMESTERS = [
 ];
 
 export default function RegisterClientView({
-  initialCounts = { firstSemCount: 0, thirdSemCount: 0, maxLimit: 40, waitlistLimit: 10 },
+  initialCounts = {
+    firstSemCount: 0,
+    thirdSemCount: 0,
+    maxLimit: 40,
+    waitlistLimit: 10,
+    firstSemWaitlistLimit: 20,
+    thirdSemWaitlistLimit: 10,
+  },
 }: {
-  initialCounts?: { firstSemCount: number; thirdSemCount: number; maxLimit: number; waitlistLimit?: number };
+  initialCounts?: {
+    firstSemCount: number;
+    thirdSemCount: number;
+    maxLimit: number;
+    waitlistLimit?: number;
+    firstSemWaitlistLimit?: number;
+    thirdSemWaitlistLimit?: number;
+  };
 }) {
   const [submitting, setSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successData, setSuccessData] = useState<{ teamName: string; refId: string; isWaitlist?: boolean } | null>(null);
 
-  // Live Semester Counts & Locking State (40 Confirmed + 10 Waitlist = 50 Total per Semester)
+  // Live Semester Counts & Locking State (1st Sem: 40 Confirmed + 20 Waitlist = 60; 3rd Sem: 40 Confirmed + 10 Waitlist = 50)
   const [semCounts, setSemCounts] = useState({
     firstSemCount: initialCounts.firstSemCount || 0,
     thirdSemCount: initialCounts.thirdSemCount || 0,
     maxLimit: initialCounts.maxLimit || 40,
+    firstSemWaitlistLimit: initialCounts.firstSemWaitlistLimit || 20,
+    thirdSemWaitlistLimit: initialCounts.thirdSemWaitlistLimit || 10,
     waitlistLimit: initialCounts.waitlistLimit || 10,
   });
   const maxLimit = semCounts.maxLimit;
-  const waitlistLimit = semCounts.waitlistLimit;
-  const maxTotal = maxLimit + waitlistLimit;
+  const firstSemWaitlistLimit = semCounts.firstSemWaitlistLimit;
+  const thirdSemWaitlistLimit = semCounts.thirdSemWaitlistLimit;
 
-  const isFirstSemWaitlist = semCounts.firstSemCount >= maxLimit && semCounts.firstSemCount < maxTotal;
-  const isFirstSemLocked = semCounts.firstSemCount >= maxTotal;
-  const isThirdSemWaitlist = semCounts.thirdSemCount >= maxLimit && semCounts.thirdSemCount < maxTotal;
-  const isThirdSemLocked = semCounts.thirdSemCount >= maxTotal;
+  const firstSemMaxTotal = maxLimit + firstSemWaitlistLimit;
+  const thirdSemMaxTotal = maxLimit + thirdSemWaitlistLimit;
+
+  const isFirstSemWaitlist = semCounts.firstSemCount >= maxLimit && semCounts.firstSemCount < firstSemMaxTotal;
+  const isFirstSemLocked = semCounts.firstSemCount >= firstSemMaxTotal;
+  const isThirdSemWaitlist = semCounts.thirdSemCount >= maxLimit && semCounts.thirdSemCount < thirdSemMaxTotal;
+  const isThirdSemLocked = semCounts.thirdSemCount >= thirdSemMaxTotal;
   const isAllLocked = isFirstSemLocked && isThirdSemLocked;
   const defaultAvailableSem = isFirstSemLocked && !isThirdSemLocked ? "3rd Semester" : "1st Semester";
 
@@ -122,6 +141,8 @@ export default function RegisterClientView({
     college: "Vidya Vardhaka College Of Engineering",
   });
 
+  const isDriver1FirstSem = (driver1.sem || "").toLowerCase().includes("1st") || driver1.sem === "1";
+  const selectedSemWaitlistLimit = isDriver1FirstSem ? firstSemWaitlistLimit : thirdSemWaitlistLimit;
   const isSelectedSemWaitlist =
     (driver1.sem.includes("1st") && isFirstSemWaitlist) ||
     (driver1.sem.includes("3rd") && isThirdSemWaitlist);
@@ -277,19 +298,19 @@ export default function RegisterClientView({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    // Check Semester Slot Lock before validating (40 confirmed + 10 waitlist = 50 max)
+    // Check Semester Slot Lock before validating (1st Sem: 40 confirmed + 20 waitlist = 60 max; 3rd Sem: 40 confirmed + 10 waitlist = 50 max)
     if (isAllLocked) {
-      setErrorMsg("REGISTRATION LOCKED: All 40 confirmed slots and 10 waiting list slots for both 1st Semester and 3rd Semester are full.");
+      setErrorMsg(`REGISTRATION LOCKED: All confirmed slots and waiting list slots for both 1st Semester (${firstSemWaitlistLimit} waitlist) and 3rd Semester (${thirdSemWaitlistLimit} waitlist) are full.`);
       window.scrollTo({ top: 300, behavior: "smooth" });
       return;
     }
     if (driver1.sem.includes("1st") && isFirstSemLocked) {
-      setErrorMsg("1st Semester registration is LOCKED (40 confirmed + 10 waiting list teams filled). Please select 3rd Semester if eligible.");
+      setErrorMsg(`1st Semester registration is LOCKED (40 confirmed + ${firstSemWaitlistLimit} waiting list teams filled). Please select 3rd Semester if eligible.`);
       window.scrollTo({ top: 300, behavior: "smooth" });
       return;
     }
     if (driver1.sem.includes("3rd") && isThirdSemLocked) {
-      setErrorMsg("3rd Semester registration is LOCKED (40 confirmed + 10 waiting list teams filled). Please select 1st Semester if eligible.");
+      setErrorMsg(`3rd Semester registration is LOCKED (40 confirmed + ${thirdSemWaitlistLimit} waiting list teams filled). Please select 1st Semester if eligible.`);
       window.scrollTo({ top: 300, behavior: "smooth" });
       return;
     }
@@ -619,9 +640,9 @@ export default function RegisterClientView({
                   </div>
                   <span className="text-[11px] text-neutral-400 font-bold">
                     {isFirstSemLocked
-                      ? `WAITLIST FULL (${waitlistLimit}/${waitlistLimit})`
+                      ? `WAITLIST FULL (${firstSemWaitlistLimit}/${firstSemWaitlistLimit})`
                       : isFirstSemWaitlist
-                        ? `WAITLIST: ${semCounts.firstSemCount - maxLimit}/${waitlistLimit}`
+                        ? `WAITLIST: ${semCounts.firstSemCount - maxLimit}/${firstSemWaitlistLimit}`
                         : `${Math.max(0, maxLimit - semCounts.firstSemCount)} SLOTS LEFT`}
                   </span>
                 </div>
@@ -687,9 +708,9 @@ export default function RegisterClientView({
                   </div>
                   <span className="text-[11px] text-neutral-400 font-bold">
                     {isThirdSemLocked
-                      ? `WAITLIST FULL (${waitlistLimit}/${waitlistLimit})`
+                      ? `WAITLIST FULL (${thirdSemWaitlistLimit}/${thirdSemWaitlistLimit})`
                       : isThirdSemWaitlist
-                        ? `WAITLIST: ${semCounts.thirdSemCount - maxLimit}/${waitlistLimit}`
+                        ? `WAITLIST: ${semCounts.thirdSemCount - maxLimit}/${thirdSemWaitlistLimit}`
                         : `${Math.max(0, maxLimit - semCounts.thirdSemCount)} SLOTS LEFT`}
                   </span>
                 </div>
@@ -1269,7 +1290,7 @@ export default function RegisterClientView({
                       <p className="text-xs text-yellow-200/80 m-0 mt-1">
                         Waitlist Slot:{" "}
                         <strong className="text-white">
-                          #{(driver1.sem.includes("1st") ? semCounts.firstSemCount : semCounts.thirdSemCount) - maxLimit + 1} of {waitlistLimit}
+                          #{(isDriver1FirstSem ? semCounts.firstSemCount : semCounts.thirdSemCount) - maxLimit + 1} of {selectedSemWaitlistLimit}
                         </strong>{" "}
                         — Payment is NOT required right now
                       </p>
