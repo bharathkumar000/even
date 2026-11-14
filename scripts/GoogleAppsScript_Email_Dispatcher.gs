@@ -41,6 +41,8 @@ function onOpen() {
     .createMenu("Eventra Dispatch")
     .addItem("🧪 Send Test Email to Myself (Safe Preview)", "sendTestConfirmationEmail")
     .addSeparator()
+    .addItem("🔄 Update All Team Codes to IVC-RY (In Sheet)", "updateAllTeamCodesToRy")
+    .addSeparator()
     .addItem("🚀 Send All Credentials Emails (Approved Teams)", "sendCredentialsToAllApprovedTeams")
     .addSeparator()
     .addItem("⚠️ Clear Test Data (Registrations / Approved)", "clearAllTestData")
@@ -237,6 +239,13 @@ function sendCredentialsToAllApprovedTeams() {
     var password = String(row[passwordCol] || "").trim();
     var teamName = String(row[teamNameCol] || "Grand Prix Squad").trim();
     var teamCode = teamCodeCol !== -1 ? String(row[teamCodeCol] || "") : "";
+    if (teamCode.indexOf("IVC-VV-") !== -1) {
+      teamCode = teamCode.replace("IVC-VV-", "IVC-RY-");
+      if (teamCodeCol !== -1) sheet.getRange(i + 1, teamCodeCol + 1).setValue(teamCode);
+    } else if (teamName.toUpperCase() === "OPAMP" && (teamCode === "OPAMP" || !teamCode)) {
+      teamCode = "IVC-RY-001";
+      if (teamCodeCol !== -1) sheet.getRange(i + 1, teamCodeCol + 1).setValue(teamCode);
+    }
     var leaderNameRaw = nameCol !== -1 ? String(row[nameCol] || "") : "Team Leader";
     // Strip phone numbers from "Name (+91...)" if present
     var leaderName = leaderNameRaw.replace(/\s*\([^)]*\)/g, "").trim() || "Team Leader";
@@ -458,6 +467,48 @@ function doPost(e) {
 /**
  * Helper to clear test data.
  */
+
+/**
+ * 1-Click: Updates all existing team codes in Google Sheet to the official 'IVC-RY-###' format
+ */
+function updateAllTeamCodesToRy() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheets = ["Registrations", "Approved", "Credentials", "Waiting list"];
+  var count = 0;
+  
+  sheets.forEach(function(sheetName) {
+    var sheet = ss.getSheetByName(sheetName);
+    if (!sheet) return;
+    
+    var data = sheet.getDataRange().getValues();
+    if (data.length <= 1) return;
+    
+    var headers = data[0];
+    var teamCodeCol = headers.indexOf("Team Code");
+    var teamNameCol = headers.indexOf("Team Name");
+    if (teamCodeCol === -1) return;
+    
+    for (var i = 1; i < data.length; i++) {
+      var currentCode = String(data[i][teamCodeCol] || "").trim();
+      var teamName = teamNameCol !== -1 ? String(data[i][teamNameCol] || "").trim() : "";
+      var newCode = currentCode;
+      
+      if (currentCode.indexOf("IVC-VV-") !== -1) {
+        newCode = currentCode.replace("IVC-VV-", "IVC-RY-");
+      } else if (teamName.toUpperCase() === "OPAMP" && (currentCode === "OPAMP" || !currentCode)) {
+        newCode = "IVC-RY-001";
+      }
+      
+      if (newCode !== currentCode) {
+        sheet.getRange(i + 1, teamCodeCol + 1).setValue(newCode);
+        count++;
+      }
+    }
+  });
+  
+  SpreadsheetApp.getUi().alert("✅ Successfully updated " + count + " team codes to IVC-RY format in Google Sheets!");
+}
+
 function clearAllTestData() {
   var ui = SpreadsheetApp.getUi();
   var res = ui.alert(
