@@ -817,8 +817,38 @@ function sendCredentialsToAllApprovedTeams() {
 /**
  * 1-Click: Updates all existing team codes (IVC-RY-###) and track names (1st Sem / 3rd Sem) in Google Sheet.
  */
+/**
+ * 1-Click: Updates all existing team codes (IVC-RY-###) and track names (1st Sem / 3rd Sem) in Google Sheet.
+ * Correctly cross-references the Registrations sheet when updating the Credentials sheet.
+ */
 function updateAllTeamCodesToRy() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
+  
+  // Build a master team-to-semester lookup map from the primary "Registrations" sheet
+  var regSheet = ss.getSheetByName("Registrations");
+  var teamSemMap = {};
+  
+  if (regSheet) {
+    var regData = regSheet.getDataRange().getValues();
+    if (regData.length > 1) {
+      var rHeaders = regData[0];
+      var rTeamNameCol = rHeaders.indexOf("Team Name");
+      var rSemCol = rHeaders.indexOf("Leader Semester") !== -1 ? rHeaders.indexOf("Leader Semester") : rHeaders.indexOf("Leader Sem");
+      var rTrackCol = rHeaders.indexOf("Track");
+      
+      for (var r = 1; r < regData.length; r++) {
+        var tName = String(regData[r][rTeamNameCol] || "").trim().toLowerCase();
+        var semVal = rSemCol !== -1 ? String(regData[r][rSemCol] || "").toLowerCase() : "";
+        var trackVal = rTrackCol !== -1 ? String(regData[r][rTrackCol] || "").toLowerCase() : "";
+        
+        var is3rd = semVal.indexOf("3") !== -1 || trackVal.indexOf("3") !== -1;
+        if (tName) {
+          teamSemMap[tName] = is3rd ? "3rd Sem" : "1st Sem";
+        }
+      }
+    }
+  }
+  
   var sheets = ["Registrations", "Approved", "Credentials", "Waiting list"];
   var count = 0;
   
@@ -835,43 +865,18 @@ function updateAllTeamCodesToRy() {
     var trackCol = headers.indexOf("Track");
     var semCol = headers.indexOf("Leader Semester") !== -1 ? headers.indexOf("Leader Semester") : headers.indexOf("Leader Sem");
     
-    var seenCodes = {};
-    var nextNum = 1;
-    var statusCol = headers.indexOf("Status");
-    
     for (var i = 1; i < data.length; i++) {
-      // 1. Team Code
+      var currentCode = teamCodeCol !== -1 ? String(data[i][teamCodeCol] || "").trim() : "";
+      var teamNameRaw = teamNameCol !== -1 ? String(data[i][teamNameCol] || "").trim() : "";
+      var teamNameKey = teamNameRaw.toLowerCase();
+      var newCode = currentCode;
+      
+      // 1. Update Team Code
       if (teamCodeCol !== -1) {
-        var currentCode = String(data[i][teamCodeCol] || "").trim();
-        var teamName = teamNameCol !== -1 ? String(data[i][teamNameCol] || "").trim() : "";
-        var status = statusCol !== -1 ? String(data[i][statusCol] || "").trim() : "";
-        var isWaitlist = status.toLowerCase().indexOf("waitlist") !== -1 || currentCode.toUpperCase().indexOf("WAITLIST") !== -1;
-        
-        if (isWaitlist) {
-          continue;
-        }
-        
-        var newCode = currentCode;
         if (currentCode.indexOf("IVC-VV-") !== -1) {
           newCode = currentCode.replace("IVC-VV-", "IVC-RY-");
-        } else if (teamName.toUpperCase() === "OPAMP" && (currentCode === "OPAMP" || !currentCode)) {
+        } else if (teamNameRaw.toUpperCase() === "OPAMP" && (currentCode === "OPAMP" || !currentCode)) {
           newCode = "IVC-RY-001";
-        }
-        
-        // If code is empty or duplicate (already seen in an earlier row), assign next unique sequential code
-        if (!newCode || seenCodes[newCode]) {
-          while (seenCodes["IVC-RY-" + ("000" + nextNum).slice(-3)]) {
-            nextNum++;
-          }
-          newCode = "IVC-RY-" + ("000" + nextNum).slice(-3);
-          nextNum++;
-        }
-        
-        seenCodes[newCode] = true;
-        var m = newCode.match(/IVC-RY-(\d+)/i);
-        if (m) {
-          var parsedN = parseInt(m[1], 10);
-          if (parsedN >= nextNum) nextNum = parsedN + 1;
         }
         
         if (newCode !== currentCode) {
@@ -880,12 +885,35 @@ function updateAllTeamCodesToRy() {
         }
       }
       
-      // 2. Track column (1st Sem or 3rd Sem)
-      if (trackCol !== -1 && semCol !== -1) {
-        var semVal = String(data[i][semCol] || "").toLowerCase();
-        var targetTrack = semVal.indexOf("3") !== -1 ? "3rd Sem" : "1st Sem";
+      // 2. Update Track column (strictly 1st Sem or 3rd Sem)
+      if (trackCol !== -1) {
+        var targetTrack = "";
+        
+        // Check local sheet's semester column first
+        if (semCol !== -1) {
+          var localSem = String(data[i][semCol] || "").toLowerCase().trim();
+          if (localSem) {
+            targetTrack = localSem.indexOf("3") !== -1 ? "3rd Sem" : "1st Sem";
+          }
+        }
+        
+        // If sheet doesn't have a semester column (e.g. Credentials tab), look up from Registrations sheet map
+        if (!targetTrack && teamNameKey && teamSemMap[teamNameKey]) {
+          targetTrack = teamSemMap[teamNameKey];
+        }
+        
+        // Fallback hardcoded for known 3rd Sem teams if unmapped
+        if (!targetTrack) {
+          var known3rdSem = ["corner four", "spark", "vs³", "vs3", "whtt the hack"];
+          if (known3rdSem.indexOf(teamNameKey) !== -1) {
+            targetTrack = "3rd Sem";
+          } else {
+            targetTrack = "1st Sem";
+          }
+        }
+        
         var currentTrack = String(data[i][trackCol] || "").trim();
-        if (currentTrack !== targetTrack) {
+        if (targetTrack && currentTrack !== targetTrack) {
           sheet.getRange(i + 1, trackCol + 1).setValue(targetTrack);
           count++;
         }
@@ -893,7 +921,7 @@ function updateAllTeamCodesToRy() {
     }
   });
   
-  SpreadsheetApp.getUi().alert("✅ Successfully updated " + count + " items (team codes & track names) to IVC-RY and 1st/3rd Sem in Google Sheets!");
+  SpreadsheetApp.getUi().alert("✅ Successfully updated " + count + " items (team codes & track names) across all sheets!");
 }
 
 function clearAllTestData() {
