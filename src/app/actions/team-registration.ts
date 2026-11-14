@@ -202,8 +202,8 @@ export async function submitTeamRegistration(
     const paymentPhone = String(formData.get("paymentPhone") || "").trim() || leaderPhone;
     const paymentFile = formData.get("paymentProof") as File | null;
 
-    if (!teamName || !track || !leaderName || !leaderEmail || !leaderPhone) {
-      return { success: false, message: "Please fill in all required team and leader fields." };
+    if (!teamName || !track || !leaderName || !leaderEmail || !leaderPhone || !leaderUsn) {
+      return { success: false, message: "Please fill in all required team and leader fields, including Leader USN." };
     }
 
     // Parse the other 3 members from form data
@@ -224,6 +224,17 @@ export async function submitTeamRegistration(
         success: false,
         message: "Details for all 4 team members (Leader + 3 Members) must be provided.",
       };
+    }
+
+    // Validate that all members have required fields including USN
+    for (let i = 0; i < members.length; i++) {
+      const member = members[i];
+      if (!member.name?.trim() || !member.email?.trim() || !member.usn?.trim()) {
+        return {
+          success: false,
+          message: `Please fill in all required fields including USN for Member ${i + 2}.`,
+        };
+      }
     }
 
     // Strict Semester Integrity: Mixed semester and senior-junior teams are strictly prohibited.

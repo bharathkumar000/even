@@ -217,8 +217,8 @@ export default function RegisterClientView({
     }
 
     // Validate Driver 1 (Captain)
-    if (!driver1.name.trim() || !driver1.email.trim() || !driver1.phone.trim() || !driver1.college.trim()) {
-      setErrorMsg("// DRIVER 1 (CAPTAIN): Please complete Name, Email, 10-digit Phone, and College.");
+    if (!driver1.name.trim() || !driver1.email.trim() || !driver1.phone.trim() || !driver1.college.trim() || !driver1.usn.trim()) {
+      setErrorMsg("// DRIVER 1 (CAPTAIN): Please complete Name, USN, Email, 10-digit Phone, and College.");
       return false;
     }
     if (!driver1.email.includes("@")) {
@@ -231,8 +231,8 @@ export default function RegisterClientView({
     }
 
     // Validate Driver 2
-    if (!driver2.name.trim() || !driver2.email.trim() || !driver2.phone.trim() || !driver2.college.trim()) {
-      setErrorMsg("// DRIVER 2 (AERODYNAMICS): Please complete all required member details.");
+    if (!driver2.name.trim() || !driver2.email.trim() || !driver2.phone.trim() || !driver2.college.trim() || !driver2.usn.trim()) {
+      setErrorMsg("// DRIVER 2 (AERODYNAMICS): Please complete all required member details including USN.");
       return false;
     }
     if (!driver2.email.includes("@")) {
@@ -241,8 +241,8 @@ export default function RegisterClientView({
     }
 
     // Validate Driver 3
-    if (!driver3.name.trim() || !driver3.email.trim() || !driver3.phone.trim() || !driver3.college.trim()) {
-      setErrorMsg("// DRIVER 3 (POWERTRAIN): Please complete all required member details.");
+    if (!driver3.name.trim() || !driver3.email.trim() || !driver3.phone.trim() || !driver3.college.trim() || !driver3.usn.trim()) {
+      setErrorMsg("// DRIVER 3 (POWERTRAIN): Please complete all required member details including USN.");
       return false;
     }
     if (!driver3.email.includes("@")) {
@@ -251,8 +251,8 @@ export default function RegisterClientView({
     }
 
     // Validate Driver 4
-    if (!driver4.name.trim() || !driver4.email.trim() || !driver4.phone.trim() || !driver4.college.trim()) {
-      setErrorMsg("// DRIVER 4 (TELEMETRY): Please complete all required member details.");
+    if (!driver4.name.trim() || !driver4.email.trim() || !driver4.phone.trim() || !driver4.college.trim() || !driver4.usn.trim()) {
+      setErrorMsg("// DRIVER 4 (TELEMETRY): Please complete all required member details including USN.");
       return false;
     }
     if (!driver4.email.includes("@")) {
@@ -333,7 +333,7 @@ export default function RegisterClientView({
       formData.append("leaderEmail", driver1.email.trim().toLowerCase());
       formData.append("leaderPhone", driver1.phone.trim());
       formData.append("leaderCollege", driver1.college.trim());
-      formData.append("leaderUsn", driver1.usn.trim() || "N/A");
+      formData.append("leaderUsn", driver1.usn.trim().toUpperCase());
       formData.append("leaderBranch", driver1.branch);
       formData.append("leaderSem", driver1.sem);
 
@@ -343,7 +343,7 @@ export default function RegisterClientView({
           name: driver2.name.trim(),
           email: driver2.email.trim().toLowerCase(),
           phone: driver2.phone.trim(),
-          usn: driver2.usn.trim() || "N/A",
+          usn: driver2.usn.trim().toUpperCase(),
           college: driver2.college.trim(),
           branch: driver2.branch,
           sem: driver2.sem,
@@ -352,7 +352,7 @@ export default function RegisterClientView({
           name: driver3.name.trim(),
           email: driver3.email.trim().toLowerCase(),
           phone: driver3.phone.trim(),
-          usn: driver3.usn.trim() || "N/A",
+          usn: driver3.usn.trim().toUpperCase(),
           college: driver3.college.trim(),
           branch: driver3.branch,
           sem: driver3.sem,
@@ -361,7 +361,7 @@ export default function RegisterClientView({
           name: driver4.name.trim(),
           email: driver4.email.trim().toLowerCase(),
           phone: driver4.phone.trim(),
-          usn: driver4.usn.trim() || "N/A",
+          usn: driver4.usn.trim().toUpperCase(),
           college: driver4.college.trim(),
           branch: driver4.branch,
           sem: driver4.sem,
@@ -814,13 +814,14 @@ export default function RegisterClientView({
 
                   <div className="space-y-1.5">
                     <label className="block text-red-500 uppercase text-[11px] font-bold">
-                      USN (OPTIONAL)
+                      USN <span className="text-red-500">*</span>
                     </label>
                     <input
                       type="text"
+                      required
                       value={driver1.usn}
                       onChange={(e) => setDriver1({ ...driver1, usn: e.target.value })}
-                      placeholder="ENTER USN (OPTIONAL FOR 1ST YEAR)"
+                      placeholder="ENTER USN (MANDATORY)"
                       className="w-full bg-[#0a0a0a] border border-neutral-800 focus:border-red-500 text-white p-3 rounded outline-none text-xs placeholder:text-neutral-600"
                     />
                   </div>
@@ -946,13 +947,14 @@ export default function RegisterClientView({
 
                   <div className="space-y-1.5">
                     <label className="block text-red-500 uppercase text-[11px] font-bold">
-                      USN_2 (OPTIONAL)
+                      USN_2 <span className="text-red-500">*</span>
                     </label>
                     <input
                       type="text"
+                      required
                       value={driver2.usn}
                       onChange={(e) => setDriver2({ ...driver2, usn: e.target.value })}
-                      placeholder="ENTER USN (OPTIONAL FOR 1ST YEAR)"
+                      placeholder="ENTER USN (MANDATORY)"
                       className="w-full bg-[#0a0a0a] border border-neutral-800 focus:border-red-500 text-white p-3 rounded outline-none text-xs placeholder:text-neutral-600"
                     />
                   </div>
@@ -1060,13 +1062,14 @@ export default function RegisterClientView({
 
                   <div className="space-y-1.5">
                     <label className="block text-red-500 uppercase text-[11px] font-bold">
-                      USN_3 (OPTIONAL)
+                      USN_3 <span className="text-red-500">*</span>
                     </label>
                     <input
                       type="text"
+                      required
                       value={driver3.usn}
                       onChange={(e) => setDriver3({ ...driver3, usn: e.target.value })}
-                      placeholder="ENTER USN (OPTIONAL FOR 1ST YEAR)"
+                      placeholder="ENTER USN (MANDATORY)"
                       className="w-full bg-[#0a0a0a] border border-neutral-800 focus:border-red-500 text-white p-3 rounded outline-none text-xs placeholder:text-neutral-600"
                     />
                   </div>
@@ -1174,13 +1177,14 @@ export default function RegisterClientView({
 
                   <div className="space-y-1.5">
                     <label className="block text-red-500 uppercase text-[11px] font-bold">
-                      USN_4 (OPTIONAL)
+                      USN_4 <span className="text-red-500">*</span>
                     </label>
                     <input
                       type="text"
+                      required
                       value={driver4.usn}
                       onChange={(e) => setDriver4({ ...driver4, usn: e.target.value })}
-                      placeholder="ENTER USN (OPTIONAL FOR 1ST YEAR)"
+                      placeholder="ENTER USN (MANDATORY)"
                       className="w-full bg-[#0a0a0a] border border-neutral-800 focus:border-red-500 text-white p-3 rounded outline-none text-xs placeholder:text-neutral-600"
                     />
                   </div>
