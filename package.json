@@ -13,7 +13,7 @@
     "dev:all": "node scripts/start-all-portals.mjs",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "eslint src"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.0",
