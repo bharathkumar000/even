@@ -414,14 +414,25 @@ export async function submitTeamRegistration(
       paymentProofUrl = `data:${paymentFile.type || "image/jpeg"};base64,${fileBuffer.toString("base64")}`;
     }
 
-    // 2. Assign clean username and provisional team code (e.g. IVC-VV-001)
+    // 2. Assign clean username and strictly monotonic provisional team code (e.g. IVC-VV-005)
     // NOTE: Official credentials & passwords are ONLY generated upon Admin Verification & Approval!
     const cleanUsername = teamName.toLowerCase().replace(/[^a-z0-9]/g, "");
 
-    const { count: regCount } = await supabaseAdmin
+    const { data: allRegs } = await supabaseAdmin
       .from("team_registrations")
-      .select("*", { count: "exact", head: true });
-    const provisionalTeamCode = `IVC-VV-${String((regCount || 0) + 1).padStart(3, "0")}`;
+      .select("generated_credentials");
+
+    let maxNum = 0;
+    for (const r of allRegs || []) {
+      const code = (r.generated_credentials as any)?.teamCode || "";
+      const m = code.match(/IVC-VV-(\d+)/i);
+      if (m) {
+        const n = parseInt(m[1], 10);
+        if (n > maxNum) maxNum = n;
+      }
+    }
+    const nextNum = Math.max(maxNum + 1, (allRegs?.length || 0) + 1);
+    const provisionalTeamCode = `IVC-VV-${String(nextNum).padStart(3, "0")}`;
 
     // 3. Insert into team_registrations table with pending status and empty password
     let registrationPayload: any = {
@@ -443,7 +454,7 @@ export async function submitTeamRegistration(
       login_email: leaderEmail,
       login_password: "",
       team_code: provisionalTeamCode,
-      generated_credentials: null,
+      generated_credentials: { teamCode: provisionalTeamCode },
     };
 
     let { data: insertData, error: insertError } = await supabaseAdmin
@@ -469,7 +480,7 @@ export async function submitTeamRegistration(
         payment_phone: paymentPhone,
         payment_proof_url: paymentProofUrl,
         status: "pending",
-        generated_credentials: null,
+        generated_credentials: { teamCode: provisionalTeamCode },
       };
       const retryResult = await supabaseAdmin
         .from("team_registrations")
