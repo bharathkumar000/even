@@ -792,10 +792,57 @@ function clearAllTestData() {
   ui.alert("Success: All test data has been cleared from: " + (clearedSheets.join(", ") || "None") + ". Headers are preserved!");
 }
 
+/**
+ * Safe Test Function: Sends a single sample confirmation email to your personal address
+ * without touching any rows or emailing any registered teams.
+ */
+function sendTestConfirmationEmail() {
+  var ui = SpreadsheetApp.getUi();
+  var defaultEmail = Session.getActiveUser().getEmail() || "";
+  var prompt = ui.prompt(
+    "📧 Send Test Confirmation Email",
+    "Enter the email address you want to receive the test email at (or leave blank for " + defaultEmail + "):",
+    ui.ButtonSet.OK_CANCEL
+  );
+  
+  if (prompt.getSelectedButton() !== ui.Button.OK) return;
+  var targetEmail = prompt.getResponseText().trim() || defaultEmail;
+  if (!targetEmail) {
+    ui.alert("No email address provided!");
+    return;
+  }
+  
+  var sampleLeader = "Charan C";
+  var sampleTeam = "Velocity Racers";
+  var sampleCode = "GP26-7842";
+  var sampleTrack = "1st year";
+  var samplePass = "VV26-9X4M";
+  var sampleWhatsapp = "https://chat.whatsapp.com/LNqyZOwG0R8D2IEST6KSld";
+  
+  var subject = "[TEST PREVIEW - GRAND PRIX RELAYTHON’2026] Official Team Confirmation & Credentials - " + sampleTeam + " (" + sampleCode + ")";
+  var htmlContent = buildTeamConfirmationEmailHtml(sampleLeader, sampleTeam, sampleCode, sampleTrack, targetEmail, samplePass, sampleWhatsapp);
+  
+  try {
+    MailApp.sendEmail({
+      to: targetEmail,
+      subject: subject,
+      body: "Test confirmation email preview for " + sampleTeam,
+      htmlBody: htmlContent,
+      name: "Innovators & Visionaries Club (IVC)",
+      replyTo: "ivcofficial@vvce.ac.in"
+    });
+    ui.alert("✅ Test email successfully sent to: " + targetEmail + "\\nCheck your inbox to inspect the exact layout, colors, and banner image!");
+  } catch (err) {
+    ui.alert("❌ Error sending test email: " + err.toString());
+  }
+}
+
 function onOpen() {
   SpreadsheetApp.getUi()
     .createMenu("🚀 Eventra Dispatch")
-    .addItem("📧 Send All Credentials Emails", "sendCredentialsToAllApprovedTeams")
+    .addItem("🧪 Send Test Email to Myself (Safe Preview)", "sendTestConfirmationEmail")
+    .addSeparator()
+    .addItem("📧 Send All Credentials Emails (Approved Teams)", "sendCredentialsToAllApprovedTeams")
     .addSeparator()
     .addItem("🧹 Clear All Test / Mock Data", "clearAllTestData")
     .addToUi();
