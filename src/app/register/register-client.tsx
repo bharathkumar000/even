@@ -534,19 +534,15 @@ export default function RegisterClientView({
 
               <div className="pt-3 border-t border-neutral-800 text-center space-y-1.5">
                 <span className="text-neutral-400 font-bold uppercase tracking-wider text-xs block">
-                  Race Control Coordinators:
+                  Student Coordinators:
                 </span>
                 <div className="flex flex-wrap justify-center items-center gap-x-4 gap-y-1 text-sm sm:text-base font-bold text-white">
-                  <a href="tel:+918310353103" className="text-red-400 hover:text-white transition-colors">
-                    Moksh (+91 831 035 3103)
+                  <a href="tel:+919945867010" className="text-red-400 hover:text-white transition-colors">
+                    Preksha Dixit (+91 99458 67010)
                   </a>
                   <span className="text-neutral-600 hidden sm:inline">•</span>
                   <a href="tel:+916361455193" className="text-red-400 hover:text-white transition-colors">
-                    Parinitha (+91 63614 55193)
-                  </a>
-                  <span className="text-neutral-600 hidden sm:inline">•</span>
-                  <a href="tel:+919591755995" className="text-red-400 hover:text-white transition-colors">
-                    Monish (+91 95917 55995)
+                    Parinitha K (+91 63614 55193)
                   </a>
                 </div>
               </div>
@@ -1386,8 +1382,8 @@ export default function RegisterClientView({
                       </div>
 
                       <div className="flex flex-col sm:flex-row sm:items-center justify-between p-2.5 bg-black/60 border border-neutral-800/80 rounded gap-1">
-                        <span className="text-neutral-500 text-[11px]">PAYMENT DESK COORDINATOR:</span>
-                        <span className="text-neutral-300 text-xs">Monish N Kumar (+91 95917 55995)</span>
+                        <span className="text-neutral-500 text-[11px]">PAYMENT DESK COORDINATORS:</span>
+                        <span className="text-neutral-300 text-xs">Monish N Kumar (+91 95917 55995) · Charan C (+91 80884 36353)</span>
                       </div>
                     </div>
 
@@ -1537,19 +1533,15 @@ export default function RegisterClientView({
 
                   <div className="pt-3 border-t border-neutral-800/80">
                     <p className="text-[11px] uppercase tracking-widest text-neutral-400 font-bold mb-2">
-                      For any queries contact:
+                      For any queries contact student coordinators:
                     </p>
                     <div className="flex flex-wrap justify-center items-center gap-x-6 gap-y-2 text-xs">
-                      <a href="tel:+918310353103" className="text-neutral-300 hover:text-red-400 transition-colors">
-                        <span className="text-white font-bold">Moksh</span> - +91 831 035 3103
+                      <a href="tel:+919945867010" className="text-neutral-300 hover:text-red-400 transition-colors">
+                        <span className="text-white font-bold">Preksha Dixit</span> - +91 99458 67010
                       </a>
                       <span className="text-neutral-700 hidden sm:inline">•</span>
                       <a href="tel:+916361455193" className="text-neutral-300 hover:text-red-400 transition-colors">
-                        <span className="text-white font-bold">Parinitha</span> - +91 63614 55193
-                      </a>
-                      <span className="text-neutral-700 hidden sm:inline">•</span>
-                      <a href="tel:+919591755995" className="text-neutral-300 hover:text-red-400 transition-colors">
-                        <span className="text-white font-bold">Monish</span> - +91 95917 55995
+                        <span className="text-white font-bold">Parinitha K</span> - +91 63614 55193
                       </a>
                     </div>
                   </div>

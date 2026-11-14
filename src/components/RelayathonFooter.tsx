@@ -150,17 +150,14 @@ export default function RelayathonFooter() {
             <ul className="space-y-4 text-sm font-mono text-neutral-400 list-none p-0 m-0">
               <li>
                 <div className="text-white font-bold text-xs uppercase mb-1">
-                  // CREW LEADER HELPLINES
+                  // STUDENT COORDINATORS
                 </div>
                 <div className="flex flex-col gap-1 text-xs">
+                  <a href="tel:+919945867010" className="text-red-500 hover:text-red-400 transition-colors font-bold">
+                    Preksha Dixit: +91 99458 67010
+                  </a>
                   <a href="tel:+916361455193" className="text-red-500 hover:text-red-400 transition-colors font-bold">
-                    Parinitha: +91 63614 55193
-                  </a>
-                  <a href="tel:+918310353103" className="text-red-500 hover:text-red-400 transition-colors font-bold">
-                    Moksh: +91 83103 53103
-                  </a>
-                  <a href="tel:+919591755995" className="text-red-500 hover:text-red-400 transition-colors font-bold">
-                    Monish: +91 95917 55995
+                    Parinitha K: +91 63614 55193
                   </a>
                 </div>
               </li>

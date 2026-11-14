@@ -179,9 +179,8 @@ Password: ${creds.password}
 Official WhatsApp Group: ${OFFICIAL_WHATSAPP_GROUP}
 
 Coordinators for queries:
-• Moksh: +91 831 035 3103
-• Parinitha: +91 63614 55193
-• Monish: +91 95917 55995
+• Preksha Dixit: +91 99458 67010
+• Parinitha K: +91 63614 55193
 ============================================
     `.trim();
 
@@ -213,9 +212,8 @@ Join the official event WhatsApp group immediately to receive live schedule upda
 👉 ${OFFICIAL_WHATSAPP_GROUP}
 
 For any queries or assistance, contact the student coordinators:
-• Moksh: +91 831 035 3103
-• Parinitha: +91 63614 55193
-• Monish: +91 95917 55995
+• Preksha Dixit: +91 99458 67010
+• Parinitha K: +91 63614 55193
 
 Best regards,
 Innovators & Visionaries Club (IVC)`;
@@ -255,9 +253,8 @@ Hello ${creds.leaderName || "Team Leader"}, your team registration has been veri
 ${OFFICIAL_WHATSAPP_GROUP}
 
 *Coordinators for queries:*
-• Moksh: +91 831 035 3103
-• Parinitha: +91 63614 55193
-• Monish: +91 95917 55995`;
+• Preksha Dixit: +91 99458 67010
+• Parinitha K: +91 63614 55193`;
 
     const waUrl = phoneWithCountry
       ? `https://api.whatsapp.com/send?phone=${phoneWithCountry}&text=${encodeURIComponent(msg)}`
@@ -929,7 +926,7 @@ ${OFFICIAL_WHATSAPP_GROUP}
               </div>
               <div className="flex justify-between items-center pt-1 border-t border-white/5 text-[11px]">
                 <span className="text-text-secondary">Coordinators:</span>
-                <span className="text-neutral-300 font-mono">Moksh (+91 83103 53103) · Parinitha (+91 63614 55193)</span>
+                <span className="text-neutral-300 font-mono">Preksha Dixit (+91 99458 67010) · Parinitha K (+91 63614 55193)</span>
               </div>
             </div>
 
