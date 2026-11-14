@@ -110,7 +110,7 @@ export function buildMockTeam(index, semCode, isWaitlist, waitlistNum = 0) {
 
   const cleanUsername = teamName.toLowerCase().replace(/[^a-z0-9]/g, "");
   const password = isWaitlist ? "" : generateSecurePassword();
-  const teamCode = isWaitlist ? `WAITLIST-S${semCode}-#${String(waitlistNum).padStart(2, "0")}` : `IVC-VV-${semCode}${String(index).padStart(2, "0")}`;
+  const teamCode = isWaitlist ? `WAITLIST-S${semCode}-#${String(waitlistNum).padStart(2, "0")}` : `IVC-RY-${semCode}${String(index).padStart(2, "0")}`;
   const utr = isWaitlist
     ? `WAITLIST-#${waitlistNum} (Payment NOT required right now)`
     : `4318${semCode}0${String(index).padStart(2, "0")}${String(Math.floor(1000 + Math.random() * 8999))}`;

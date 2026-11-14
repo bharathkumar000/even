@@ -425,25 +425,25 @@ export async function submitTeamRegistration(
       paymentProofUrl = `data:${paymentFile.type || "image/jpeg"};base64,${fileBuffer.toString("base64")}`;
     }
 
-    // 2. Assign clean username and strictly monotonic provisional team code (e.g. IVC-VV-005)
+    // 2. Assign clean username and strictly monotonic provisional team code (e.g. IVC-RY-001)
     // NOTE: Official credentials & passwords are ONLY generated upon Admin Verification & Approval!
     const cleanUsername = teamName.toLowerCase().replace(/[^a-z0-9]/g, "");
 
     const { data: allRegs } = await supabaseAdmin
       .from("team_registrations")
-      .select("generated_credentials");
+      .select("generated_credentials, team_code");
 
     let maxNum = 0;
     for (const r of allRegs || []) {
-      const code = (r.generated_credentials as any)?.teamCode || "";
-      const m = code.match(/IVC-VV-(\d+)/i);
+      const code = (r as any)?.team_code || (r.generated_credentials as any)?.teamCode || "";
+      const m = code.match(/IVC-(?:RY|VV)-(\d+)/i);
       if (m) {
         const n = parseInt(m[1], 10);
         if (n > maxNum) maxNum = n;
       }
     }
     const nextNum = Math.max(maxNum + 1, (allRegs?.length || 0) + 1);
-    const provisionalTeamCode = `IVC-VV-${String(nextNum).padStart(3, "0")}`;
+    const provisionalTeamCode = `IVC-RY-${String(nextNum).padStart(3, "0")}`;
 
     // 3. Insert into team_registrations table with pending status and empty password
     let registrationPayload: any = {
@@ -782,15 +782,19 @@ export async function approveRegistration(registrationId: string): Promise<{
       reg.generated_credentials?.username ||
       teamName.toLowerCase().replace(/[^a-z0-9]/g, "");
 
-    // Generate readable team code (e.g. IVC-VV-042)
+    // Generate readable team code (e.g. IVC-RY-001)
     const { count: teamCount } = await supabaseAdmin
       .from("teams")
       .select("*", { count: "exact", head: true });
 
-    const teamCode =
+    let teamCode =
       reg.team_code ||
       reg.generated_credentials?.teamCode ||
-      `IVC-VV-${String((teamCount || 0) + 1).padStart(3, "0")}`;
+      `IVC-RY-${String((teamCount || 0) + 1).padStart(3, "0")}`;
+
+    if (teamCode.startsWith("IVC-VV-")) {
+      teamCode = teamCode.replace("IVC-VV-", "IVC-RY-");
+    }
 
     // 3. Create or find User in Supabase Auth
     let authUserId: string | null = null;
@@ -1227,7 +1231,10 @@ export async function syncAllApprovedRegistrationsAction(): Promise<{
       const isBase64 = typeof reg.payment_proof_url === "string" && reg.payment_proof_url.startsWith("data:");
 
       const pass = reg.login_password || reg.generated_credentials?.password || generateSecurePassword();
-      const code = reg.team_code || reg.generated_credentials?.teamCode || `IVC-VV-${String(approvedList.indexOf(reg) + 1).padStart(3, "0")}`;
+      let code = reg.team_code || reg.generated_credentials?.teamCode || `IVC-RY-${String(approvedList.indexOf(reg) + 1).padStart(3, "0")}`;
+      if (code.startsWith("IVC-VV-")) {
+        code = code.replace("IVC-VV-", "IVC-RY-");
+      }
       const uname = reg.login_username || reg.generated_credentials?.username || reg.team_name.toLowerCase().replace(/[^a-z0-9]/g, "");
 
       // If missing password or credentials in Supabase columns, backfill now

@@ -69,7 +69,7 @@ function sendTestConfirmationEmail() {
   
   var sampleLeader = "Charan C";
   var sampleTeam = "Velocity Racers";
-  var sampleCode = "GP26-7842";
+  var sampleCode = "IVC-RY-001";
   var sampleTrack = "1st year";
   var samplePass = "VV26-9X4M";
   var sampleWhatsapp = "https://chat.whatsapp.com/LNqyZOwG0R8D2IEST6KSld";
