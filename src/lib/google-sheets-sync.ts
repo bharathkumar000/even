@@ -340,6 +340,21 @@ function doPost(e) {
     var ss = SpreadsheetApp.getActiveSpreadsheet();
     var data = JSON.parse(e.postData.contents);
     
+    // Remote clear command for resetting all sheets
+    if (data.action === "clear_all_test_data") {
+      var sheetsToClear = ["Registrations", "Waiting list", "Credentials", "Approved", "Rejected"];
+      var cleared = [];
+      sheetsToClear.forEach(function(name) {
+        var s = ss.getSheetByName(name);
+        if (s && s.getLastRow() > 1) {
+          s.getRange(2, 1, s.getLastRow() - 1, s.getLastColumn()).clearContent();
+          cleared.push(name);
+        }
+      });
+      return ContentService.createTextOutput(JSON.stringify({ success: true, clearedSheets: cleared }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+    
     // Auto-rename default 'Sheet1' to 'Registrations' if fresh spreadsheet
     var regSheet = ss.getSheetByName("Registrations");
     if (!regSheet) {
@@ -640,10 +655,34 @@ function sendCredentialsToAllApprovedTeams() {
   SpreadsheetApp.getUi().alert("Successfully sent official credentials to " + count + " teams!");
 }
 
+function clearAllTestData() {
+  var ui = SpreadsheetApp.getUi();
+  var res = ui.alert(
+    "Clear All Test Data",
+    "Are you sure you want to delete all participant test rows from Registrations, Waiting list, Credentials, and Approved sheets? (Headers will be kept intact)",
+    ui.ButtonSet.YES_NO
+  );
+  if (res !== ui.Button.YES) return;
+
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheetNames = ["Registrations", "Waiting list", "Credentials", "Approved", "Rejected"];
+  var clearedSheets = [];
+  sheetNames.forEach(function(name) {
+    var sheet = ss.getSheetByName(name);
+    if (sheet && sheet.getLastRow() > 1) {
+      sheet.getRange(2, 1, sheet.getLastRow() - 1, sheet.getLastColumn()).clearContent();
+      clearedSheets.push(name);
+    }
+  });
+  ui.alert("Success: All test data has been cleared from: " + (clearedSheets.join(", ") || "None") + ". Headers are preserved!");
+}
+
 function onOpen() {
   SpreadsheetApp.getUi()
     .createMenu("🚀 Eventra Dispatch")
     .addItem("📧 Send All Credentials Emails", "sendCredentialsToAllApprovedTeams")
+    .addSeparator()
+    .addItem("🧹 Clear All Test / Mock Data", "clearAllTestData")
     .addToUi();
 }
 `.trim();
