@@ -50,12 +50,16 @@ export interface GeneratedCredentials {
   approvedAt: string;
 }
 
-/** Helper: Generate a unique random alphanumeric password (e.g., VV26-9X4M) */
+import crypto from "crypto";
+
+/** Helper: Generate a cryptographically secure random alphanumeric password (e.g., VV26-9X4M) */
 function generateSecurePassword(): string {
+  // Excluding visually confusing characters (0/O, 1/I)
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
   let token = "";
   for (let i = 0; i < 5; i++) {
-    token += chars.charAt(Math.floor(Math.random() * chars.length));
+    const randIndex = crypto.randomInt(0, chars.length);
+    token += chars.charAt(randIndex);
   }
   return `VV26-${token}`;
 }
