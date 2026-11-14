@@ -7,6 +7,7 @@ import { generateQrSignature } from "@/lib/qr-signature";
 import {
   syncRegistrationToGoogleSheets,
   syncCredentialsToGoogleSheets,
+  formatToIST,
   GoogleSheetRegistrationRecord,
   ComprehensiveTeamRecord,
   generateRegistrationsCsv,
@@ -285,7 +286,7 @@ export async function submitTeamRegistration(
         track: track,
         teamCode: `WAITLIST-#${waitlistNum}`,
         status: "Waitlist",
-        decisionAt: new Date().toISOString(),
+        decisionAt: formatToIST(new Date()),
         decisionBy: "Waiting List Submission",
 
         // Driver 1 (Leader)
@@ -562,7 +563,7 @@ export async function submitTeamRegistration(
       track: track,
       teamCode: provisionalTeamCode,
       status: isWaitlist ? "Waitlist" : "Pending",
-      decisionAt: new Date().toISOString(),
+      decisionAt: formatToIST(new Date()),
 
       // Driver 1 (Leader)
       leaderName: leaderName,
@@ -981,7 +982,7 @@ export async function approveRegistration(registrationId: string): Promise<{
       track: track,
       teamCode: teamCode,
       status: "Approved",
-      decisionAt: nowIso,
+      decisionAt: formatToIST(nowIso),
       decisionBy: adminUser.email || adminUser.id,
 
       // Driver 1 (Leader)
@@ -1059,7 +1060,7 @@ export async function approveRegistration(registrationId: string): Promise<{
       leaderPhone: reg.leader_phone || reg.payment_phone || "",
       driver2Name: d2.name || "",
       driver2Phone: d2.phone || d2.email || "",
-      decisionAt: nowIso,
+      decisionAt: formatToIST(nowIso),
     }).catch((e) =>
       console.error("[approveRegistration] Credentials sheet sync error:", e)
     );
@@ -1128,7 +1129,7 @@ export async function rejectRegistration(
         teamName: reg.team_name,
         track: (reg.leader_sem && reg.leader_sem.includes("3")) || (reg.track && reg.track.includes("3")) ? "3rd Sem" : "1st Sem",
         status: "Rejected",
-        decisionAt: nowIso,
+        decisionAt: formatToIST(nowIso),
         decisionBy: adminUser.email || adminUser.id,
         rejectionReason: reason,
 
@@ -1257,7 +1258,7 @@ export async function syncAllApprovedRegistrationsAction(): Promise<{
         track: (reg.leader_sem && reg.leader_sem.includes("3")) || (reg.track && reg.track.includes("3")) ? "3rd Sem" : "1st Sem",
         teamCode: code,
         status: "Approved",
-        decisionAt: reg.approved_at || reg.created_at,
+        decisionAt: formatToIST(reg.approved_at || reg.created_at),
 
         // Driver 1 (Leader)
         leaderName: reg.leader_name,
@@ -1321,7 +1322,7 @@ export async function syncAllApprovedRegistrationsAction(): Promise<{
         leaderPhone: reg.leader_phone || reg.payment_phone || "",
         driver2Name: d2.name || "",
         driver2Phone: d2.phone || d2.email || "",
-        decisionAt: reg.approved_at || reg.created_at,
+        decisionAt: formatToIST(reg.approved_at || reg.created_at),
       }).catch((e) =>
         console.error("[syncAllApprovedRegistrations] Credentials sheet sync error:", e)
       );
@@ -1370,7 +1371,7 @@ export async function exportRegistrationsCsvAction(
         track: (r.leader_sem && r.leader_sem.includes("3")) || (r.track && r.track.includes("3")) ? "3rd Sem" : "1st Sem",
         teamCode: r.generated_credentials?.teamCode || "",
         status: r.status === "approved" ? "Approved" : "Rejected",
-        decisionAt: r.approved_at || r.updated_at || r.created_at,
+        decisionAt: formatToIST(r.approved_at || r.updated_at || r.created_at),
         rejectionReason: r.rejection_reason || "",
 
         // Driver 1 (Leader)

@@ -36,10 +36,36 @@ function getBannerBlob() {
   }
 }
 
+function convertTimestampsToIST() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheetNames = ["Registrations", "Waiting list", "Credentials", "Approved", "Rejected"];
+  var count = 0;
+  sheetNames.forEach(function(name) {
+    var sheet = ss.getSheetByName(name);
+    if (!sheet || sheet.getLastRow() <= 1) return;
+    var range = sheet.getRange(2, 1, sheet.getLastRow() - 1, 1);
+    var values = range.getValues();
+    for (var i = 0; i < values.length; i++) {
+      var val = String(values[i][0] || "").trim();
+      if (val && (val.indexOf("T") !== -1 || val.indexOf("Z") !== -1)) {
+        var d = new Date(val);
+        if (!isNaN(d.getTime())) {
+          values[i][0] = Utilities.formatDate(d, "Asia/Kolkata", "dd/MM/yyyy, hh:mm:ss a");
+          count++;
+        }
+      }
+    }
+    range.setValues(values);
+  });
+  SpreadsheetApp.getUi().alert("✅ Successfully converted " + count + " timestamps to Indian Standard Time (IST)!");
+}
+
 function onOpen() {
   SpreadsheetApp.getUi()
-    .createMenu("Eventra Dispatch")
+    .createMenu("🚀 Eventra Dispatch")
     .addItem("🧪 Send Test Email to Myself (Safe Preview)", "sendTestConfirmationEmail")
+    .addSeparator()
+    .addItem("🕒 Convert All Timestamps to IST", "convertTimestampsToIST")
     .addSeparator()
     .addItem("🔄 Update All Team Codes to IVC-RY (In Sheet)", "updateAllTeamCodesToRy")
     .addSeparator()
@@ -330,6 +356,23 @@ function doPost(e) {
     var data = JSON.parse(contents);
     var ss = SpreadsheetApp.getActiveSpreadsheet();
     
+    function formatTimestampToIST(raw) {
+      if (!raw) return Utilities.formatDate(new Date(), "Asia/Kolkata", "dd/MM/yyyy, hh:mm:ss a");
+      try {
+        var str = String(raw).trim();
+        if (str.indexOf("/") !== -1 && (str.indexOf("AM") !== -1 || str.indexOf("PM") !== -1 || str.indexOf("am") !== -1 || str.indexOf("pm") !== -1)) {
+          return str;
+        }
+        var d = new Date(raw);
+        if (!isNaN(d.getTime())) {
+          return Utilities.formatDate(d, "Asia/Kolkata", "dd/MM/yyyy, hh:mm:ss a");
+        }
+        return str;
+      } catch (e) {
+        return String(raw);
+      }
+    }
+    
     var sheetName = data.sheetName || "Registrations";
     var sheet = ss.getSheetByName(sheetName);
     if (!sheet) {
@@ -408,7 +451,7 @@ function doPost(e) {
     }
     
     sheet.appendRow([
-      data.decisionAt || new Date().toISOString(),
+      formatTimestampToIST(data.decisionAt),
       data.status || "Pending",
       data.teamName || "",
       data.teamCode || "",

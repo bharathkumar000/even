@@ -7,6 +7,28 @@
  *   - Sheet 3: "Rejected" (Teams rejected by admin)
  */
 
+/**
+ * Formats any date or ISO string to Indian Standard Time (IST / Asia/Kolkata).
+ * Output format: "14/11/2026, 05:46:29 PM"
+ */
+export function formatToIST(input?: string | Date | null): string {
+  const date = input ? new Date(input) : new Date();
+  const validDate = isNaN(date.getTime()) ? new Date() : date;
+
+  return new Intl.DateTimeFormat("en-IN", {
+    timeZone: "Asia/Kolkata",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: true,
+  })
+    .format(validDate)
+    .replace(/(am|pm)/i, (m) => m.toUpperCase());
+}
+
 export interface ComprehensiveTeamRecord {
   sheetName?: "Registrations" | "Approved" | "Waiting list" | "Rejected" | "Credentials" | string;
   teamName: string;
@@ -115,7 +137,7 @@ export async function syncRegistrationToGoogleSheets(
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ ...record, sheetName: targetTab }),
+      body: JSON.stringify({ ...record, sheetName: targetTab, decisionAt: formatToIST(record.decisionAt) }),
       redirect: "follow",
       signal: AbortSignal.timeout(12000),
     });
@@ -175,7 +197,7 @@ export async function syncCredentialsToGoogleSheets(
     teamId: record.teamId,
     teamCode: record.teamCode,
     status: "Approved",
-    decisionAt: record.decisionAt || new Date().toISOString(),
+    decisionAt: formatToIST(record.decisionAt),
 
     loginPassword: record.loginPassword,
     loginEmail: record.loginEmail,
@@ -275,7 +297,7 @@ export function generateRegistrationsCsv(records: ComprehensiveTeamRecord[]): st
   };
 
   const rows = records.map((r) => [
-    escapeCsv(r.decisionAt),
+    escapeCsv(formatToIST(r.decisionAt)),
     escapeCsv(r.status),
     escapeCsv(r.teamName),
     escapeCsv(r.teamCode),
@@ -339,6 +361,18 @@ function doPost(e) {
   try {
     var ss = SpreadsheetApp.getActiveSpreadsheet();
     var data = JSON.parse(e.postData.contents);
+    
+    function formatTimestampToIST(raw) {
+      try {
+        if (!raw) return Utilities.formatDate(new Date(), "Asia/Kolkata", "dd/MM/yyyy, hh:mm:ss a");
+        if (typeof raw === "string" && raw.indexOf("/") !== -1 && (raw.indexOf("AM") !== -1 || raw.indexOf("PM") !== -1)) return raw;
+        var d = new Date(raw);
+        if (isNaN(d.getTime())) d = new Date();
+        return Utilities.formatDate(d, "Asia/Kolkata", "dd/MM/yyyy, hh:mm:ss a");
+      } catch (err) {
+        return raw || "";
+      }
+    }
     
     // Remote clear command for resetting all sheets
     if (data.action === "clear_all_test_data") {
@@ -410,7 +444,7 @@ function doPost(e) {
       if (memberPhone) memberContact += " (" + memberPhone + ")";
       
       sheet.appendRow([
-        data.decisionAt || new Date().toISOString(),
+        formatTimestampToIST(data.decisionAt),
         data.teamName || "",
         data.loginEmail || data.leaderEmail || "",
         data.loginPassword || data.password || "",
@@ -503,7 +537,7 @@ function doPost(e) {
     
     // Append complete row to target sheet (Registrations, Approved, or Rejected)
     sheet.appendRow([
-      data.decisionAt || new Date().toISOString(),
+      formatTimestampToIST(data.decisionAt),
       data.status || "Pending",
       data.teamName || "",
       data.teamCode || "",
@@ -922,10 +956,36 @@ function getBannerBlob() {
   }
 }
 
+function convertTimestampsToIST() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheetNames = ["Registrations", "Waiting list", "Credentials", "Approved", "Rejected"];
+  var count = 0;
+  sheetNames.forEach(function(name) {
+    var sheet = ss.getSheetByName(name);
+    if (!sheet || sheet.getLastRow() <= 1) return;
+    var range = sheet.getRange(2, 1, sheet.getLastRow() - 1, 1);
+    var values = range.getValues();
+    for (var i = 0; i < values.length; i++) {
+      var val = String(values[i][0] || "").trim();
+      if (val && (val.indexOf("T") !== -1 || val.indexOf("Z") !== -1)) {
+        var d = new Date(val);
+        if (!isNaN(d.getTime())) {
+          values[i][0] = Utilities.formatDate(d, "Asia/Kolkata", "dd/MM/yyyy, hh:mm:ss a");
+          count++;
+        }
+      }
+    }
+    range.setValues(values);
+  });
+  SpreadsheetApp.getUi().alert("✅ Successfully converted " + count + " timestamps to Indian Standard Time (IST)!");
+}
+
 function onOpen() {
   SpreadsheetApp.getUi()
     .createMenu("🚀 Eventra Dispatch")
     .addItem("🧪 Send Test Email to Myself (Safe Preview)", "sendTestConfirmationEmail")
+    .addSeparator()
+    .addItem("🕒 Convert All Timestamps to IST", "convertTimestampsToIST")
     .addSeparator()
     .addItem("🔄 Update All Team Codes to IVC-RY (In Sheet)", "updateAllTeamCodesToRy")
     .addSeparator()
