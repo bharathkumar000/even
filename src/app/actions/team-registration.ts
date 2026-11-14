@@ -586,7 +586,7 @@ export async function submitTeamRegistration(
       // Credentials: Login Password is NOT generated yet (only generated upon Admin Approval)
       loginPassword: "",
       portalUrl: "",
-      whatsappGroup: "https://chat.whatsapp.com/Baq9uEcVFQs9loSZxJTspB",
+      whatsappGroup: "https://chat.whatsapp.com/LNqyZOwG0R8D2IEST6KSld",
       emailDispatchStatus: "PENDING_APPROVAL",
     };
 
@@ -1001,7 +1001,7 @@ export async function approveRegistration(registrationId: string): Promise<{
       // Credentials for Bulk Email Dispatch from Google Sheets (No premature Portal URL)
       loginPassword: generatedPassword,
       portalUrl: "",
-      whatsappGroup: "https://chat.whatsapp.com/Baq9uEcVFQs9loSZxJTspB",
+      whatsappGroup: "https://chat.whatsapp.com/LNqyZOwG0R8D2IEST6KSld",
       emailDispatchStatus: "PENDING",
     };
 
@@ -1273,7 +1273,7 @@ export async function syncAllApprovedRegistrationsAction(): Promise<{
         // Credentials for Bulk Email Dispatch from Google Sheets (No premature Portal URL)
         loginPassword: pass,
         portalUrl: "",
-        whatsappGroup: "https://chat.whatsapp.com/Baq9uEcVFQs9loSZxJTspB",
+        whatsappGroup: "https://chat.whatsapp.com/LNqyZOwG0R8D2IEST6KSld",
         emailDispatchStatus: "PENDING",
       };
 
@@ -1388,7 +1388,7 @@ export async function exportRegistrationsCsvAction(
         // Credentials for Bulk Email Dispatch from Google Sheets / Mail Merge (No premature portal URL)
         loginPassword: r.login_password || r.generated_credentials?.password || "",
         portalUrl: "",
-        whatsappGroup: "https://chat.whatsapp.com/Baq9uEcVFQs9loSZxJTspB",
+        whatsappGroup: "https://chat.whatsapp.com/LNqyZOwG0R8D2IEST6KSld",
         emailDispatchStatus: "PENDING",
       };
     });

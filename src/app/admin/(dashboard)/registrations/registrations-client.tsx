@@ -166,7 +166,7 @@ export default function RegistrationsClientView({
     }
   };
 
-  const OFFICIAL_WHATSAPP_GROUP = "https://chat.whatsapp.com/Baq9uEcVFQs9loSZxJTspB";
+  const OFFICIAL_WHATSAPP_GROUP = "https://chat.whatsapp.com/LNqyZOwG0R8D2IEST6KSld";
 
   const copyCredentials = (creds: GeneratedCredentials) => {
     const text = `

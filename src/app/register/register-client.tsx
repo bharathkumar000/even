@@ -491,7 +491,7 @@ export default function RegisterClientView({
                 </p>
 
                 <a
-                  href="https://chat.whatsapp.com/Baq9uEcVFQs9loSZxJTspB"
+                  href="https://chat.whatsapp.com/LNqyZOwG0R8D2IEST6KSld"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="inline-flex items-center justify-center gap-2.5 px-8 py-4 bg-emerald-500 hover:bg-emerald-400 text-black font-black uppercase italic tracking-wider text-sm sm:text-base rounded-xl transition-all shadow-[0_0_30px_rgba(16,185,129,0.5)] hover:scale-105 active:scale-95"
@@ -504,12 +504,12 @@ export default function RegisterClientView({
                 <div className="pt-2 text-[11px] font-mono text-neutral-400 break-all">
                   Direct Link:{" "}
                   <a
-                    href="https://chat.whatsapp.com/Baq9uEcVFQs9loSZxJTspB"
+                    href="https://chat.whatsapp.com/LNqyZOwG0R8D2IEST6KSld"
                     target="_blank"
                     rel="noopener noreferrer"
                     className="text-emerald-400 underline hover:text-emerald-300"
                   >
-                    https://chat.whatsapp.com/Baq9uEcVFQs9loSZxJTspB
+                    https://chat.whatsapp.com/LNqyZOwG0R8D2IEST6KSld
                   </a>
                 </div>
               </div>
