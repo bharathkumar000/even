@@ -186,7 +186,6 @@ export async function submitTeamRegistration(
 ): Promise<{ success: boolean; message: string; registrationId?: string; isWaitlist?: boolean }> {
   try {
     const teamName = String(formData.get("teamName") || "").trim();
-    const track = String(formData.get("track") || "").trim();
 
     // Leader info (Vidya Vardhaka College Of Engineering exclusive)
     const leaderName = String(formData.get("leaderName") || "").trim();
@@ -196,6 +195,8 @@ export async function submitTeamRegistration(
     const leaderUsn = String(formData.get("leaderUsn") || "").trim().toUpperCase();
     const leaderBranch = String(formData.get("leaderBranch") || "").trim();
     const leaderSem = String(formData.get("leaderSem") || "").trim();
+    // Derive track as 1st Sem or 3rd Sem
+    const track = leaderSem.includes("3") ? "3rd Sem" : "1st Sem";
 
     // Payment info
     const paymentUtr = String(formData.get("paymentUtr") || "").trim();
@@ -1125,7 +1126,7 @@ export async function rejectRegistration(
       const sheetRecord: GoogleSheetRegistrationRecord = {
         sheetName: "Rejected",
         teamName: reg.team_name,
-        track: reg.track || "GRAND PRIX",
+        track: (reg.leader_sem && reg.leader_sem.includes("3")) || (reg.track && reg.track.includes("3")) ? "3rd Sem" : "1st Sem",
         status: "Rejected",
         decisionAt: nowIso,
         decisionBy: adminUser.email || adminUser.id,
@@ -1253,7 +1254,7 @@ export async function syncAllApprovedRegistrationsAction(): Promise<{
       const record: GoogleSheetRegistrationRecord = {
         sheetName: "Approved",
         teamName: reg.team_name,
-        track: reg.track || "GRAND PRIX",
+        track: (reg.leader_sem && reg.leader_sem.includes("3")) || (reg.track && reg.track.includes("3")) ? "3rd Sem" : "1st Sem",
         teamCode: code,
         status: "Approved",
         decisionAt: reg.approved_at || reg.created_at,
@@ -1366,7 +1367,7 @@ export async function exportRegistrationsCsvAction(
 
       return {
         teamName: r.team_name,
-        track: r.track || "GRAND PRIX",
+        track: (r.leader_sem && r.leader_sem.includes("3")) || (r.track && r.track.includes("3")) ? "3rd Sem" : "1st Sem",
         teamCode: r.generated_credentials?.teamCode || "",
         status: r.status === "approved" ? "Approved" : "Rejected",
         decisionAt: r.approved_at || r.updated_at || r.created_at,

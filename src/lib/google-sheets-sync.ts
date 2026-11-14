@@ -507,7 +507,7 @@ function doPost(e) {
       data.status || "Pending",
       data.teamName || "",
       data.teamCode || "",
-      data.track || "GRAND PRIX",
+      (function(){ var s = String(data.leaderSem || data.track || "").toLowerCase(); return s.indexOf("3") !== -1 ? "3rd Sem" : "1st Sem"; })(),
       data.rejectionReason || "",
       // Leader
       data.leaderName || "",
@@ -780,6 +780,9 @@ function sendCredentialsToAllApprovedTeams() {
 /**
  * 1-Click: Updates all existing team codes in Google Sheet to the official 'IVC-RY-###' format
  */
+/**
+ * 1-Click: Updates all existing team codes (IVC-RY-###) and track names (1st Sem / 3rd Sem) in Google Sheet.
+ */
 function updateAllTeamCodesToRy() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var sheets = ["Registrations", "Approved", "Credentials", "Waiting list"];
@@ -795,27 +798,42 @@ function updateAllTeamCodesToRy() {
     var headers = data[0];
     var teamCodeCol = headers.indexOf("Team Code");
     var teamNameCol = headers.indexOf("Team Name");
-    if (teamCodeCol === -1) return;
+    var trackCol = headers.indexOf("Track");
+    var semCol = headers.indexOf("Leader Semester") !== -1 ? headers.indexOf("Leader Semester") : headers.indexOf("Leader Sem");
     
     for (var i = 1; i < data.length; i++) {
-      var currentCode = String(data[i][teamCodeCol] || "").trim();
-      var teamName = teamNameCol !== -1 ? String(data[i][teamNameCol] || "").trim() : "";
-      var newCode = currentCode;
-      
-      if (currentCode.indexOf("IVC-VV-") !== -1) {
-        newCode = currentCode.replace("IVC-VV-", "IVC-RY-");
-      } else if (teamName.toUpperCase() === "OPAMP" && (currentCode === "OPAMP" || !currentCode)) {
-        newCode = "IVC-RY-001";
+      // 1. Team Code
+      if (teamCodeCol !== -1) {
+        var currentCode = String(data[i][teamCodeCol] || "").trim();
+        var teamName = teamNameCol !== -1 ? String(data[i][teamNameCol] || "").trim() : "";
+        var newCode = currentCode;
+        
+        if (currentCode.indexOf("IVC-VV-") !== -1) {
+          newCode = currentCode.replace("IVC-VV-", "IVC-RY-");
+        } else if (teamName.toUpperCase() === "OPAMP" && (currentCode === "OPAMP" || !currentCode)) {
+          newCode = "IVC-RY-001";
+        }
+        
+        if (newCode !== currentCode) {
+          sheet.getRange(i + 1, teamCodeCol + 1).setValue(newCode);
+          count++;
+        }
       }
       
-      if (newCode !== currentCode) {
-        sheet.getRange(i + 1, teamCodeCol + 1).setValue(newCode);
-        count++;
+      // 2. Track column (1st Sem or 3rd Sem)
+      if (trackCol !== -1 && semCol !== -1) {
+        var semVal = String(data[i][semCol] || "").toLowerCase();
+        var targetTrack = semVal.indexOf("3") !== -1 ? "3rd Sem" : "1st Sem";
+        var currentTrack = String(data[i][trackCol] || "").trim();
+        if (currentTrack !== targetTrack) {
+          sheet.getRange(i + 1, trackCol + 1).setValue(targetTrack);
+          count++;
+        }
       }
     }
   });
   
-  SpreadsheetApp.getUi().alert("✅ Successfully updated " + count + " team codes to IVC-RY format in Google Sheets!");
+  SpreadsheetApp.getUi().alert("✅ Successfully updated " + count + " items (team codes & track names) to IVC-RY and 1st/3rd Sem in Google Sheets!");
 }
 
 function clearAllTestData() {
