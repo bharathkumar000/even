@@ -1,12 +1,16 @@
 import Link from "next/link";
 import { getJudgeEvaluationMatrix } from "@/app/actions/admin-evaluation-matrix";
 import JudgeEvaluationMatrixClient from "./evaluation-matrix-client";
-import { Layers, FileCheck2, ShieldCheck } from "lucide-react";
+import { Layers, FileCheck2, ShieldCheck, AlertCircle } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
-export default async function AdminJudgeEvaluationMatrixPage() {
-  const result = await getJudgeEvaluationMatrix();
+export default async function AdminJudgeEvaluationMatrixPage(props: {
+  searchParams?: Promise<{ roundId?: string }>;
+}) {
+  const searchParams = props.searchParams ? await props.searchParams : undefined;
+  const roundId = searchParams?.roundId;
+  const result = await getJudgeEvaluationMatrix(roundId);
 
   const rows = result.rows || [];
   const kpis = result.kpis || {
@@ -21,6 +25,7 @@ export default async function AdminJudgeEvaluationMatrixPage() {
   const criteria = result.criteria || [];
   const uniqueJudges = result.uniqueJudges || [];
   const roundTitle = result.round?.title || "FINAL JUDGING";
+  const availableRounds = result.availableRounds || [];
 
   return (
     <div className="space-y-8 animate-fade-in font-tech max-w-7xl mx-auto pb-12">
@@ -35,7 +40,7 @@ export default async function AdminJudgeEvaluationMatrixPage() {
               Judge Evaluation Matrix
             </h1>
             <p className="font-tech text-text-secondary text-sm mt-2 max-w-2xl">
-              Consolidated evaluation matrix displaying all 60 participating teams and their two assigned judges for the {roundTitle} round.
+              Consolidated evaluation matrix displaying participating teams and their assigned judges for the {roundTitle} round.
             </p>
           </div>
 
@@ -57,7 +62,49 @@ export default async function AdminJudgeEvaluationMatrixPage() {
             </Link>
           </div>
         </div>
+
+        {/* Round Switcher Tabs (if multiple rounds exist) */}
+        {availableRounds.length > 1 && (
+          <div className="flex items-center gap-2 pt-2 overflow-x-auto custom-scrollbar">
+            <span className="text-xs uppercase text-text-secondary font-bold shrink-0 flex items-center gap-1">
+              <Layers size={13} className="text-accent-secondary" />
+              <span>Round:</span>
+            </span>
+            {availableRounds.map((r) => {
+              const isSelected = (result.round?.id || "") === r.id;
+              return (
+                <Link
+                  key={r.id}
+                  href={`/admin/evaluation?roundId=${r.id}`}
+                  className={`px-3 py-1 rounded text-xs font-bold uppercase tracking-wider border transition-all shrink-0 ${
+                    isSelected
+                      ? "bg-accent-secondary/20 border-accent-secondary text-accent-secondary"
+                      : "bg-surface-color/40 border-border-color text-text-secondary hover:text-text-primary hover:border-border-color-light"
+                  }`}
+                >
+                  {r.title}
+                </Link>
+              );
+            })}
+          </div>
+        )}
       </div>
+
+      {/* Error alert if matrix failed to load */}
+      {result.error && (
+        <div className="p-4 bg-status-error/15 border border-status-error/40 text-status-error text-xs font-tech rounded-xl flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <AlertCircle size={16} className="shrink-0" />
+            <span>{result.error}</span>
+          </div>
+          <Link
+            href="/admin/evaluation"
+            className="px-3 py-1 bg-status-error text-white rounded text-xs uppercase font-bold tracking-wider hover:opacity-90 transition-opacity"
+          >
+            Retry
+          </Link>
+        </div>
+      )}
 
       {/* Main Client Matrix */}
       <JudgeEvaluationMatrixClient
@@ -70,4 +117,3 @@ export default async function AdminJudgeEvaluationMatrixPage() {
     </div>
   );
 }
-
