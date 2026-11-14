@@ -326,9 +326,43 @@ export async function submitTeamRegistration(
         console.error("Waitlist Google Sheets sync error:", err);
       }
 
+      // Persist waitlist registration into team_registrations table with status 'waitlist'
+      // This enables getSemesterRegistrationCounts to track waitlist slots filled and lock when reaching the limit
+      let insertedWaitlistId = "";
+      try {
+        const { data: waitlistInsert } = await supabaseAdmin
+          .from("team_registrations")
+          .insert({
+            team_name: teamName,
+            track: track,
+            leader_name: leaderName,
+            leader_email: leaderEmail,
+            leader_phone: leaderPhone,
+            leader_college: leaderCollege,
+            leader_usn: leaderUsn,
+            leader_branch: leaderBranch,
+            leader_sem: leaderSem,
+            members: members,
+            payment_utr: `WAITLIST-#${waitlistNum}`,
+            payment_phone: paymentPhone,
+            payment_proof_url: "WAITLIST (Payment pending slot availability)",
+            status: "waitlist",
+            login_username: teamName.toLowerCase().replace(/[^a-z0-9]/g, ""),
+            login_email: leaderEmail,
+            login_password: "",
+            team_code: `WAITLIST-#${waitlistNum}`,
+          })
+          .select("id")
+          .maybeSingle();
+        insertedWaitlistId = waitlistInsert?.id || "";
+      } catch (dbErr) {
+        console.error("Waitlist DB insertion error:", dbErr);
+      }
+
       return {
         success: true,
         isWaitlist: true,
+        registrationId: insertedWaitlistId,
         message: "Your team has been successfully registered on the Waiting List! Details have been saved to Google Sheets (Waiting list). If any confirmed team is unable to participate, we will contact you.",
       };
     }
@@ -805,11 +839,31 @@ export async function approveRegistration(registrationId: string): Promise<{
 
     if (authError) {
       // If user already exists in auth, find existing user
-      if (authError.message.includes("already registered") || authError.message.includes("already exists")) {
+      const errMsg = (authError.message || "").toLowerCase();
+      if (
+        errMsg.includes("already registered") ||
+        errMsg.includes("already been registered") ||
+        errMsg.includes("already exists") ||
+        errMsg.includes("email address has already") ||
+        authError.status === 422 ||
+        (authError as any).code === "email_exists"
+      ) {
         const { data: userList } = await supabaseAdmin.auth.admin.listUsers({ perPage: 1000 });
-        const existing = userList?.users?.find(
+        let existing = userList?.users?.find(
           (u) => u.email?.toLowerCase() === leaderEmail
         );
+
+        if (!existing) {
+          const { data: prof } = await supabaseAdmin
+            .from("profiles")
+            .select("id")
+            .eq("email", leaderEmail)
+            .maybeSingle();
+          if (prof?.id) {
+            existing = { id: prof.id } as any;
+          }
+        }
+
         if (existing) {
           authUserId = existing.id;
           // Update password and metadata for existing user so they can login
@@ -822,6 +876,8 @@ export async function approveRegistration(registrationId: string): Promise<{
               username: username,
             },
           });
+        } else {
+          return { success: false, message: `Auth user already exists but could not locate user ID for ${leaderEmail}` };
         }
       } else {
         return { success: false, message: `Failed creating Auth user: ${authError.message}` };

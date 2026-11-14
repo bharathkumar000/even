@@ -171,7 +171,7 @@ export default function RegisterClientView({
   // Generate crisp UPI QR Code for payment
   useEffect(() => {
     // Official UPI Payment Link with amount ₹400
-    const upiLink = "upi://pay?pa=6361455193@okbizaxis&pn=Parinitha%20K&am=400&cu=INR&tn=Eventra%20Grand%20Prix%20Entry%20Fee";
+    const upiLink = "upi://pay?pa=charan31106@oksbi&pn=Charan%20C&am=400&cu=INR&tn=Eventra%20Grand%20Prix%20Entry%20Fee";
     QRCode.toDataURL(
       upiLink,
       {
@@ -203,7 +203,7 @@ export default function RegisterClientView({
   };
 
   const copyUpiId = () => {
-    navigator.clipboard.writeText("6361455193@okbizaxis");
+    navigator.clipboard.writeText("charan31106@oksbi");
     setCopiedUpi(true);
     setTimeout(() => setCopiedUpi(false), 2500);
   };
@@ -1309,33 +1309,29 @@ export default function RegisterClientView({
                       SCAN TO PAY ₹400 VIA GOOGLE PAY / PHONEPE / PAYTM
                     </p>
 
-                    <div className="inline-block p-2 bg-white rounded border-2 border-red-600 shadow-[0_0_20px_rgba(255,0,0,0.3)] my-1 mx-auto">
-                      {paymentQrDataUrl ? (
-                        <Image
-                          src={paymentQrDataUrl}
-                          alt="Official UPI QR Code"
-                          width={180}
-                          height={180}
-                          className="w-40 h-40 sm:w-44 sm:h-44 object-contain"
-                        />
-                      ) : (
-                        <div className="w-40 h-40 sm:w-44 sm:h-44 bg-neutral-900 flex items-center justify-center text-neutral-500 text-[10px]">
-                          Generating UPI QR...
-                        </div>
-                      )}
+                    <div className="inline-block p-2 bg-white rounded border-2 border-red-600 shadow-[0_0_20px_rgba(255,0,0,0.3)] my-1 mx-auto max-w-[240px]">
+                      <Image
+                        src="/payment-qr.png"
+                        alt="Official UPI QR Code - Charan C"
+                        width={240}
+                        height={320}
+                        className="w-48 sm:w-52 h-auto object-contain rounded mx-auto"
+                        priority
+                      />
                     </div>
 
                     <div className="space-y-2">
-                      <p className="text-[11px] text-neutral-300 font-bold m-0">
-                        COORDINATOR: <span className="text-white">Monish N Kumar (+91 95917 55995)</span>
-                      </p>
+                      <div className="bg-red-950/30 border border-red-900/40 rounded p-2 text-center">
+                        <span className="text-neutral-400 text-[10px] block uppercase font-mono tracking-wider">Official UPI ID</span>
+                        <span className="text-yellow-400 font-bold font-mono text-xs select-all">charan31106@oksbi</span>
+                      </div>
                       <button
                         type="button"
                         onClick={copyUpiId}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white/5 hover:bg-white/10 text-neutral-300 border border-neutral-800 rounded text-[10px] transition-colors"
+                        className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-1.5 bg-white/5 hover:bg-white/10 text-neutral-300 border border-neutral-800 rounded text-[10px] transition-colors font-bold"
                       >
                         {copiedUpi ? <Check size={11} className="text-green-400" /> : <Copy size={11} />}
-                        <span>{copiedUpi ? "UPI ID COPIED" : "COPY UPI ID: 6361455193@okbizaxis"}</span>
+                        <span>{copiedUpi ? "UPI ID COPIED" : "COPY UPI ID: charan31106@oksbi"}</span>
                       </button>
                     </div>
                   </div>
@@ -1352,24 +1348,29 @@ export default function RegisterClientView({
                       </span>
                     </div>
 
-                    <div className="p-2.5 bg-yellow-950/20 border border-yellow-900/40 rounded text-yellow-300/90 text-[11px] leading-relaxed">
-                      ⚠ <strong>Important:</strong> Please confirm that the receiver name matches the verified beneficiary below on your UPI app (Google Pay, PhonePe, Paytm, or BHIM) before approving the payment.
+                    <div className="p-3 bg-yellow-950/40 border-2 border-yellow-500/80 rounded-lg text-yellow-300 text-xs leading-relaxed space-y-1">
+                      <div className="flex items-center gap-1.5 font-bold uppercase tracking-wide text-yellow-400">
+                        <span>⚠ VERIFICATION REQUIRED BEFORE PAYMENT</span>
+                      </div>
+                      <p className="m-0 text-[11px] text-yellow-200/90 leading-normal">
+                        Please verify that the beneficiary / receiver name is shown as <strong className="text-white font-bold underline decoration-yellow-400 decoration-2 underline-offset-2">Charan C</strong> on your UPI app (Google Pay, PhonePe, Paytm, or BHIM) before completing the transaction.
+                      </p>
                     </div>
 
                     <div className="space-y-2 text-xs">
                       <div className="flex flex-col sm:flex-row sm:items-center justify-between p-2.5 bg-black/60 border border-neutral-800/80 rounded gap-1">
-                        <span className="text-neutral-500 text-[11px]">BENEFICIARY / RECEIVER NAME:</span>
-                        <span className="text-white font-bold text-xs tracking-wider">Parinitha K</span>
+                        <span className="text-neutral-500 text-[11px]">BENEFICIARY / FULL NAME:</span>
+                        <span className="text-yellow-400 font-bold text-sm tracking-wider">Charan C</span>
                       </div>
 
                       <div className="flex flex-col sm:flex-row sm:items-center justify-between p-2.5 bg-black/60 border border-neutral-800/80 rounded gap-1">
                         <span className="text-neutral-500 text-[11px]">OFFICIAL RECEIVING UPI ID:</span>
-                        <span className="text-yellow-400 font-mono font-bold text-xs break-all">6361455193@okbizaxis</span>
+                        <span className="text-white font-mono font-bold text-xs break-all">charan31106@oksbi</span>
                       </div>
 
                       <div className="flex flex-col sm:flex-row sm:items-center justify-between p-2.5 bg-black/60 border border-neutral-800/80 rounded gap-1">
                         <span className="text-neutral-500 text-[11px]">RECEIVING BANK / ACCOUNT:</span>
-                        <span className="text-neutral-200 font-bold text-xs">Axis Bank (Current A/c)</span>
+                        <span className="text-neutral-200 font-bold text-xs">State Bank of India (SBI)</span>
                       </div>
 
                       <div className="flex flex-col sm:flex-row sm:items-center justify-between p-2.5 bg-black/60 border border-neutral-800/80 rounded gap-1">
@@ -1384,7 +1385,7 @@ export default function RegisterClientView({
                     </div>
 
                     <p className="text-[10px] text-neutral-500 m-0 italic">
-                      * Official QR, UPI ID and Receiving Account credentials are authenticated for Ideathon registration.
+                      * Official QR, UPI ID (charan31106@oksbi) and Receiver Full Name (Charan C) are authenticated for Ideathon registration.
                     </p>
                   </div>
                 </div>
