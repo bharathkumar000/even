@@ -159,11 +159,10 @@ export default function CrossPortalNav({
                 <Link
                   key={p.href}
                   href={p.href}
-                  className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 text-xs uppercase tracking-wider font-bold transition-all border shrink-0 ${
-                    isActive
+                  className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 text-xs uppercase tracking-wider font-bold transition-all border shrink-0 ${isActive
                       ? `${p.activeBg} shadow-sm`
                       : "border-transparent text-text-secondary hover:text-text-primary hover:bg-surface-color-light/60 hover:border-border-color"
-                  }`}
+                    }`}
                   style={{
                     textShadow: isActive ? p.activeGlow : "none",
                   }}

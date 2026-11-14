@@ -39,20 +39,20 @@ import TeamPullToRefresh from "@/components/team/TeamPullToRefresh";
 
 export const dynamic = "force-dynamic";
 
-const SPOC_CONTACTS = [
-  { name: "Monish", phone: "9591755995", email: "vvce25ec0308@vvce.ac.in" },
-  { name: "Ananya", phone: "9742993151", email: "vvce25cse0005@vvce.ac.in" },
-  { name: "Anirudh", phone: "7975211494", email: "vvce25cse0129@vvce.ac.in" },
-  { name: "Anish", phone: "7975274945", email: "vvce25cse0342@vvce.ac.in" },
-  { name: "PSP", phone: "8073565631", email: "vvce25cse0402@vvce.ac.in" },
-  { name: "Vaishnavi", phone: "9845019351", email: "vvce25cseaiml0180@vvce.ac.in" },
-  { name: "Bhavana", phone: "9632327370", email: "vvce25ec0220@vvce.ac.in" },
-  { name: "Ramya", phone: "9035677873", email: "vvce25cse0158@vvce.ac.in" },
-  { name: "Vidhith", phone: "8147526812", email: "vvce25cse0089@vvce.ac.in" },
-  { name: "Charan", phone: "8088436353", email: "vvce25ec0244@vvce.ac.in" },
-  { name: "Mamatha", phone: "9743777121", email: "vvce25ec0183@vvce.ac.in" },
-  { name: "Rahul", phone: "7348877344", email: "vvce25cse0647@vvce.ac.in" },
-];
+const SPOC_PHONE_MAP: Record<string, string> = {
+  monish: "9591755995",
+  ananya: "9742993151",
+  anirudh: "7975211494",
+  anish: "7975274945",
+  psp: "8073565631",
+  vaishnavi: "9845019351",
+  bhavana: "9632327370",
+  ramya: "9035677873",
+  vidhith: "8147526812",
+  charan: "8088436353",
+  mamatha: "9743777121",
+  rahul: "7348877344",
+};
 
 export default async function TeamDashboardPage() {
   const { teamId, user, role } = await requireAuthenticatedTeamUser();
@@ -164,6 +164,12 @@ export default async function TeamDashboardPage() {
 
   const isLeader = role === "leader" || !teamId;
   const totalMembers = Math.max(members.length, 1);
+
+  const assignedSpocPhone =
+    assignedSpoc?.phone ||
+    (assignedSpoc?.name
+      ? SPOC_PHONE_MAP[assignedSpoc.name.trim().toLowerCase()]
+      : null);
 
   // Distribution counters
   const regCount = activityLogs.filter((l) => l.action_type === "registration").length;
@@ -413,92 +419,121 @@ export default async function TeamDashboardPage() {
         )}
       </div>
 
-      {/* SPOC Contact Directory */}
+      {/* Assigned Team SPOC Section */}
       <div className="space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
           <div className="flex items-center gap-2">
-            <Users className="w-5 h-5 text-accent-secondary shrink-0" />
+            <UserCheck className="w-5 h-5 text-accent-secondary shrink-0" />
             <h2 className="font-heading text-lg sm:text-xl text-text-primary uppercase m-0 font-bold tracking-wide">
-              SPOC Contact Directory
+              Your Assigned SPOC
             </h2>
           </div>
           <p className="text-[10px] sm:text-[11px] text-text-secondary/70 font-mono m-0">
-            Single Point of Contact — Event Coordination
+            Single Point of Contact — Dedicated Club Coordinator
           </p>
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
-          {SPOC_CONTACTS.map((spoc) => (
-            <div
-              key={spoc.name}
-              className="glass-panel p-4 sm:p-5 border border-border-color rounded-xl bg-[#0a0a0f]/50 flex flex-col justify-between"
-            >
-              <div>
-                <div className="flex items-center justify-between mb-3">
-                  <h3 className="font-heading text-base sm:text-lg text-text-primary uppercase m-0 font-bold tracking-wide leading-tight">
-                    {spoc.name}
-                  </h3>
-                  <div className="flex items-center gap-1 text-accent-secondary">
-                    <span className="text-[9px] sm:text-[10px] text-accent-secondary/80 bg-accent-secondary/10 px-2 py-0.5 rounded border border-accent-secondary/30 uppercase tracking-wider font-bold font-mono">
-                      SPOC
+
+        {assignedSpoc ? (
+          <div className="glass-panel p-5 sm:p-6 border border-border-color rounded-xl bg-[#0a0a0f]/60 max-w-2xl">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-border-color/30">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-full bg-accent-secondary/10 border-2 border-accent-secondary/40 flex items-center justify-center text-accent-secondary font-bold font-mono text-lg shrink-0">
+                  {assignedSpoc.name ? assignedSpoc.name.charAt(0).toUpperCase() : "S"}
+                </div>
+                <div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h3 className="font-heading text-lg sm:text-xl text-text-primary uppercase m-0 font-bold tracking-wide">
+                      {assignedSpoc.name}
+                    </h3>
+                    <span className="text-[9px] sm:text-[10px] text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/30 uppercase tracking-wider font-bold font-mono">
+                      ASSIGNED
                     </span>
                   </div>
+                  <p className="text-xs text-text-secondary font-mono m-0 mt-0.5">
+                    {assignedSpoc.department ? `${assignedSpoc.department} • ` : ""}Official Squad Mentor / SPOC
+                  </p>
                 </div>
-
-                <div className="space-y-2.5">
-                  <div className="flex items-center gap-2.5">
-                    <Phone className="w-4 h-4 text-accent-secondary shrink-0" />
-                    <div className="min-w-0 flex-1">
-                      <p className="text-[9px] uppercase tracking-wider text-text-secondary/60 font-mono m-0">
-                        Contact Number
-                      </p>
-                      <a
-                        href={`tel:${spoc.phone}`}
-                        className="text-text-primary text-xs sm:text-sm font-mono font-bold hover:text-accent-primary hover:underline transition-colors block truncate"
-                      >
-                        +91 {spoc.phone}
-                      </a>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2.5 pt-2 border-t border-border-color/30">
-                    <Mail className="w-4 h-4 text-accent-secondary shrink-0" />
-                    <div className="min-w-0 flex-1">
-                      <p className="text-[9px] uppercase tracking-wider text-text-secondary/60 font-mono m-0">
-                        Email Address
-                      </p>
-                      <a
-                        href={`mailto:${spoc.email}`}
-                        className="text-text-primary text-xs sm:text-sm font-mono font-bold hover:text-accent-primary hover:underline transition-colors block truncate"
-                        title={spoc.email}
-                      >
-                        {spoc.email}
-                      </a>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="mt-4 pt-3 border-t border-border-color/30 flex items-center gap-2">
-                <a
-                  href={`tel:${spoc.phone}`}
-                  className="flex-1 py-2 sm:py-2.5 px-3 bg-accent-secondary border border-accent-secondary/30 text-black text-xs uppercase font-bold tracking-wider rounded-lg transition-all hover:bg-accent-primary hover:border-accent-primary flex items-center justify-center gap-1.5 min-h-[40px]"
-                >
-                  <Phone className="w-3.5 h-3.5 shrink-0" />
-                  <span>Call</span>
-                </a>
-                <a
-                  href={`mailto:${spoc.email}`}
-                  className="flex-1 py-2 sm:py-2.5 px-3 bg-surface-color-light border border-border-color hover:border-accent-secondary text-text-primary text-xs uppercase font-bold tracking-wider rounded-lg transition-all hover:bg-surface-color hover:text-text-primary flex items-center justify-center gap-1.5 min-h-[40px]"
-                >
-                  <Mail className="w-3.5 h-3.5 shrink-0" />
-                  <span>Email</span>
-                </a>
               </div>
             </div>
-          ))}
-        </div>
-        <p className="text-[10px] text-text-secondary/50 italic mt-2">
-          Tap Call to dial directly or Email to open your default mail client.
-        </p>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 my-4">
+              {assignedSpocPhone ? (
+                <div className="p-3 bg-black/40 border border-border-color/40 rounded-lg">
+                  <p className="text-[9px] uppercase tracking-wider text-text-secondary/60 font-mono m-0 mb-1">
+                    Contact Phone
+                  </p>
+                  <a
+                    href={`tel:${assignedSpocPhone}`}
+                    className="text-text-primary text-xs sm:text-sm font-mono font-bold hover:text-accent-primary hover:underline transition-colors block truncate"
+                  >
+                    +91 {assignedSpocPhone}
+                  </a>
+                </div>
+              ) : null}
+
+              {assignedSpoc.email ? (
+                <div className="p-3 bg-black/40 border border-border-color/40 rounded-lg">
+                  <p className="text-[9px] uppercase tracking-wider text-text-secondary/60 font-mono m-0 mb-1">
+                    Official Email
+                  </p>
+                  <a
+                    href={`mailto:${assignedSpoc.email}`}
+                    className="text-text-primary text-xs sm:text-sm font-mono font-bold hover:text-accent-primary hover:underline transition-colors block truncate"
+                    title={assignedSpoc.email}
+                  >
+                    {assignedSpoc.email}
+                  </a>
+                </div>
+              ) : null}
+            </div>
+
+            <div className="flex flex-col sm:flex-row items-center gap-2 pt-2 border-t border-border-color/30">
+              {assignedSpocPhone && (
+                <a
+                  href={`tel:${assignedSpocPhone}`}
+                  className="w-full sm:flex-1 py-2.5 px-4 bg-accent-secondary border border-accent-secondary/30 text-black text-xs uppercase font-bold tracking-wider rounded-lg transition-all hover:bg-accent-primary hover:border-accent-primary flex items-center justify-center gap-2 min-h-[42px]"
+                >
+                  <Phone className="w-4 h-4 shrink-0" />
+                  <span>Call SPOC</span>
+                </a>
+              )}
+              {assignedSpocPhone && (
+                <a
+                  href={`https://wa.me/91${assignedSpocPhone}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-full sm:flex-1 py-2.5 px-4 bg-[#25D366] hover:bg-[#20ba59] text-white text-xs uppercase font-bold tracking-wider rounded-lg transition-all flex items-center justify-center gap-2 min-h-[42px]"
+                >
+                  <MessageCircle className="w-4 h-4 shrink-0" />
+                  <span>WhatsApp</span>
+                </a>
+              )}
+              {assignedSpoc.email && (
+                <a
+                  href={`mailto:${assignedSpoc.email}`}
+                  className="w-full sm:flex-1 py-2.5 px-4 bg-surface-color-light border border-border-color hover:border-accent-secondary text-text-primary text-xs uppercase font-bold tracking-wider rounded-lg transition-all hover:bg-surface-color flex items-center justify-center gap-2 min-h-[42px]"
+                >
+                  <Mail className="w-4 h-4 shrink-0" />
+                  <span>Email SPOC</span>
+                </a>
+              )}
+            </div>
+          </div>
+        ) : (
+          <div className="glass-panel p-5 sm:p-6 border border-border-color rounded-xl bg-[#0a0a0f]/40 max-w-2xl flex flex-col sm:flex-row sm:items-center gap-4">
+            <div className="w-12 h-12 rounded-xl bg-yellow-500/10 border border-yellow-500/30 flex items-center justify-center text-yellow-400 shrink-0">
+              <Users className="w-6 h-6" />
+            </div>
+            <div className="space-y-1">
+              <h3 className="font-heading text-base sm:text-lg text-text-primary uppercase m-0 font-bold tracking-wide">
+                SPOC Assignment in Progress
+              </h3>
+              <p className="text-xs text-text-secondary leading-relaxed m-0 font-sans">
+                Your dedicated Single Point of Contact (SPOC) is being assigned by the admin team. Once allotted, their direct contact details will appear right here.
+              </p>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Distribution Progress Section (Identical to Ops Progress Cards) */}
