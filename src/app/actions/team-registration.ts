@@ -915,7 +915,6 @@ export async function approveRegistration(registrationId: string): Promise<{
           code: teamCode,
           track: track,
           leader_name: leaderName,
-          leader_email: leaderEmail,
           status: "active",
         })
         .eq("id", teamId);
@@ -927,7 +926,6 @@ export async function approveRegistration(registrationId: string): Promise<{
           code: teamCode,
           track: track,
           leader_name: leaderName,
-          leader_email: leaderEmail,
           status: "active",
         })
         .select("id")
@@ -939,12 +937,12 @@ export async function approveRegistration(registrationId: string): Promise<{
       teamId = newTeam.id;
     }
 
-    // 6. Insert all 4 members into `team_members`
+    // 6. Insert Leader into `team_members`
     // First, remove any existing members for this team to avoid duplicates
     await supabaseAdmin.from("team_members").delete().eq("team_id", teamId);
 
     // Leader record
-    await supabaseAdmin.from("team_members").insert({
+    const { error: leaderMemberErr } = await supabaseAdmin.from("team_members").insert({
       team_id: teamId,
       user_id: authUserId,
       role: "leader",
@@ -952,17 +950,8 @@ export async function approveRegistration(registrationId: string): Promise<{
       email: leaderEmail,
     });
 
-    // The other 3 members
-    for (const m of members) {
-      if (m.name && m.email) {
-        await supabaseAdmin.from("team_members").insert({
-          team_id: teamId,
-          user_id: authUserId, // linked to team account
-          role: "member",
-          name: m.name,
-          email: m.email.toLowerCase(),
-        });
-      }
+    if (leaderMemberErr) {
+      console.warn("Leader team_members insert notice:", leaderMemberErr.message);
     }
 
     // 7. Generate official QR Code pass payload (compatible with /ops/scanner, signed with HMAC)

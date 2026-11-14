@@ -76,14 +76,10 @@ export async function resolveUsernameToEmail(username: string): Promise<string |
     try {
       const { data: teamMatch } = await supabaseAdmin
         .from("teams")
-        .select("id, leader_email")
+        .select("id")
         .or(`name.ilike.${normalizedUsername},code.ilike.${normalizedUsername}`)
         .limit(1)
         .maybeSingle();
-
-      if (teamMatch?.leader_email) {
-        return teamMatch.leader_email;
-      }
 
       if (teamMatch?.id) {
         const { data: leaderMember } = await supabaseAdmin
