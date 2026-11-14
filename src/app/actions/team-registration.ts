@@ -431,12 +431,28 @@ export async function submitTeamRegistration(
     // NOTE: Official credentials & passwords are ONLY generated upon Admin Verification & Approval!
     const cleanUsername = teamName.toLowerCase().replace(/[^a-z0-9]/g, "");
 
-    const { data: allRegs } = await supabaseAdmin
+    let allRegs: any[] = [];
+    const { data: regsWithCode, error: regsWithCodeErr } = await supabaseAdmin
       .from("team_registrations")
       .select("generated_credentials, team_code");
 
+    if (regsWithCode && !regsWithCodeErr) {
+      allRegs = regsWithCode;
+    } else {
+      const { data: basicRegs } = await supabaseAdmin
+        .from("team_registrations")
+        .select("generated_credentials");
+      if (basicRegs) {
+        allRegs = basicRegs;
+      }
+    }
+
+    const { data: existingTeams } = await supabaseAdmin
+      .from("teams")
+      .select("code");
+
     let maxNum = 0;
-    for (const r of allRegs || []) {
+    for (const r of allRegs) {
       const code = (r as any)?.team_code || (r.generated_credentials as any)?.teamCode || "";
       const m = code.match(/IVC-(?:RY|VV)-(\d+)/i);
       if (m) {
@@ -444,7 +460,15 @@ export async function submitTeamRegistration(
         if (n > maxNum) maxNum = n;
       }
     }
-    const nextNum = Math.max(maxNum + 1, (allRegs?.length || 0) + 1);
+    for (const t of existingTeams || []) {
+      const m = (t.code || "").match(/IVC-(?:RY|VV)-(\d+)/i);
+      if (m) {
+        const n = parseInt(m[1], 10);
+        if (n > maxNum) maxNum = n;
+      }
+    }
+
+    const nextNum = Math.max(maxNum + 1, allRegs.length + 1);
     const provisionalTeamCode = `IVC-RY-${String(nextNum).padStart(3, "0")}`;
 
     // 3. Insert into team_registrations table with pending status and empty password
@@ -704,6 +728,58 @@ export async function getRegistrations(statusFilter?: "all" | "pending" | "appro
       throw error;
     }
 
+    if (data && data.length > 0) {
+      const sorted = [...data].sort(
+        (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+      );
+      const seenCodes = new Set<string>();
+      let nextSeq = 1;
+
+      for (const item of sorted) {
+        let currentCode = item.team_code || item.generated_credentials?.teamCode || "";
+        if (currentCode.startsWith("IVC-VV-")) {
+          currentCode = currentCode.replace("IVC-VV-", "IVC-RY-");
+        }
+
+        if (item.status === "waitlist" || currentCode.includes("WAITLIST")) continue;
+
+        if (!currentCode || seenCodes.has(currentCode)) {
+          while (seenCodes.has(`IVC-RY-${String(nextSeq).padStart(3, "0")}`)) {
+            nextSeq++;
+          }
+          const fixedCode = `IVC-RY-${String(nextSeq).padStart(3, "0")}`;
+          nextSeq++;
+          seenCodes.add(fixedCode);
+
+          item.team_code = fixedCode;
+          if (item.generated_credentials) {
+            item.generated_credentials.teamCode = fixedCode;
+          } else {
+            item.generated_credentials = { teamCode: fixedCode };
+          }
+
+          Promise.resolve(
+            supabaseAdmin
+              .from("team_registrations")
+              .update({
+                generated_credentials: {
+                  ...(item.generated_credentials || {}),
+                  teamCode: fixedCode,
+                },
+              })
+              .eq("id", item.id)
+          ).catch(() => {});
+        } else {
+          seenCodes.add(currentCode);
+          const m = currentCode.match(/IVC-RY-(\d+)/i);
+          if (m) {
+            const num = parseInt(m[1], 10);
+            if (num >= nextSeq) nextSeq = num + 1;
+          }
+        }
+      }
+    }
+
     return { success: true, registrations: data || [], tableFallback: false };
   } catch (err: any) {
     console.error("getRegistrations error:", err);
@@ -785,17 +861,36 @@ export async function approveRegistration(registrationId: string): Promise<{
       teamName.toLowerCase().replace(/[^a-z0-9]/g, "");
 
     // Generate readable team code (e.g. IVC-RY-001)
-    const { count: teamCount } = await supabaseAdmin
+    const { data: allTeams } = await supabaseAdmin
       .from("teams")
-      .select("*", { count: "exact", head: true });
+      .select("id, code");
 
-    let teamCode =
+    let candidateCode =
       reg.team_code ||
       reg.generated_credentials?.teamCode ||
-      `IVC-RY-${String((teamCount || 0) + 1).padStart(3, "0")}`;
+      "";
 
-    if (teamCode.startsWith("IVC-VV-")) {
-      teamCode = teamCode.replace("IVC-VV-", "IVC-RY-");
+    if (candidateCode.startsWith("IVC-VV-")) {
+      candidateCode = candidateCode.replace("IVC-VV-", "IVC-RY-");
+    }
+
+    const isCodeTaken = candidateCode
+      ? (allTeams || []).some(
+          (t) => t.id !== reg.team_id && t.code?.toUpperCase() === candidateCode.toUpperCase()
+        )
+      : true;
+
+    let teamCode = candidateCode;
+    if (!teamCode || isCodeTaken) {
+      let maxNum = 0;
+      for (const t of allTeams || []) {
+        const m = (t.code || "").match(/IVC-(?:RY|VV)-(\d+)/i);
+        if (m) {
+          const n = parseInt(m[1], 10);
+          if (n > maxNum) maxNum = n;
+        }
+      }
+      teamCode = `IVC-RY-${String(maxNum + 1).padStart(3, "0")}`;
     }
 
     // 3. Create or find User in Supabase Auth

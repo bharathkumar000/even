@@ -535,17 +535,43 @@ function updateAllTeamCodesToRy() {
     var trackCol = headers.indexOf("Track");
     var semCol = headers.indexOf("Leader Semester") !== -1 ? headers.indexOf("Leader Semester") : headers.indexOf("Leader Sem");
     
+    var seenCodes = {};
+    var nextNum = 1;
+    var statusCol = headers.indexOf("Status");
+    
     for (var i = 1; i < data.length; i++) {
       // 1. Team Code
       if (teamCodeCol !== -1) {
         var currentCode = String(data[i][teamCodeCol] || "").trim();
         var teamName = teamNameCol !== -1 ? String(data[i][teamNameCol] || "").trim() : "";
-        var newCode = currentCode;
+        var status = statusCol !== -1 ? String(data[i][statusCol] || "").trim() : "";
+        var isWaitlist = status.toLowerCase().indexOf("waitlist") !== -1 || currentCode.toUpperCase().indexOf("WAITLIST") !== -1;
         
+        if (isWaitlist) {
+          continue;
+        }
+        
+        var newCode = currentCode;
         if (currentCode.indexOf("IVC-VV-") !== -1) {
           newCode = currentCode.replace("IVC-VV-", "IVC-RY-");
         } else if (teamName.toUpperCase() === "OPAMP" && (currentCode === "OPAMP" || !currentCode)) {
           newCode = "IVC-RY-001";
+        }
+        
+        // If code is empty or duplicate (already seen in an earlier row), assign next unique sequential code
+        if (!newCode || seenCodes[newCode]) {
+          while (seenCodes["IVC-RY-" + ("000" + nextNum).slice(-3)]) {
+            nextNum++;
+          }
+          newCode = "IVC-RY-" + ("000" + nextNum).slice(-3);
+          nextNum++;
+        }
+        
+        seenCodes[newCode] = true;
+        var m = newCode.match(/IVC-RY-(\d+)/i);
+        if (m) {
+          var parsedN = parseInt(m[1], 10);
+          if (parsedN >= nextNum) nextNum = parsedN + 1;
         }
         
         if (newCode !== currentCode) {
