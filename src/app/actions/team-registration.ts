@@ -410,30 +410,16 @@ export async function submitTeamRegistration(
       paymentProofUrl = `data:${paymentFile.type || "image/jpeg"};base64,${fileBuffer.toString("base64")}`;
     }
 
-    // 2. Generate secure credentials upfront so they are immediately preserved in Supabase & Google Sheets
-    const generatedPassword = generateSecurePassword();
+    // 2. Assign clean username and provisional team code (e.g. IVC-VV-001)
+    // NOTE: Official credentials & passwords are ONLY generated upon Admin Verification & Approval!
     const cleanUsername = teamName.toLowerCase().replace(/[^a-z0-9]/g, "");
 
-    // Determine provisional team code (e.g. IVC-VV-001)
     const { count: regCount } = await supabaseAdmin
       .from("team_registrations")
       .select("*", { count: "exact", head: true });
     const provisionalTeamCode = `IVC-VV-${String((regCount || 0) + 1).padStart(3, "0")}`;
 
-    const credentials: GeneratedCredentials = {
-      teamId: "",
-      teamName,
-      teamCode: provisionalTeamCode,
-      email: leaderEmail,
-      leaderName,
-      leaderPhone: leaderPhone || paymentPhone,
-      username: cleanUsername,
-      password: generatedPassword,
-      qrPayload: "",
-      approvedAt: "",
-    };
-
-    // 3. Insert into team_registrations table with explicit credential columns
+    // 3. Insert into team_registrations table with pending status and empty password
     let registrationPayload: any = {
       team_name: teamName,
       track: track,
@@ -451,9 +437,9 @@ export async function submitTeamRegistration(
       status: "pending",
       login_username: cleanUsername,
       login_email: leaderEmail,
-      login_password: generatedPassword,
+      login_password: "",
       team_code: provisionalTeamCode,
-      generated_credentials: credentials,
+      generated_credentials: null,
     };
 
     let { data: insertData, error: insertError } = await supabaseAdmin
@@ -479,7 +465,7 @@ export async function submitTeamRegistration(
         payment_phone: paymentPhone,
         payment_proof_url: paymentProofUrl,
         status: "pending",
-        generated_credentials: credentials,
+        generated_credentials: null,
       };
       const retryResult = await supabaseAdmin
         .from("team_registrations")
@@ -513,7 +499,7 @@ export async function submitTeamRegistration(
             leaderSem,
             members,
             paymentProofUrl,
-            loginPassword: generatedPassword,
+            loginPassword: "",
             loginUsername: cleanUsername,
             teamCode: provisionalTeamCode,
           }),
@@ -593,11 +579,11 @@ export async function submitTeamRegistration(
       paymentProofUrl: isBase64Proof ? undefined : paymentProofUrl,
       paymentProofBase64: isBase64Proof ? paymentProofUrl : undefined,
 
-      // Credentials for Bulk Dispatch (Login Password is ALWAYS populated; Portal URL is omitted before event day)
-      loginPassword: generatedPassword,
+      // Credentials: Login Password is NOT generated yet (only generated upon Admin Approval)
+      loginPassword: "",
       portalUrl: "",
       whatsappGroup: "https://chat.whatsapp.com/Baq9uEcVFQs9loSZxJTspB",
-      emailDispatchStatus: "PENDING",
+      emailDispatchStatus: "PENDING_APPROVAL",
     };
 
     // Non-blocking background sync to Sheet 1 ("Registrations")
@@ -688,48 +674,6 @@ export async function getRegistrations(statusFilter?: "all" | "pending" | "appro
         return { success: true, registrations: mapped, tableFallback: true };
       }
       throw error;
-    }
-
-    // Auto-backfill any registrations in Supabase that are missing generated passwords
-    if (data && data.length > 0) {
-      for (const item of data) {
-        if (!item.login_password && !item.generated_credentials?.password) {
-          const pass = generateSecurePassword();
-          const cleanUname = (item.team_name || "").toLowerCase().replace(/[^a-z0-9]/g, "");
-          const code = item.team_code || `IVC-VV-${String(data.indexOf(item) + 1).padStart(3, "0")}`;
-          const creds: GeneratedCredentials = {
-            teamId: item.team_id || "",
-            teamName: item.team_name,
-            teamCode: code,
-            email: item.leader_email,
-            leaderName: item.leader_name,
-            leaderPhone: item.leader_phone || item.payment_phone || "",
-            username: cleanUname,
-            password: pass,
-            qrPayload: "",
-            approvedAt: item.approved_at || "",
-          };
-
-          item.login_username = cleanUname;
-          item.login_email = item.leader_email;
-          item.login_password = pass;
-          item.team_code = code;
-          item.generated_credentials = creds;
-
-          // Asynchronously update Supabase record
-          supabaseAdmin
-            .from("team_registrations")
-            .update({
-              login_username: cleanUname,
-              login_email: item.leader_email,
-              login_password: pass,
-              team_code: code,
-              generated_credentials: creds,
-            })
-            .eq("id", item.id)
-            .then(() => {}, () => {});
-        }
-      }
     }
 
     return { success: true, registrations: data || [], tableFallback: false };
