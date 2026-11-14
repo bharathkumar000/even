@@ -66,6 +66,7 @@ export default async function TeamDashboardPage() {
   let publishedResult: any = null;
   let announcements: any[] = [];
   let assignedSpoc: any = null;
+  let assignedPS: any = null;
 
   // Fetch content for team portal
   let contentItems: any[] = [];
@@ -77,7 +78,7 @@ export default async function TeamDashboardPage() {
   }
 
   try {
-    const [teamRes, membersRes, logsRes, subRes, roundRes, resultRes, annRes, spocAssignRes] =
+    const [teamRes, membersRes, logsRes, subRes, roundRes, resultRes, annRes, spocAssignRes, psAssignRes] =
       await Promise.all([
         supabaseAdmin
           .from("teams")
@@ -127,6 +128,18 @@ export default async function TeamDashboardPage() {
           `)
           .eq("team_id", effectiveTeamId)
           .maybeSingle(),
+        supabaseAdmin
+          .from("team_problem_statement_assignments")
+          .select(`
+            problem_statement_id,
+            problem_statements (
+              id,
+              reference_number,
+              title
+            )
+          `)
+          .eq("team_id", effectiveTeamId)
+          .maybeSingle(),
       ]);
 
     if (teamRes.data) teamInfo = teamRes.data;
@@ -158,12 +171,18 @@ export default async function TeamDashboardPage() {
     if (spocAssignRes.data && (spocAssignRes.data as any).spocs) {
       assignedSpoc = (spocAssignRes.data as any).spocs;
     }
+    if (psAssignRes?.data && (psAssignRes.data as any).problem_statements) {
+      assignedPS = (psAssignRes.data as any).problem_statements;
+    }
   } catch (err) {
     console.error("Failed to load team dashboard data:", err);
   }
 
   const isLeader = role === "leader" || !teamId;
   const totalMembers = Math.max(members.length, 1);
+
+  const psDisplayTitle =
+    assignedPS?.reference_number || assignedPS?.title || "Track Deliverable";
 
   const assignedSpocPhone =
     assignedSpoc?.phone ||
@@ -233,74 +252,80 @@ export default async function TeamDashboardPage() {
       {/* Primary KPI Row: Team Status & Submission State */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-5">
         {/* Approved Roster Card */}
-        <div className="glass-panel p-4 sm:p-5 border border-border-color flex flex-col justify-between">
-          <div className="flex items-start justify-between">
-            <div>
-              <span className="text-[10px] uppercase tracking-wider text-text-secondary font-bold block mb-1">
+        <div className="glass-panel p-4 sm:p-5 border border-border-color flex flex-col justify-between relative overflow-hidden">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0 flex-1">
+              <span className="text-[10px] uppercase tracking-wider text-text-secondary font-bold block mb-1 truncate">
                 Roster Members
               </span>
-              <p className="font-heading text-2xl sm:text-3xl text-text-primary uppercase m-0 font-bold">
+              <p className="font-heading text-2xl sm:text-3xl text-text-primary uppercase m-0 font-bold truncate">
                 {totalMembers}
               </p>
             </div>
-            <div className="p-2 sm:p-2.5 bg-accent-tertiary/10 border border-accent-tertiary/30 text-accent-tertiary rounded">
+            <div className="p-2 sm:p-2.5 bg-accent-tertiary/10 border border-accent-tertiary/30 text-accent-tertiary rounded shrink-0">
               <Users size={18} className="sm:w-5 sm:h-5" />
             </div>
           </div>
-          <div className="pt-3 sm:pt-4 border-t border-border-color/50 mt-3 flex items-center justify-between text-xs">
-            <span className="text-status-success flex items-center gap-1 font-bold">
+          <div className="pt-3 sm:pt-4 border-t border-border-color/50 mt-3 flex items-center justify-between gap-2 text-xs">
+            <span className="text-status-success flex items-center gap-1 font-bold shrink-0">
               <CheckCircle2 size={13} /> Active Roster
             </span>
-            <span className="text-text-secondary font-mono text-[11px] sm:text-xs truncate max-w-[120px]">{teamInfo?.leader_name || "Leader"}</span>
+            <span className="text-text-secondary font-mono text-[11px] sm:text-xs truncate text-right">
+              {teamInfo?.leader_name || "Leader"}
+            </span>
           </div>
         </div>
 
         {/* Problem Statements Card */}
-        <div className="glass-panel p-4 sm:p-5 border border-border-color flex flex-col justify-between">
-          <div className="flex items-start justify-between">
-            <div>
-              <span className="text-[10px] uppercase tracking-wider text-text-secondary font-bold block mb-1">
+        <div className="glass-panel p-4 sm:p-5 border border-border-color flex flex-col justify-between relative overflow-hidden">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0 flex-1">
+              <span className="text-[10px] uppercase tracking-wider text-text-secondary font-bold block mb-1 truncate">
                 Problem Statement
               </span>
-              <p className="font-heading text-xl sm:text-2xl text-accent-tertiary uppercase m-0 font-bold truncate">
-                Track Deliverable
+              <p
+                className="font-heading text-lg sm:text-xl text-accent-tertiary uppercase m-0 font-bold truncate leading-snug"
+                title={psDisplayTitle}
+              >
+                {psDisplayTitle}
               </p>
             </div>
-            <div className="p-2 sm:p-2.5 bg-accent-tertiary/10 border border-accent-tertiary/30 text-accent-tertiary rounded">
+            <div className="p-2 sm:p-2.5 bg-accent-tertiary/10 border border-accent-tertiary/30 text-accent-tertiary rounded shrink-0">
               <ScrollText size={18} className="sm:w-5 sm:h-5" />
             </div>
           </div>
-          <div className="pt-3 sm:pt-4 border-t border-border-color/50 mt-3 flex items-center justify-between text-xs">
-            <span className="text-text-secondary truncate max-w-[120px]">
+          <div className="pt-3 sm:pt-4 border-t border-border-color/50 mt-3 flex items-center justify-between gap-2 text-xs">
+            <span className="text-text-secondary truncate">
               Domain: <span className="text-text-primary font-bold">{teamInfo?.track || "Innovation"}</span>
             </span>
             <Link
               href="/team/problem-statements"
               className="text-accent-tertiary hover:underline font-bold uppercase text-[11px] flex items-center gap-1 shrink-0"
             >
-              <span>View Statements</span>
+              <span>{assignedPS ? "Change PS" : "View Statements"}</span>
               <ArrowRight size={12} />
             </Link>
           </div>
         </div>
 
         {/* Deliverables Submission Card */}
-        <div className="glass-panel p-4 sm:p-5 border border-border-color flex flex-col justify-between">
-          <div className="flex items-start justify-between">
-            <div>
-              <span className="text-[10px] uppercase tracking-wider text-text-secondary font-bold block mb-1">
+        <div className="glass-panel p-4 sm:p-5 border border-border-color flex flex-col justify-between relative overflow-hidden">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0 flex-1">
+              <span className="text-[10px] uppercase tracking-wider text-text-secondary font-bold block mb-1 truncate">
                 Deliverables Status
               </span>
               <p
-                className={`font-heading text-xl sm:text-2xl uppercase m-0 font-bold ${
+                className={`font-heading text-lg sm:text-xl uppercase m-0 font-bold truncate leading-snug ${
                   hasSubmitted ? "text-status-success" : "text-status-warning"
                 }`}
+                title={hasSubmitted ? "Submitted" : "Pending Action"}
               >
                 {hasSubmitted ? "Submitted" : "Pending Action"}
               </p>
             </div>
             <div
-              className={`p-2 sm:p-2.5 rounded border ${
+              className={`p-2 sm:p-2.5 rounded border shrink-0 ${
                 hasSubmitted
                   ? "bg-status-success/10 border-status-success text-status-success"
                   : "bg-status-warning/10 border-status-warning text-status-warning"
@@ -309,8 +334,8 @@ export default async function TeamDashboardPage() {
               <FileUp size={18} className="sm:w-5 sm:h-5" />
             </div>
           </div>
-          <div className="pt-3 sm:pt-4 border-t border-border-color/50 mt-3 flex items-center justify-between text-xs">
-            <span className="text-text-secondary truncate max-w-[120px]">
+          <div className="pt-3 sm:pt-4 border-t border-border-color/50 mt-3 flex items-center justify-between gap-2 text-xs">
+            <span className="text-text-secondary truncate">
               Round: <span className="text-text-primary font-bold">{activeRound?.title || "Round 1"}</span>
             </span>
             <Link
@@ -324,22 +349,25 @@ export default async function TeamDashboardPage() {
         </div>
 
         {/* Results / Standings Card */}
-        <div className="glass-panel p-4 sm:p-5 border border-border-color flex flex-col justify-between">
-          <div className="flex items-start justify-between">
-            <div>
-              <span className="text-[10px] uppercase tracking-wider text-text-secondary font-bold block mb-1">
+        <div className="glass-panel p-4 sm:p-5 border border-border-color flex flex-col justify-between relative overflow-hidden">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0 flex-1">
+              <span className="text-[10px] uppercase tracking-wider text-text-secondary font-bold block mb-1 truncate">
                 Evaluation Standing
               </span>
-              <p className="font-heading text-xl sm:text-2xl text-accent-primary uppercase m-0 font-bold">
+              <p
+                className="font-heading text-lg sm:text-xl text-accent-primary uppercase m-0 font-bold truncate leading-snug"
+                title={publishedResult ? `Rank #${publishedResult.rank || 1}` : "Under Review"}
+              >
                 {publishedResult ? `Rank #${publishedResult.rank || 1}` : "Under Review"}
               </p>
             </div>
-            <div className="p-2 sm:p-2.5 bg-accent-primary/10 border border-accent-primary/30 text-accent-primary rounded">
+            <div className="p-2 sm:p-2.5 bg-accent-primary/10 border border-accent-primary/30 text-accent-primary rounded shrink-0">
               <Trophy size={18} className="sm:w-5 sm:h-5" />
             </div>
           </div>
-          <div className="pt-3 sm:pt-4 border-t border-border-color/50 mt-3 flex items-center justify-between text-xs">
-            <span className="text-text-secondary truncate max-w-[120px]">
+          <div className="pt-3 sm:pt-4 border-t border-border-color/50 mt-3 flex items-center justify-between gap-2 text-xs">
+            <span className="text-text-secondary truncate">
               {publishedResult ? `${publishedResult.total_score} Points` : "Judging in Progress"}
             </span>
             <Link
