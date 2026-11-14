@@ -380,9 +380,10 @@ function doPost(e) {
           "Team ID",
           "Team Code",
           "Team Lead",
-          "One Member Contact Info (Driver 2)"
+          "One Member Contact Info (Driver 2)",
+          "Email Dispatch Status"
         ]);
-        sheet.getRange(1, 1, 1, 8).setFontWeight("bold").setBackground("#d9ead3");
+        sheet.getRange(1, 1, 1, 9).setFontWeight("bold").setBackground("#d9ead3");
       }
       
       var leadContact = data.leaderName || data.teamLead || "";
@@ -401,7 +402,8 @@ function doPost(e) {
         data.teamId || "",
         data.teamCode || "",
         leadContact,
-        memberContact
+        memberContact,
+        "PENDING"
       ]);
       
       return ContentService.createTextOutput(JSON.stringify({ success: true, sheet: "Credentials" }))
