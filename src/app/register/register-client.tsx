@@ -1375,7 +1375,10 @@ export default function RegisterClientView({
 
                       <div className="flex flex-col sm:flex-row sm:items-center justify-between p-2.5 bg-black/60 border border-neutral-800/80 rounded gap-1">
                         <span className="text-neutral-500 text-[11px]">ENTRY REGISTRATION FEE:</span>
-                        <span className="text-green-400 font-black text-xs">₹400.00 (Fixed per Team)</span>
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-green-400 font-black text-xs">₹400.00 (Fixed per Team)</span>
+                          <span className="text-[10px] text-red-400 font-bold uppercase tracking-wider">(Non-Refundable)</span>
+                        </div>
                       </div>
 
                       <div className="flex flex-col sm:flex-row sm:items-center justify-between p-2.5 bg-black/60 border border-neutral-800/80 rounded gap-1">
@@ -1513,6 +1516,12 @@ export default function RegisterClientView({
                     <span>LOCK IN GRID POSITION &gt;&gt;</span>
                   )}
                 </button>
+
+                {!isSelectedSemLocked && (
+                  <p className="text-center font-mono text-[11px] sm:text-xs text-neutral-400 m-0 pt-1">
+                    <span className="text-red-500 font-bold">⚠ PLEASE NOTE:</span> Registration fee is <strong className="text-red-400 uppercase tracking-wider font-bold">strictly non-refundable</strong> once paid under any circumstances.
+                  </p>
+                )}
 
                 {/* TRANSACTION VERIFICATION & CONTACT QUERIES NOTICE */}
                 <div className="mt-8 p-5 sm:p-6 bg-[#080808] border border-red-900/50 rounded-xl space-y-3 font-mono text-center shadow-lg">
