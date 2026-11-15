@@ -297,7 +297,7 @@ export default function LiveActivityPage() {
             </div>
           </div>
           <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse text-xs">
+            <table className="w-full text-left border-collapse text-xs min-w-[650px]">
               <thead className="bg-surface-color-light/30 text-text-secondary">
                 <tr>
                   <th className="p-3 w-48">Timestamp</th>

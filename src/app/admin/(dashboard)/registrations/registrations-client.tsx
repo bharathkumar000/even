@@ -40,6 +40,7 @@ import {
   GeneratedCredentials,
   syncAllApprovedRegistrationsAction,
   exportRegistrationsCsvAction,
+  getRegistrations,
 } from "@/app/actions/team-registration";
 import { GOOGLE_APPS_SCRIPT_TEMPLATE } from "@/lib/google-sheets-sync";
 
@@ -64,10 +65,37 @@ export default function RegistrationsClientView({
   const [showScriptModal, setShowScriptModal] = useState(false);
   const [copiedScript, setCopiedScript] = useState(false);
   const [expandedProofId, setExpandedProofId] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
     setMounted(true);
+  }, []);
+
+  const fetchLatestRegistrations = async (showLoading = false) => {
+    try {
+      if (showLoading) setRefreshing(true);
+      const res = await getRegistrations("all");
+      if (res.success && Array.isArray(res.registrations)) {
+        setRegistrations(res.registrations);
+      }
+    } catch (e) {
+      console.error("Auto-fetch registrations error:", e);
+    } finally {
+      if (showLoading) setRefreshing(false);
+    }
+  };
+
+  useEffect(() => {
+    setRegistrations(initialRegistrations);
+  }, [initialRegistrations]);
+
+  // Periodic polling every 8 seconds to automatically show newly registered teams
+  useEffect(() => {
+    const timer = setInterval(() => {
+      fetchLatestRegistrations(false);
+    }, 8000);
+    return () => clearInterval(timer);
   }, []);
 
   // Generate local QR code base64 URL whenever modal opens
@@ -423,6 +451,18 @@ ${OFFICIAL_WHATSAPP_GROUP}
           </div>
 
           <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+            {/* Refresh Live Registrations */}
+            <button
+              type="button"
+              onClick={() => fetchLatestRegistrations(true)}
+              disabled={refreshing}
+              title="Refresh registration submissions in real-time"
+              className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3 py-2 bg-white/5 hover:bg-white/10 border border-white/20 hover:border-white/40 text-text-primary rounded-xl font-tech text-xs font-bold transition-all disabled:opacity-50"
+            >
+              <RefreshCw size={13} className={refreshing ? "animate-spin text-cyan-400" : ""} />
+              <span>{refreshing ? "Refreshing..." : "Refresh"}</span>
+            </button>
+
             {/* Export CSV for Google Sheets */}
             <button
               type="button"

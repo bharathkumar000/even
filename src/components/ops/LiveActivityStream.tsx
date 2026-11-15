@@ -110,7 +110,7 @@ export default function LiveActivityStream({
     act === "all" ? logs.length : logs.filter((l) => l.action_type === act).length;
 
   return (
-    <div id="live-activity" className="glass-panel p-6 border border-border-color space-y-5 font-tech scroll-mt-20">
+    <div id="live-activity" className="glass-panel p-4 sm:p-6 border border-border-color space-y-4 font-tech scroll-mt-20 rounded-xl">
       {/* Top Header with Live Pulse */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border-color pb-4">
         <div>
@@ -123,7 +123,7 @@ export default function LiveActivityStream({
               Live Real-Time Telemetry Stream
             </span>
           </div>
-          <h2 className="font-heading text-xl text-text-primary uppercase m-0 mt-1">
+          <h2 className="font-heading text-lg sm:text-xl text-text-primary uppercase m-0 mt-1">
             Verification & Distribution Audit Feed
           </h2>
           <p className="text-xs text-text-secondary m-0 mt-0.5">
@@ -141,7 +141,7 @@ export default function LiveActivityStream({
           <button
             onClick={onRefresh}
             disabled={loading}
-            className="px-3 py-1.5 bg-surface-color hover:bg-surface-color-light border border-border-color text-text-primary text-xs font-bold uppercase flex items-center gap-1.5 transition-colors"
+            className="px-3 py-1.5 bg-surface-color hover:bg-surface-color-light border border-border-color text-text-primary text-xs font-bold uppercase flex items-center gap-1.5 transition-colors rounded-lg"
             title="Refresh stream"
           >
             <RefreshCw size={13} className={loading ? "animate-spin text-accent-tertiary" : ""} />
@@ -167,7 +167,7 @@ export default function LiveActivityStream({
               <button
                 key={tab.id}
                 onClick={() => setFilterAction(tab.id)}
-                className={`px-2.5 py-1 text-[11px] transition-all border flex items-center gap-1 ${
+                className={`px-2.5 py-1 text-[11px] transition-all border rounded-lg flex items-center gap-1 ${
                   active
                     ? "bg-accent-tertiary/20 text-accent-tertiary border-accent-tertiary"
                     : "bg-surface-color text-text-secondary border-border-color hover:text-text-primary hover:border-text-secondary"
@@ -187,21 +187,21 @@ export default function LiveActivityStream({
         </div>
 
         {/* Quick Search */}
-        <div className="relative min-w-[240px]">
+        <div className="relative w-full sm:w-auto sm:min-w-[240px]">
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-secondary" />
           <input
             type="text"
             placeholder="Filter by Team, Member, or Scanner..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full bg-surface-color border border-border-color pl-8 pr-3 py-1.5 text-xs text-text-primary outline-none focus:border-accent-tertiary font-sans"
+            className="w-full bg-surface-color border border-border-color pl-8 pr-3 py-1.5 text-xs text-text-primary outline-none focus:border-accent-tertiary font-sans rounded-lg"
           />
         </div>
       </div>
 
       {/* Logs Table / List */}
-      <div className="overflow-x-auto border border-border-color rounded bg-surface-color/40">
-        <table className="w-full text-left border-collapse text-xs">
+      <div className="overflow-x-auto border border-border-color rounded-xl bg-surface-color/40">
+        <table className="w-full text-left border-collapse text-xs min-w-[580px]">
           <thead>
             <tr className="border-b border-border-color bg-surface-color-light/60 text-text-secondary uppercase tracking-wider text-[11px]">
               <th className="p-3">Time & Desk</th>

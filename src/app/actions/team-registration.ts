@@ -861,27 +861,19 @@ export async function approveRegistration(registrationId: string): Promise<{
       teamName.toLowerCase().replace(/[^a-z0-9]/g, "");
 
     // Generate readable team code (e.g. IVC-RY-001)
-    const { data: allTeams } = await supabaseAdmin
+    const { data: matchedTeam } = await supabaseAdmin
       .from("teams")
-      .select("id, code");
+      .select("id, code")
+      .ilike("name", teamName.trim())
+      .maybeSingle();
 
-    let candidateCode =
-      reg.team_code ||
-      reg.generated_credentials?.teamCode ||
-      "";
-
-    if (candidateCode.startsWith("IVC-VV-")) {
-      candidateCode = candidateCode.replace("IVC-VV-", "IVC-RY-");
+    let teamCode = reg.generated_credentials?.teamCode || matchedTeam?.code || reg.team_code || "";
+    if (teamCode.startsWith("IVC-VV-")) {
+      teamCode = teamCode.replace("IVC-VV-", "IVC-RY-");
     }
 
-    const isCodeTaken = candidateCode
-      ? (allTeams || []).some(
-          (t) => t.id !== reg.team_id && t.code?.toUpperCase() === candidateCode.toUpperCase()
-        )
-      : true;
-
-    let teamCode = candidateCode;
-    if (!teamCode || isCodeTaken) {
+    if (!teamCode) {
+      const { data: allTeams } = await supabaseAdmin.from("teams").select("code");
       let maxNum = 0;
       for (const t of allTeams || []) {
         const m = (t.code || "").match(/IVC-(?:RY|VV)-(\d+)/i);
@@ -1048,21 +1040,22 @@ export async function approveRegistration(registrationId: string): Promise<{
       approvedAt: nowIso,
     };
 
-    // 8. Update team_registrations status to 'approved' and persist credentials directly in Supabase columns
-    await supabaseAdmin
+    // 8. Update team_registrations status to 'approved' and persist credentials in generated_credentials JSONB
+    const { error: updateRegError } = await supabaseAdmin
       .from("team_registrations")
       .update({
         status: "approved",
         team_id: teamId,
         approved_at: nowIso,
-        approved_by: adminUser.id,
-        login_username: username,
-        login_email: leaderEmail,
-        login_password: generatedPassword,
-        team_code: teamCode,
+        approved_by: adminUser?.id || null,
         generated_credentials: credentials,
       })
       .eq("id", registrationId);
+
+    if (updateRegError) {
+      console.error("[approveRegistration] Failed to update team_registrations:", updateRegError);
+      return { success: false, message: `Failed to update registration status: ${updateRegError.message}` };
+    }
 
     // 9. Sync complete 4-driver squad details & payment proof directly to Sheet 2 ("Approved")
     const membersList: any[] = Array.isArray(reg.members) ? reg.members : [];
@@ -1142,6 +1135,11 @@ export async function approveRegistration(registrationId: string): Promise<{
       }
     }).catch((e) =>
       console.error("[approveRegistration] Background Google Sheets sync error:", e)
+    );
+
+    // Also update primary "Registrations" sheet with Approved status & official Team Code
+    syncRegistrationToGoogleSheets({ ...sheetRecord, sheetName: "Registrations" }).catch((e) =>
+      console.error("[approveRegistration] Registrations sheet sync error:", e)
     );
 
     // Sync approved team credentials to dedicated "Credentials" Sheet tab
@@ -1335,14 +1333,17 @@ export async function syncAllApprovedRegistrationsAction(): Promise<{
       const uname = reg.login_username || reg.generated_credentials?.username || reg.team_name.toLowerCase().replace(/[^a-z0-9]/g, "");
 
       // If missing password or credentials in Supabase columns, backfill now
-      if (!reg.login_password) {
+      if (!reg.generated_credentials?.password) {
         await supabaseAdmin
           .from("team_registrations")
           .update({
-            login_username: uname,
-            login_email: reg.leader_email,
-            login_password: pass,
-            team_code: code,
+            generated_credentials: {
+              ...(reg.generated_credentials || {}),
+              username: uname,
+              email: reg.leader_email,
+              password: pass,
+              teamCode: code,
+            },
           })
           .eq("id", reg.id);
       }
@@ -1406,6 +1407,11 @@ export async function syncAllApprovedRegistrationsAction(): Promise<{
       const res = await syncRegistrationToGoogleSheets(record);
       if (res.success) syncedCount++;
 
+      // Also sync to primary "Registrations" sheet
+      await syncRegistrationToGoogleSheets({ ...record, sheetName: "Registrations" }).catch((e) =>
+        console.error("[syncAllApprovedRegistrations] Registrations sheet sync error:", e)
+      );
+
       // Also sync to "Credentials" sheet
       await syncCredentialsToGoogleSheets({
         teamName: reg.team_name,
@@ -1425,7 +1431,7 @@ export async function syncAllApprovedRegistrationsAction(): Promise<{
 
     return {
       success: true,
-      message: `Synced ${syncedCount}/${approvedList.length} verified teams to Google Sheets ("Approved" & "Credentials").`,
+      message: `Synced ${syncedCount}/${approvedList.length} verified teams across all Google Sheets tabs ("Registrations", "Approved", & "Credentials").`,
       count: syncedCount,
     };
   } catch (err: unknown) {

@@ -79,7 +79,7 @@ export default React.memo(function ScannerDesk({
 
         <div className="relative w-full min-h-[260px] sm:min-h-[380px] lg:min-h-[480px] max-h-[550px] bg-surface-color border border-dashed border-border-color overflow-hidden rounded-xl flex items-center justify-center">
           {/* html5-qrcode attaches and mutates DOM directly in this dedicated div. React must NOT have children here */}
-          <div id="qr-reader-container" className="w-full h-full" />
+          <div id="qr-reader-container" className="w-full h-full [&_video]:max-w-full [&_video]:h-full [&_video]:object-cover [&_canvas]:max-w-full [&_select]:text-black [&_select]:bg-white" />
 
           {!scanning && (
             <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none text-center text-text-secondary font-tech p-4 bg-surface-color/90">
@@ -99,9 +99,9 @@ export default React.memo(function ScannerDesk({
       </div>
 
       {/* Manual Entry Box */}
-      <div id="manual-lookup" className="glass-panel p-4 sm:p-6 border border-border-color space-y-4 flex flex-col justify-between scroll-mt-20 min-w-0">
+      <div id="manual-lookup" className="glass-panel p-4 sm:p-6 border border-border-color space-y-4 flex flex-col justify-between scroll-mt-20 min-w-0 rounded-xl">
         <div>
-          <h2 className="font-heading text-lg text-text-primary uppercase m-0 flex items-center gap-2">
+          <h2 className="font-heading text-base sm:text-lg text-text-primary uppercase m-0 flex items-center gap-2">
             <Search className="text-accent-secondary" size={18} />
             Manual ID Lookup
           </h2>
@@ -109,7 +109,7 @@ export default React.memo(function ScannerDesk({
             Fallback for QR scanning: enter the Team UUID directly to verify team and record distributions.
           </p>
           <div className="pt-4 space-y-3 font-tech">
-            <div className="space-y-2">
+            <div className="space-y-2.5">
               <input
                 type="text"
                 id="manual-team-id"
@@ -117,7 +117,7 @@ export default React.memo(function ScannerDesk({
                 value={manualId}
                 onChange={e => onManualIdChange(e.target.value)}
                 onKeyDown={e => e.key === "Enter" && !loading && manualId && onManualLookup(manualId)}
-                className="w-full bg-surface-color border border-border-color p-3 text-text-primary text-xs focus:border-accent-secondary outline-none font-sans tracking-normal font-mono"
+                className="w-full bg-surface-color border border-border-color p-3 text-text-primary text-xs focus:border-accent-secondary outline-none font-sans tracking-normal font-mono rounded-lg"
                 autoComplete="off"
               />
               <div className="flex gap-2">
@@ -125,16 +125,16 @@ export default React.memo(function ScannerDesk({
                   type="button"
                   onClick={() => !loading && manualId && onManualLookup(manualId)}
                   disabled={loading || !manualId}
-                  className="flex-1 py-2.5 bg-accent-secondary hover:bg-accent-secondary/80 text-black font-bold uppercase text-xs transition-colors flex items-center justify-center gap-2"
+                  className="flex-1 min-h-[42px] py-2.5 px-3 bg-accent-secondary hover:bg-accent-secondary/80 text-black font-bold uppercase text-xs transition-colors flex items-center justify-center gap-2 rounded-lg disabled:opacity-50"
                 >
                   <Search size={14} className={loading ? "animate-spin" : ""} />
-                  <span>{loading ? "Verifying Team..." : "Verify Team"}</span>
+                  <span>{loading ? "Verifying..." : "Verify Team"}</span>
                 </button>
                 <button
                   type="button"
                   onClick={() => { onManualIdChange(""); }}
                   disabled={loading || !manualId}
-                  className="px-4 py-2.5 bg-surface-color border border-border-color hover:border-accent-secondary text-text-primary font-bold uppercase text-xs transition-colors flex items-center justify-center gap-2"
+                  className="min-h-[42px] px-4 py-2.5 bg-surface-color border border-border-color hover:border-accent-secondary text-text-primary font-bold uppercase text-xs transition-colors flex items-center justify-center gap-2 rounded-lg disabled:opacity-50"
                 >
                   <RefreshCw size={14} />
                   <span>Clear</span>
@@ -143,7 +143,7 @@ export default React.memo(function ScannerDesk({
             </div>
           </div>
         </div>
-        <div className="p-3 bg-surface-color-light/30 border border-border-color text-text-secondary font-tech text-[11px]">
+        <div className="p-3 bg-surface-color-light/30 border border-border-color text-text-secondary font-tech text-[11px] rounded-lg">
           Action Desks: Registration, Kit/Goodies, Lunch Token, Snacks Token, Certificates.
         </div>
       </div>

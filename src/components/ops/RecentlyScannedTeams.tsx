@@ -148,41 +148,48 @@ export default function RecentlyScannedTeams({ limit = 3 }: RecentlyScannedTeams
           return (
             <div
               key={scan.id}
-              className="flex items-center justify-between gap-4 p-3 bg-surface-color/30 rounded border border-border-color/50"
+              className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 p-3 bg-surface-color/30 rounded border border-border-color/50"
             >
               <div className="min-w-0 flex-1">
-                <p className="font-heading text-sm text-text-primary uppercase m-0 leading-none truncate">
-                  {scan.team_name}
-                </p>
-                <div className="flex items-center gap-2 mt-0.5">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="font-heading text-sm text-text-primary uppercase m-0 leading-none truncate">
+                    {scan.team_name}
+                  </p>
+                  <span className="sm:hidden text-[10px] font-mono text-text-secondary/70 shrink-0">
+                    {timeStr}
+                  </span>
+                </div>
+                <div className="flex flex-wrap items-center gap-2 mt-1">
                   <span className="text-[9px] font-mono text-text-primary truncate">
                     {scan.team_id.slice(0, 8)}&hellip;
                   </span>
                   {scan.team_code && (
-                    <span className="px-1.5 py-0.5 rounded text-[9px] font-bold uppercase border accent-tertiary/20 text-accent-tertiary border-accent-tertiary/40">
+                    <span className="px-1.5 py-0.5 rounded text-[9px] font-bold uppercase border bg-accent-tertiary/10 text-accent-tertiary border-accent-tertiary/40">
                       {scan.team_code}
                     </span>
                   )}
+                  <span className="text-[10px] text-text-secondary">
+                    {scan.team_track ? `${scan.team_track} • ` : ""}{scan.operator_name}
+                  </span>
                 </div>
-                <p className="text-[10px] text-text-secondary m-0 mt-1">
-                  {scan.team_track ? `${scan.team_track} • ` : ""}{scan.operator_name}
-                </p>
               </div>
 
-              <div className="flex items-center gap-3">
-                <span
-                  className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[10px] font-bold uppercase border accent-tertiary/20 text-accent-tertiary border-accent-tertiary/40`}
-                >
-                  {action.icon}
-                  <span>{action.label}</span>
-                </span>
-                <span
-                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold uppercase border status-success/20 text-status-success border-status-success/40"
-                >
-                  <CheckCircle2 size={12} className="text-status-success" />
-                  <span>Verified</span>
-                </span>
-                <div className="flex flex-col items-end">
+              <div className="flex items-center justify-between sm:justify-end gap-2 flex-wrap pt-1 sm:pt-0 border-t border-border-color/30 sm:border-t-0">
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <span
+                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold uppercase border bg-accent-tertiary/10 text-accent-tertiary border-accent-tertiary/40"
+                  >
+                    {action.icon}
+                    <span>{action.label}</span>
+                  </span>
+                  <span
+                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold uppercase border bg-status-success/10 text-status-success border-status-success/40"
+                  >
+                    <CheckCircle2 size={11} className="text-status-success" />
+                    <span>Verified</span>
+                  </span>
+                </div>
+                <div className="hidden sm:flex flex-col items-end shrink-0">
                   <span className="text-[10px] font-mono text-text-primary">{timeStr}</span>
                   <span className="text-[10px] text-text-secondary/60">{dateStr}</span>
                 </div>

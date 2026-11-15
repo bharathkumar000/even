@@ -908,7 +908,7 @@ export default function ScannerClientView() {
       {/* 2. TRANSACTION RESULT BANNER (Instant, High-Visibility Feedback) */}
       {scanFeedback && (
         <div
-          className={`p-5 rounded-lg border font-tech transition-all animate-fade-in ${
+          className={`p-4 sm:p-5 rounded-xl border font-tech transition-all animate-fade-in relative ${
             scanFeedback.status === "success"
               ? "bg-status-success/15 border-status-success text-status-success shadow-[0_0_25px_rgba(0,255,157,0.15)]"
               : scanFeedback.status === "already_completed"
@@ -916,19 +916,28 @@ export default function ScannerClientView() {
               : "bg-status-error/15 border-status-error text-status-error shadow-[0_0_25px_rgba(255,59,48,0.15)]"
           }`}
         >
-          <div className="flex items-start justify-between gap-4">
-            <div className="flex items-start gap-3.5">
+          <button
+            type="button"
+            onClick={() => setScanFeedback(null)}
+            className="absolute top-3 right-3 text-text-secondary hover:text-white transition-colors p-1"
+            title="Dismiss"
+          >
+            <X size={18} />
+          </button>
+
+          <div className="flex flex-col sm:flex-row items-start justify-between gap-4 pr-6 sm:pr-0">
+            <div className="flex items-start gap-3 min-w-0 flex-1">
               {scanFeedback.status === "success" ? (
-                <CheckCircle2 size={26} className="text-status-success shrink-0 mt-0.5" />
+                <CheckCircle2 size={24} className="text-status-success shrink-0 mt-0.5" />
               ) : scanFeedback.status === "already_completed" ? (
-                <AlertCircle size={26} className="text-yellow-400 shrink-0 mt-0.5" />
+                <AlertCircle size={24} className="text-yellow-400 shrink-0 mt-0.5" />
               ) : (
-                <ShieldAlert size={26} className="text-status-error shrink-0 mt-0.5" />
+                <ShieldAlert size={24} className="text-status-error shrink-0 mt-0.5" />
               )}
 
-              <div className="space-y-1">
-                <div className="flex items-center gap-2.5 flex-wrap">
-                  <h3 className="font-heading text-base uppercase tracking-wider m-0">
+              <div className="space-y-1 min-w-0 flex-1">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h3 className="font-heading text-sm sm:text-base uppercase tracking-wider m-0">
                     {scanFeedback.title}
                   </h3>
                   <span className="text-[10px] font-mono uppercase px-2 py-0.5 rounded border border-current opacity-80">
@@ -939,7 +948,7 @@ export default function ScannerClientView() {
                   </span>
                 </div>
 
-                <p className="text-sm font-bold m-0 text-white">
+                <p className="text-xs sm:text-sm font-bold m-0 text-white break-words">
                   {scanFeedback.message}
                 </p>
 
@@ -959,32 +968,21 @@ export default function ScannerClientView() {
               </div>
             </div>
 
-            <div className="flex flex-col items-end gap-2 shrink-0">
-              <button
-                type="button"
-                onClick={() => setScanFeedback(null)}
-                className="text-text-secondary hover:text-white transition-colors"
-                title="Dismiss"
-              >
-                <X size={16} />
-              </button>
-
-              {/* Continuous Ready Indicator & Re-scan Button */}
-              <div className="flex flex-col items-end gap-1.5">
-                <div className="px-2.5 py-1 bg-black/60 border border-status-success/50 text-status-success rounded text-[10px] font-mono flex items-center gap-1.5">
-                  <span className="w-1.5 h-1.5 rounded-full bg-status-success animate-ping" />
-                  <span>Scanner Ready for Next QR</span>
-                </div>
-                {lastScannedCodeRef.current && (
-                  <button
-                    type="button"
-                    onClick={handleClearBadgeLock}
-                    className="text-[10px] text-text-secondary hover:text-accent-primary underline font-mono cursor-pointer transition-colors"
-                  >
-                    Scan Same Badge Again
-                  </button>
-                )}
+            {/* Continuous Ready Indicator & Re-scan Button */}
+            <div className="flex items-center sm:items-end justify-between sm:justify-start gap-2 w-full sm:w-auto pt-2 sm:pt-0 border-t border-current/20 sm:border-t-0 shrink-0">
+              <div className="px-2.5 py-1 bg-black/60 border border-status-success/50 text-status-success rounded text-[10px] font-mono flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-status-success animate-ping" />
+                <span>Ready for Next QR</span>
               </div>
+              {lastScannedCodeRef.current && (
+                <button
+                  type="button"
+                  onClick={handleClearBadgeLock}
+                  className="text-[10px] text-text-secondary hover:text-accent-primary underline font-mono cursor-pointer transition-colors"
+                >
+                  Scan Same Badge Again
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -1009,11 +1007,11 @@ export default function ScannerClientView() {
 
       {/* 4. SCANNED TEAM ROSTER PANEL WITH 1-TAP INDIVIDUAL PARTICIPANT ACTIONS */}
       {teamData && (
-        <div className="glass-panel p-6 border border-accent-primary/40 space-y-6 animate-fade-in font-tech">
+        <div className="glass-panel p-4 sm:p-6 border border-accent-primary/40 space-y-6 animate-fade-in font-tech rounded-xl">
           {/* Team Header */}
-          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-border-color pb-4">
-            <div>
-              <div className="flex items-center gap-2">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border-color pb-4">
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2 flex-wrap">
                 <span className="text-[10px] text-accent-primary uppercase font-bold tracking-wider px-2 py-0.5 bg-accent-primary/10 border border-accent-primary">
                   {teamData.team.track || "GENERAL TRACK"}
                 </span>
@@ -1026,12 +1024,13 @@ export default function ScannerClientView() {
                   <CheckCircle2 size={11} /> Live Synchronized
                 </span>
               </div>
-              <h2 className="font-heading text-2xl text-text-primary uppercase m-0 mt-2">
+              <h2 className="font-heading text-xl sm:text-2xl text-text-primary uppercase m-0 mt-2 truncate">
                 {teamData.team.name}
               </h2>
-              <p className="text-xs text-text-secondary m-0 mt-0.5">
-                Leader: <span className="text-text-primary font-bold">{teamData.team.leader_name}</span> | UUID:{" "}
-                <span className="font-mono text-text-primary">{teamData.team.id}</span>
+              <p className="text-xs text-text-secondary m-0 mt-1 break-words">
+                Leader: <span className="text-text-primary font-bold">{teamData.team.leader_name}</span>
+                <span className="hidden sm:inline"> | UUID: </span>
+                <span className="block sm:inline font-mono text-[11px] text-text-primary break-all">{teamData.team.id}</span>
               </p>
             </div>
 
@@ -1041,7 +1040,7 @@ export default function ScannerClientView() {
                 setScanFeedback(null);
                 handleClearBadgeLock();
               }}
-              className="px-4 py-2 border border-border-color hover:border-accent-primary rounded text-text-secondary hover:text-text-primary font-tech uppercase text-xs transition-all flex items-center gap-2 self-start lg:self-center"
+              className="w-full sm:w-auto px-4 py-2.5 border border-border-color hover:border-accent-primary rounded-lg text-text-secondary hover:text-text-primary font-tech uppercase text-xs transition-all flex items-center justify-center gap-2 shrink-0"
             >
               <RefreshCw size={13} />
               <span>Clear / Ready Next</span>
@@ -1049,7 +1048,7 @@ export default function ScannerClientView() {
           </div>
 
           {/* Team Distribution Progress: Lunch & Snacks */}
-          <div className="border border-border-color rounded-lg bg-surface-color/50 p-4">
+          <div className="border border-border-color rounded-xl bg-surface-color/50 p-4">
             <div className="flex items-center justify-between mb-3">
               <h3 className="font-heading text-sm text-text-primary uppercase m-0 tracking-wider flex items-center gap-2">
                 <Users size={14} className="text-accent-primary" />
@@ -1060,9 +1059,9 @@ export default function ScannerClientView() {
               </span>
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {/* Lunch Progress */}
-              <div className="border border-border-color rounded p-3 flex flex-col">
+              <div className="border border-border-color rounded-lg p-3 flex flex-col bg-surface-color/30">
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-2">
                     <Utensils className="w-4 h-4 text-status-warning" />
@@ -1081,7 +1080,7 @@ export default function ScannerClientView() {
                 <button
                   onClick={() => handleTeamDistributionScan("lunch")}
                   disabled={loading || lunchCount >= 3}
-                  className={`mt-2 w-full py-1.5 text-[10px] font-bold uppercase rounded transition-all flex items-center justify-center gap-1.5 ${
+                  className={`mt-2.5 w-full min-h-[36px] py-1.5 text-xs font-bold uppercase rounded-lg transition-all flex items-center justify-center gap-1.5 ${
                     lunchCount >= 3
                       ? "bg-status-error/20 border border-status-error/40 text-status-error disabled:opacity-100 cursor-not-allowed"
                       : "bg-surface-color-light border border-accent-secondary text-accent-secondary hover:bg-accent-secondary/10 disabled:opacity-50"
@@ -1089,12 +1088,12 @@ export default function ScannerClientView() {
                 >
                   {lunchCount >= 3 ? (
                     <>
-                      <X size={11} className="mr-1" />
+                      <X size={12} className="mr-1" />
                       <span>Lunch Complete (3/3)</span>
                     </>
                   ) : (
                     <>
-                      <Utensils size={11} className="mr-1" />
+                      <Utensils size={12} className="mr-1" />
                       <span>Scan Lunch</span>
                     </>
                   )}
@@ -1102,7 +1101,7 @@ export default function ScannerClientView() {
               </div>
 
               {/* Snacks Progress */}
-              <div className="border border-border-color rounded p-3 flex flex-col">
+              <div className="border border-border-color rounded-lg p-3 flex flex-col bg-surface-color/30">
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-2">
                     <Coffee className="w-4 h-4 text-accent-secondary" />
@@ -1121,7 +1120,7 @@ export default function ScannerClientView() {
                 <button
                   onClick={() => handleTeamDistributionScan("snacks")}
                   disabled={loading || snacksCount >= 3}
-                  className={`mt-2 w-full py-1.5 text-[10px] font-bold uppercase rounded transition-all flex items-center justify-center gap-1.5 ${
+                  className={`mt-2.5 w-full min-h-[36px] py-1.5 text-xs font-bold uppercase rounded-lg transition-all flex items-center justify-center gap-1.5 ${
                     snacksCount >= 3
                       ? "bg-status-error/20 border border-status-error/40 text-status-error disabled:opacity-100 cursor-not-allowed"
                       : "bg-surface-color-light border border-accent-secondary text-accent-secondary hover:bg-accent-secondary/10 disabled:opacity-50"
@@ -1129,12 +1128,12 @@ export default function ScannerClientView() {
                 >
                   {snacksCount >= 3 ? (
                     <>
-                      <X size={11} className="mr-1" />
+                      <X size={12} className="mr-1" />
                       <span>Snacks Complete (3/3)</span>
                     </>
                   ) : (
                     <>
-                      <Coffee size={11} className="mr-1" />
+                      <Coffee size={12} className="mr-1" />
                       <span>Scan Snacks</span>
                     </>
                   )}
@@ -1143,21 +1142,117 @@ export default function ScannerClientView() {
             </div>
 
             {(lunchCount >= 3 || snacksCount >= 3) && (
-              <div className="mt-3 p-2.5 bg-surface-color border border-border-color rounded text-[10px] font-mono text-text-secondary flex items-center gap-2">
-                <AlertCircle size={12} className="text-text-secondary" />
+              <div className="mt-3 p-2.5 bg-surface-color border border-border-color rounded-lg text-[10px] font-mono text-text-secondary flex items-center gap-2">
+                <AlertCircle size={12} className="text-text-secondary shrink-0" />
                 <span>
                   {lunchCount >= 3 && snacksCount >= 3
                     ? "All distributions complete for this team."
                     : lunchCount >= 3
                     ? "Lunch limit reached (3/3). Snacks still available."
                     : "Snacks limit reached (3/3). Lunch still available."}
-              </span>
+                </span>
               </div>
             )}
           </div>
 
-          {/* Members Table */}
-          <div className="overflow-x-auto">
+          {/* Mobile Participant Cards (md:hidden) */}
+          <div className="block md:hidden space-y-3">
+            <h3 className="font-heading text-sm text-text-primary uppercase m-0 flex items-center gap-2">
+              <Users size={14} className="text-accent-secondary" />
+              Participants ({teamData.members.length})
+            </h3>
+
+            {teamData.members.length === 0 ? (
+              <div className="p-4 text-center text-text-secondary italic border border-border-color rounded-lg">
+                No registered members mapped in roster.
+              </div>
+            ) : (
+              teamData.members.map((m: TeamScanMember) => {
+                const participantId = m.user_id || m.id;
+                const regLog = getLogForAction(participantId, "registration");
+                const goodiesLog = getLogForAction(participantId, "goodies");
+                const lunchLog = getLogForAction(participantId, "lunch");
+                const snacksLog = getLogForAction(participantId, "snacks");
+                const certLog = getLogForAction(participantId, "certificates");
+                const currentLog = getLogForAction(participantId, scanPurpose);
+
+                return (
+                  <div
+                    key={m.id}
+                    className="p-3.5 bg-surface-color/60 border border-border-color rounded-xl space-y-3"
+                  >
+                    {/* Top Row: Name, Role & 1-Tap Action Button */}
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <p className="font-heading text-sm text-text-primary uppercase m-0 leading-tight">
+                            {m.name || "Member"}
+                          </p>
+                          <span
+                            className={`px-1.5 py-0.5 border text-[9px] uppercase font-bold rounded ${
+                              m.role === "leader"
+                                ? "bg-accent-secondary/15 text-accent-secondary border-accent-secondary"
+                                : "bg-surface-color text-text-secondary border-border-color"
+                            }`}
+                          >
+                            {m.role || "Member"}
+                          </span>
+                        </div>
+                        <p className="font-mono text-[10px] text-text-secondary m-0 mt-0.5 truncate">
+                          {m.email || m.id.slice(0, 8)}
+                        </p>
+                      </div>
+
+                      {/* 1-Tap Action Button */}
+                      <div className="shrink-0">
+                        {currentLog ? (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[10px] font-bold uppercase border bg-status-success/15 text-status-success border-status-success/40 font-mono">
+                            <CheckCircle2 size={11} /> Recorded
+                          </span>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => handleDetectedCode(teamData.team.id, participantId)}
+                            disabled={loading}
+                            className="min-h-[34px] px-3 py-1.5 bg-accent-primary hover:bg-accent-primary/80 text-black text-xs font-bold uppercase rounded-lg font-tech transition-all disabled:opacity-50 cursor-pointer shadow-[0_0_12px_rgba(0,240,255,0.25)]"
+                          >
+                            {scanPurpose === "registration" ? "Check In" : `Claim ${scanPurpose}`}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Micro Badge Strip for All 5 Perks */}
+                    <div className="grid grid-cols-3 xs:grid-cols-5 gap-1.5 pt-2 border-t border-border-color/30 text-center">
+                      <div className={`p-1 rounded border text-[9px] font-bold uppercase ${regLog ? "bg-status-success/15 text-status-success border-status-success/40" : "bg-surface-color text-text-secondary/60 border-border-color/40"}`}>
+                        <span>Check-In</span>
+                        {regLog && <CheckCircle2 size={9} className="inline ml-0.5" />}
+                      </div>
+                      <div className={`p-1 rounded border text-[9px] font-bold uppercase ${goodiesLog ? "bg-status-success/15 text-status-success border-status-success/40" : "bg-surface-color text-text-secondary/60 border-border-color/40"}`}>
+                        <span>Goodies</span>
+                        {goodiesLog && <CheckCircle2 size={9} className="inline ml-0.5" />}
+                      </div>
+                      <div className={`p-1 rounded border text-[9px] font-bold uppercase ${lunchLog ? "bg-status-success/15 text-status-success border-status-success/40" : "bg-surface-color text-text-secondary/60 border-border-color/40"}`}>
+                        <span>Lunch</span>
+                        {lunchLog && <CheckCircle2 size={9} className="inline ml-0.5" />}
+                      </div>
+                      <div className={`p-1 rounded border text-[9px] font-bold uppercase ${snacksLog ? "bg-status-success/15 text-status-success border-status-success/40" : "bg-surface-color text-text-secondary/60 border-border-color/40"}`}>
+                        <span>Snacks</span>
+                        {snacksLog && <CheckCircle2 size={9} className="inline ml-0.5" />}
+                      </div>
+                      <div className={`p-1 rounded border text-[9px] font-bold uppercase ${certLog ? "bg-status-success/15 text-status-success border-status-success/40" : "bg-surface-color text-text-secondary/60 border-border-color/40"}`}>
+                        <span>Cert</span>
+                        {certLog && <CheckCircle2 size={9} className="inline ml-0.5" />}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+
+          {/* Desktop Members Table (hidden md:block) */}
+          <div className="hidden md:block overflow-x-auto">
             <table className="w-full text-left border-collapse text-xs">
               <thead className="border-b border-border-color bg-surface-color-light/40 text-text-secondary uppercase tracking-wider">
                 <tr>

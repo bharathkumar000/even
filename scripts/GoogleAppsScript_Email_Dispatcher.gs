@@ -63,13 +63,15 @@ function convertTimestampsToIST() {
 function onOpen() {
   SpreadsheetApp.getUi()
     .createMenu("🚀 Eventra Dispatch")
-    .addItem("🧪 Send Test Email to Myself (Safe Preview)", "sendTestConfirmationEmail")
-    .addSeparator()
-    .addItem("🕒 Convert All Timestamps to IST", "convertTimestampsToIST")
+    .addItem("🧹 Deduplicate & Clean All Sheets (1-Click Fix)", "deduplicateAllSheets")
     .addSeparator()
     .addItem("🔄 Update All Team Codes to IVC-RY (In Sheet)", "updateAllTeamCodesToRy")
     .addSeparator()
+    .addItem("🕒 Convert All Timestamps to IST", "convertTimestampsToIST")
+    .addSeparator()
     .addItem("🚀 Send All Credentials Emails (Approved Teams)", "sendCredentialsToAllApprovedTeams")
+    .addSeparator()
+    .addItem("🧪 Send Test Email to Myself (Safe Preview)", "sendTestConfirmationEmail")
     .addSeparator()
     .addItem("⚠️ Clear Test Data (Registrations / Approved)", "clearAllTestData")
     .addToUi();
@@ -349,6 +351,7 @@ function sendCredentialsToAllApprovedTeams() {
 
 /**
  * Webhook Listener (doPost) for real-time registration sync from Next.js.
+ * Supports in-place UPSERT (no duplicate rows) and remote maintenance actions.
  */
 function doPost(e) {
   try {
@@ -356,6 +359,34 @@ function doPost(e) {
     var data = JSON.parse(contents);
     var ss = SpreadsheetApp.getActiveSpreadsheet();
     
+    // Remote Action: Health Ping
+    if (data.action === "ping") {
+      return ContentService.createTextOutput(JSON.stringify({ success: true, message: "pong" }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+    
+    // Remote Action: 1-Click Clean and Deduplicate All Sheets
+    if (data.action === "deduplicate_all") {
+      var dedupRes = deduplicateAllSheetsInternal(ss);
+      return ContentService.createTextOutput(JSON.stringify({ success: true, result: dedupRes }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+    
+    // Remote Action: Clear Test Data
+    if (data.action === "clear_all_test_data") {
+      var sheetsToClear = ["Registrations", "Waiting list", "Credentials", "Approved", "Rejected"];
+      var cleared = [];
+      sheetsToClear.forEach(function(name) {
+        var s = ss.getSheetByName(name);
+        if (s && s.getLastRow() > 1) {
+          s.deleteRows(2, s.getLastRow() - 1);
+          cleared.push(name);
+        }
+      });
+      return ContentService.createTextOutput(JSON.stringify({ success: true, clearedSheets: cleared }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
     function formatTimestampToIST(raw) {
       if (!raw) return Utilities.formatDate(new Date(), "Asia/Kolkata", "dd/MM/yyyy, hh:mm:ss a");
       try {
@@ -373,10 +404,113 @@ function doPost(e) {
       }
     }
     
-    var sheetName = data.sheetName || "Registrations";
+    // Universal UPSERT helper: Updates existing row matching team in-place, or appends if new
+    function upsertRow(sheet, rowValues, keyName, keyCode, keyEmail) {
+      var numRows = sheet.getLastRow();
+      if (numRows <= 1) {
+        sheet.appendRow(rowValues);
+        return;
+      }
+      
+      var data = sheet.getRange(1, 1, numRows, sheet.getLastColumn()).getValues();
+      var headers = data[0];
+      var nameCol = -1;
+      var codeCol = -1;
+      var emailCol = -1;
+
+      for (var c = 0; c < headers.length; c++) {
+        var h = String(headers[c] || "").toLowerCase().trim();
+        if (h === "team name") nameCol = c;
+        if (h === "team code") codeCol = c;
+        if (h === "login email id" || h === "leader email" || h === "email") emailCol = c;
+      }
+
+      var normKeyName = String(keyName || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+      var normKeyCode = String(keyCode || "").toUpperCase().trim();
+      var normKeyEmail = String(keyEmail || "").toLowerCase().trim();
+
+      var matchRow = -1;
+      for (var r = 1; r < data.length; r++) {
+        var rowName = nameCol !== -1 ? String(data[r][nameCol] || "").toLowerCase().replace(/[^a-z0-9]/g, "") : "";
+        var rowCode = codeCol !== -1 ? String(data[r][codeCol] || "").toUpperCase().trim() : "";
+        var rowEmail = emailCol !== -1 ? String(data[r][emailCol] || "").toLowerCase().trim() : "";
+
+        // Check matching by Code first, then Name, then Email
+        if (normKeyCode && rowCode && normKeyCode === rowCode) {
+          matchRow = r + 1;
+          break;
+        }
+        if (normKeyName && rowName && normKeyName === rowName) {
+          matchRow = r + 1;
+          break;
+        }
+        if (normKeyEmail && rowEmail && normKeyEmail === rowEmail) {
+          matchRow = r + 1;
+          break;
+        }
+      }
+
+      if (matchRow !== -1) {
+        sheet.getRange(matchRow, 1, 1, rowValues.length).setValues([rowValues]);
+      } else {
+        sheet.appendRow(rowValues);
+      }
+    }
+    
+    var sheetName = data.sheetName || (data.status === "Approved" ? "Approved" : "Registrations");
     var sheet = ss.getSheetByName(sheetName);
+    
+    // Dedicated compact layout for "Credentials" Sheet (Approved Teams only)
+    if (sheetName === "Credentials") {
+      if (!sheet) {
+        sheet = ss.insertSheet("Credentials");
+      }
+      if (sheet.getLastRow() === 0) {
+        sheet.appendRow([
+          "Timestamp",
+          "Team Name",
+          "Login Email ID",
+          "Password",
+          "Team ID",
+          "Team Code",
+          "Team Lead",
+          "One Member Contact Info (Driver 2)",
+          "Email Dispatch Status"
+        ]);
+        sheet.getRange(1, 1, 1, 9).setFontWeight("bold").setBackground("#d9ead3");
+      }
+      
+      var leadContact = data.leaderName || data.teamLead || "";
+      var leadPhone = data.leaderPhone || data.teamLeadPhone || "";
+      if (leadPhone) leadContact += " (" + leadPhone + ")";
+      
+      var memberContact = data.driver2Name || data.member2Name || "";
+      var memberPhone = data.driver2Phone || data.member2Phone || data.driver2Email || "";
+      if (memberPhone) memberContact += " (" + memberPhone + ")";
+      
+      var credValues = [
+        formatTimestampToIST(data.decisionAt),
+        data.teamName || "",
+        data.loginEmail || data.leaderEmail || "",
+        data.loginPassword || data.password || "",
+        data.teamId || "",
+        data.teamCode || "",
+        leadContact,
+        memberContact,
+        data.emailDispatchStatus || "PENDING"
+      ];
+      
+      upsertRow(sheet, credValues, data.teamName, data.teamCode, data.loginEmail);
+      
+      return ContentService.createTextOutput(JSON.stringify({ success: true, sheet: "Credentials" }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+    
+    // Full 40-Column Sheet Layout (Registrations / Approved / Waiting list / Rejected)
     if (!sheet) {
       sheet = ss.insertSheet(sheetName);
+    }
+    if (sheet.getLastRow() === 0) {
       sheet.appendRow([
         "Timestamp",
         "Status",
@@ -450,7 +584,7 @@ function doPost(e) {
       }
     }
     
-    sheet.appendRow([
+    var fullRowValues = [
       formatTimestampToIST(data.decisionAt),
       data.status || "Pending",
       data.teamName || "",
@@ -497,7 +631,9 @@ function doPost(e) {
       data.portalUrl || "",
       data.whatsappGroup || "https://chat.whatsapp.com/LNqyZOwG0R8D2IEST6KSld",
       data.emailDispatchStatus || "PENDING"
-    ]);
+    ];
+    
+    upsertRow(sheet, fullRowValues, data.teamName, data.teamCode, data.leaderEmail);
     
     return ContentService.createTextOutput(JSON.stringify({ success: true, proofUrl: proofLink, sheet: sheetName }))
       .setMimeType(ContentService.MimeType.JSON);
@@ -505,6 +641,129 @@ function doPost(e) {
     return ContentService.createTextOutput(JSON.stringify({ success: false, error: err.toString() }))
       .setMimeType(ContentService.MimeType.JSON);
   }
+}
+
+/**
+ * 1-Click: Deduplicate and Clean All Sheets
+ * Removes all repeated/duplicate rows across all tabs while preserving the highest quality data.
+ */
+function deduplicateAllSheets() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var result = deduplicateAllSheetsInternal(ss);
+  SpreadsheetApp.getUi().alert(
+    "✅ DEDUPLICATION COMPLETE!\n\n" +
+    (result.cleanedSheets.length > 0 ? "Cleaned sheets:\n• " + result.cleanedSheets.join("\n• ") + "\n\n" : "No duplicates found!\n\n") +
+    "Total redundant/duplicate/empty rows removed: " + result.totalRemoved
+  );
+}
+
+function deduplicateAllSheetsInternal(ss) {
+  var sheetNames = ["Approved", "Credentials", "Registrations", "Waiting list", "Rejected"];
+  var totalRemoved = 0;
+  var cleanedSheets = [];
+
+  sheetNames.forEach(function(sName) {
+    var sheet = ss.getSheetByName(sName);
+    if (!sheet) return;
+    var numRows = sheet.getLastRow();
+    if (numRows <= 1) return;
+
+    var numCols = sheet.getLastColumn();
+    var data = sheet.getRange(1, 1, numRows, numCols).getValues();
+    var headers = data[0];
+
+    var nameCol = -1;
+    var codeCol = -1;
+    var emailCol = -1;
+    var passCol = -1;
+    var statusCol = -1;
+
+    for (var c = 0; c < headers.length; c++) {
+      var h = String(headers[c] || "").toLowerCase().trim();
+      if (h === "team name") nameCol = c;
+      if (h === "team code") codeCol = c;
+      if (h === "login email id" || h === "leader email" || h === "email") emailCol = c;
+      if (h === "password" || h === "login password") passCol = c;
+      if (h === "status") statusCol = c;
+    }
+
+    var teamGroups = {};
+    var rowsToDelete = [];
+
+    for (var r = 1; r < data.length; r++) {
+      var row = data[r];
+      var rowNum = r + 1;
+
+      var tName = nameCol !== -1 ? String(row[nameCol] || "").trim() : "";
+      var tCode = codeCol !== -1 ? String(row[codeCol] || "").trim() : "";
+      var tEmail = emailCol !== -1 ? String(row[emailCol] || "").trim() : "";
+
+      // Empty row check
+      if (!tName && !tCode && !tEmail) {
+        rowsToDelete.push(rowNum);
+        continue;
+      }
+
+      var key = "";
+      if (tName) {
+        key = "name:" + tName.toLowerCase().replace(/[^a-z0-9]/g, "");
+      } else if (tCode) {
+        key = "code:" + tCode.toUpperCase().trim();
+      } else if (tEmail) {
+        key = "email:" + tEmail.toLowerCase().trim();
+      }
+
+      var score = 0;
+      if (tCode && tCode.indexOf("IVC-RY-") !== -1) score += 20;
+      else if (tCode) score += 5;
+
+      if (passCol !== -1 && String(row[passCol] || "").trim()) score += 10;
+      if (statusCol !== -1 && String(row[statusCol] || "").toLowerCase().indexOf("approved") !== -1) score += 10;
+      if (row[0]) score += 1;
+
+      var entry = { rowNum: rowNum, score: score };
+
+      if (!teamGroups[key]) {
+        teamGroups[key] = [entry];
+      } else {
+        teamGroups[key].push(entry);
+      }
+    }
+
+    // Keep highest scoring entry for each team, mark rest for deletion
+    for (var k in teamGroups) {
+      var entries = teamGroups[k];
+      if (entries.length > 1) {
+        entries.sort(function(a, b) {
+          if (b.score !== a.score) return b.score - a.score;
+          return b.rowNum - a.rowNum;
+        });
+
+        for (var i = 1; i < entries.length; i++) {
+          rowsToDelete.push(entries[i].rowNum);
+        }
+      }
+    }
+
+    if (rowsToDelete.length > 0) {
+      rowsToDelete.sort(function(a, b) { return b - a; });
+
+      rowsToDelete.forEach(function(rNum) {
+        sheet.deleteRow(rNum);
+        totalRemoved++;
+      });
+
+      cleanedSheets.push(sName + " (" + rowsToDelete.length + " removed)");
+    }
+
+    // Sort remaining rows by Team Code ascending
+    var remainingRows = sheet.getLastRow();
+    if (codeCol !== -1 && remainingRows > 2) {
+      sheet.getRange(2, 1, remainingRows - 1, sheet.getLastColumn()).sort({ column: codeCol + 1, ascending: true });
+    }
+  });
+
+  return { totalRemoved: totalRemoved, cleanedSheets: cleanedSheets };
 }
 
 /**
