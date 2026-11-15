@@ -3,8 +3,10 @@
 import Link from "next/link";
 import { Users, FileUp, Trophy, QrCode, ArrowLeft } from "lucide-react";
 import SignOutButton from "@/components/SignOutButton";
+import { isDeliverablesUnlocked } from "@/lib/event-schedule";
 
 export default function TeamHeader() {
+  const isUnlocked = isDeliverablesUnlocked();
   return (
     <header className="border-b border-border-color bg-surface-color/80 backdrop-blur sticky top-0 z-30 px-6 py-4 flex items-center justify-between">
       <div className="flex items-center gap-3">
@@ -22,13 +24,15 @@ export default function TeamHeader() {
       </div>
 
       <div className="flex items-center gap-4">
-        <Link
-          href="/team/submission"
-          className="flex items-center gap-1.5 font-tech text-xs uppercase font-bold text-text-secondary hover:text-text-primary transition-colors"
-        >
-          <FileUp size={16} className="text-accent-secondary" />
-          <span>Deliverables</span>
-        </Link>
+        {isUnlocked && (
+          <Link
+            href="/team/submission"
+            className="flex items-center gap-1.5 font-tech text-xs uppercase font-bold text-text-secondary hover:text-text-primary transition-colors"
+          >
+            <FileUp size={16} className="text-accent-secondary" />
+            <span>Deliverables</span>
+          </Link>
+        )}
 
         <Link
           href="/team/results"

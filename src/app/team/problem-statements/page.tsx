@@ -1,6 +1,8 @@
+import { redirect } from "next/navigation";
 import { requireAuthenticatedTeamUser } from "@/lib/auth/team";
 import { getPublishedProblemStatements, getAssignmentCounts } from "@/app/actions/admin-problem-statements";
 import { supabaseAdmin } from "@/lib/supabase/admin";
+import { isDeliverablesUnlocked } from "@/lib/event-schedule";
 import DepartmentProblemStatements from "./department-problem-statements";
 
 export const dynamic = "force-dynamic";
@@ -18,6 +20,10 @@ const DEPARTMENTS: Array<{
 ];
 
 export default async function TeamProblemStatementsPage() {
+  if (!isDeliverablesUnlocked()) {
+    redirect("/team");
+  }
+
   const { user, teamId } = await requireAuthenticatedTeamUser();
 
   // Determine user department if team has a track

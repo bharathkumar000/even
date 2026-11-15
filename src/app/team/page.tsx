@@ -36,6 +36,7 @@ import TeamActivitySyncListener from "@/components/team/TeamActivitySyncListener
 import { getTeamRegistrationByEmail } from "@/lib/googleSheet";
 import { ContentActivityHub } from "@/components/content-hub";
 import TeamPullToRefresh from "@/components/team/TeamPullToRefresh";
+import { isDeliverablesUnlocked } from "@/lib/event-schedule";
 
 export const dynamic = "force-dynamic";
 
@@ -178,6 +179,7 @@ export default async function TeamDashboardPage() {
     console.error("Failed to load team dashboard data:", err);
   }
 
+  const isUnlocked = isDeliverablesUnlocked();
   const isLeader = role === "leader" || !teamId;
   const totalMembers = Math.max(members.length, 1);
 
@@ -250,7 +252,7 @@ export default async function TeamDashboardPage() {
       />
 
       {/* Primary KPI Row: Team Status & Submission State */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-5">
+      <div className={`grid grid-cols-1 sm:grid-cols-2 ${isUnlocked ? "lg:grid-cols-4" : "lg:grid-cols-2"} gap-3 sm:gap-5`}>
         {/* Approved Roster Card */}
         <div className="glass-panel p-4 sm:p-5 border border-border-color flex flex-col justify-between relative overflow-hidden">
           <div className="flex items-start justify-between gap-3">
@@ -276,77 +278,81 @@ export default async function TeamDashboardPage() {
           </div>
         </div>
 
-        {/* Problem Statements Card */}
-        <div className="glass-panel p-4 sm:p-5 border border-border-color flex flex-col justify-between relative overflow-hidden">
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0 flex-1">
-              <span className="text-[10px] uppercase tracking-wider text-text-secondary font-bold block mb-1 truncate">
-                Problem Statement
+        {/* Problem Statements Card (Revealed Nov 25th 10:00 AM IST) */}
+        {isUnlocked && (
+          <div className="glass-panel p-4 sm:p-5 border border-border-color flex flex-col justify-between relative overflow-hidden">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0 flex-1">
+                <span className="text-[10px] uppercase tracking-wider text-text-secondary font-bold block mb-1 truncate">
+                  Problem Statement
+                </span>
+                <p
+                  className="font-heading text-lg sm:text-xl text-accent-tertiary uppercase m-0 font-bold truncate leading-snug"
+                  title={psDisplayTitle}
+                >
+                  {psDisplayTitle}
+                </p>
+              </div>
+              <div className="p-2 sm:p-2.5 bg-accent-tertiary/10 border border-accent-tertiary/30 text-accent-tertiary rounded shrink-0">
+                <ScrollText size={18} className="sm:w-5 sm:h-5" />
+              </div>
+            </div>
+            <div className="pt-3 sm:pt-4 border-t border-border-color/50 mt-3 flex items-center justify-between gap-2 text-xs">
+              <span className="text-text-secondary truncate">
+                Domain: <span className="text-text-primary font-bold">{teamInfo?.track || "Innovation"}</span>
               </span>
-              <p
-                className="font-heading text-lg sm:text-xl text-accent-tertiary uppercase m-0 font-bold truncate leading-snug"
-                title={psDisplayTitle}
+              <Link
+                href="/team/problem-statements"
+                className="text-accent-tertiary hover:underline font-bold uppercase text-[11px] flex items-center gap-1 shrink-0"
               >
-                {psDisplayTitle}
-              </p>
-            </div>
-            <div className="p-2 sm:p-2.5 bg-accent-tertiary/10 border border-accent-tertiary/30 text-accent-tertiary rounded shrink-0">
-              <ScrollText size={18} className="sm:w-5 sm:h-5" />
+                <span>{assignedPS ? "Change PS" : "View Statements"}</span>
+                <ArrowRight size={12} />
+              </Link>
             </div>
           </div>
-          <div className="pt-3 sm:pt-4 border-t border-border-color/50 mt-3 flex items-center justify-between gap-2 text-xs">
-            <span className="text-text-secondary truncate">
-              Domain: <span className="text-text-primary font-bold">{teamInfo?.track || "Innovation"}</span>
-            </span>
-            <Link
-              href="/team/problem-statements"
-              className="text-accent-tertiary hover:underline font-bold uppercase text-[11px] flex items-center gap-1 shrink-0"
-            >
-              <span>{assignedPS ? "Change PS" : "View Statements"}</span>
-              <ArrowRight size={12} />
-            </Link>
-          </div>
-        </div>
+        )}
 
-        {/* Deliverables Submission Card */}
-        <div className="glass-panel p-4 sm:p-5 border border-border-color flex flex-col justify-between relative overflow-hidden">
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0 flex-1">
-              <span className="text-[10px] uppercase tracking-wider text-text-secondary font-bold block mb-1 truncate">
-                Deliverables Status
-              </span>
-              <p
-                className={`font-heading text-lg sm:text-xl uppercase m-0 font-bold truncate leading-snug ${
-                  hasSubmitted ? "text-status-success" : "text-status-warning"
+        {/* Deliverables Submission Card (Revealed Nov 25th 10:00 AM IST) */}
+        {isUnlocked && (
+          <div className="glass-panel p-4 sm:p-5 border border-border-color flex flex-col justify-between relative overflow-hidden">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0 flex-1">
+                <span className="text-[10px] uppercase tracking-wider text-text-secondary font-bold block mb-1 truncate">
+                  Deliverables Status
+                </span>
+                <p
+                  className={`font-heading text-lg sm:text-xl uppercase m-0 font-bold truncate leading-snug ${
+                    hasSubmitted ? "text-status-success" : "text-status-warning"
+                  }`}
+                  title={hasSubmitted ? "Submitted" : "Pending Action"}
+                >
+                  {hasSubmitted ? "Submitted" : "Pending Action"}
+                </p>
+              </div>
+              <div
+                className={`p-2 sm:p-2.5 rounded border shrink-0 ${
+                  hasSubmitted
+                    ? "bg-status-success/10 border-status-success text-status-success"
+                    : "bg-status-warning/10 border-status-warning text-status-warning"
                 }`}
-                title={hasSubmitted ? "Submitted" : "Pending Action"}
               >
-                {hasSubmitted ? "Submitted" : "Pending Action"}
-              </p>
+                <FileUp size={18} className="sm:w-5 sm:h-5" />
+              </div>
             </div>
-            <div
-              className={`p-2 sm:p-2.5 rounded border shrink-0 ${
-                hasSubmitted
-                  ? "bg-status-success/10 border-status-success text-status-success"
-                  : "bg-status-warning/10 border-status-warning text-status-warning"
-              }`}
-            >
-              <FileUp size={18} className="sm:w-5 sm:h-5" />
+            <div className="pt-3 sm:pt-4 border-t border-border-color/50 mt-3 flex items-center justify-between gap-2 text-xs">
+              <span className="text-text-secondary truncate">
+                Round: <span className="text-text-primary font-bold">{activeRound?.title || "Round 1"}</span>
+              </span>
+              <Link
+                href="/team/submission"
+                className="text-accent-secondary hover:underline font-bold uppercase text-[11px] flex items-center gap-1 shrink-0"
+              >
+                <span>{hasSubmitted ? "Review" : "Upload Now"}</span>
+                <ArrowRight size={12} />
+              </Link>
             </div>
           </div>
-          <div className="pt-3 sm:pt-4 border-t border-border-color/50 mt-3 flex items-center justify-between gap-2 text-xs">
-            <span className="text-text-secondary truncate">
-              Round: <span className="text-text-primary font-bold">{activeRound?.title || "Round 1"}</span>
-            </span>
-            <Link
-              href="/team/submission"
-              className="text-accent-secondary hover:underline font-bold uppercase text-[11px] flex items-center gap-1 shrink-0"
-            >
-              <span>{hasSubmitted ? "Review" : "Upload Now"}</span>
-              <ArrowRight size={12} />
-            </Link>
-          </div>
-        </div>
+        )}
 
         {/* Results / Standings Card */}
         <div className="glass-panel p-4 sm:p-5 border border-border-color flex flex-col justify-between relative overflow-hidden">
