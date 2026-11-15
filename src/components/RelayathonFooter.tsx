@@ -22,13 +22,19 @@ export default function RelayathonFooter() {
           <div className="space-y-7">
             <div className="space-y-3">
               <div className="mb-2">
-                <Image
-                  src="/relaython_logo@2x.png"
-                  alt="Relaython"
-                  width={220}
-                  height={42}
-                  className="h-10 w-auto object-contain"
-                />
+                <a
+                  href="https://relaython-ivc.vercel.app"
+                  className="inline-block hover:opacity-90 transition-opacity"
+                  title="RELAYTHON Grand Prix"
+                >
+                  <Image
+                    src="/relaython_logo@2x.png"
+                    alt="Relaython"
+                    width={220}
+                    height={42}
+                    className="h-10 w-auto object-contain"
+                  />
+                </a>
               </div>
               <p className="text-neutral-400 text-sm leading-relaxed max-w-sm m-0">
                 The ultimate high-octane Formula 1 innovation Grand Prix. 4-driver constructor teams navigate technical relay sprints to engineer breakthrough solutions on November 24th, 2026.
@@ -100,42 +106,66 @@ export default function RelayathonFooter() {
             </h4>
             <ul className="space-y-3 text-sm font-mono text-neutral-400 list-none p-0 m-0">
               <li>
-                <Link href="/" className="hover:text-red-500 transition-colors flex items-center gap-2">
+                <a
+                  href="https://relaython-ivc.vercel.app/#home"
+                  className="hover:text-red-500 transition-colors flex items-center gap-2"
+                >
                   <span className="text-red-600">▸</span> HOME
-                </Link>
+                </a>
               </li>
               <li>
-                <Link href="/event-details" className="hover:text-red-500 transition-colors flex items-center gap-2">
+                <a
+                  href="https://relaython-ivc.vercel.app/#about"
+                  className="hover:text-red-500 transition-colors flex items-center gap-2"
+                >
                   <span className="text-red-600">▸</span> CIRCUIT BRIEF
-                </Link>
+                </a>
               </li>
               <li>
-                <Link href="/event-flow" className="hover:text-red-500 transition-colors flex items-center gap-2">
-                  <span className="text-red-600">▸</span> RACE TRACKS
-                </Link>
+                <a
+                  href="https://relaython-ivc.vercel.app/#missions"
+                  className="hover:text-red-500 transition-colors flex items-center gap-2"
+                >
+                  <span className="text-red-600">▸</span> CHALLENGES (LAPS)
+                </a>
               </li>
               <li>
-                <Link href="/faq" className="hover:text-red-500 transition-colors flex items-center gap-2">
-                  <span className="text-red-600">▸</span> CHALLENGES
-                </Link>
+                <a
+                  href="https://relaython-ivc.vercel.app/#rules"
+                  className="hover:text-red-500 transition-colors flex items-center gap-2"
+                >
+                  <span className="text-red-600">▸</span> RULES &amp; REGULATIONS
+                </a>
               </li>
               <li>
-                <Link href="/schedule" className="hover:text-red-500 transition-colors flex items-center gap-2">
+                <a
+                  href="https://relaython-ivc.vercel.app/#timeline"
+                  className="hover:text-red-500 transition-colors flex items-center gap-2"
+                >
                   <span className="text-red-600">▸</span> RACE SCHEDULE
-                </Link>
+                </a>
               </li>
               <li>
-                <Link href="/faq" className="hover:text-red-500 transition-colors flex items-center gap-2">
+                <a
+                  href="https://relaython-ivc.vercel.app/#rewards"
+                  className="hover:text-red-500 transition-colors flex items-center gap-2"
+                >
                   <span className="text-red-600">▸</span> PODIUM LOOT
-                </Link>
+                </a>
               </li>
               <li>
-                <Link href="/faq" className="hover:text-red-500 transition-colors flex items-center gap-2">
+                <a
+                  href="https://relaython-ivc.vercel.app/#faq"
+                  className="hover:text-red-500 transition-colors flex items-center gap-2"
+                >
                   <span className="text-red-600">▸</span> RACE FAQ
-                </Link>
+                </a>
               </li>
               <li>
-                <Link href="/register" className="text-red-500 font-bold hover:text-red-400 transition-colors flex items-center gap-2">
+                <Link
+                  href="/register"
+                  className="text-red-500 font-bold hover:text-red-400 transition-colors flex items-center gap-2"
+                >
                   <span className="text-red-500">▸</span> REGISTER SQUAD
                 </Link>
               </li>

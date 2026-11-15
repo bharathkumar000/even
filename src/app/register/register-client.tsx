@@ -2,7 +2,6 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import Image from "next/image";
-import Link from "next/link";
 import QRCode from "qrcode";
 import {
   UploadCloud,
@@ -406,14 +405,26 @@ export default function RegisterClientView({
       <header className="sticky top-0 z-50 bg-[#050505]/95 backdrop-blur-md border-b border-red-950/40 px-4 sm:px-8 py-3.5">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
           {/* Top Left: Eventra Relaython 2026 */}
-          <Link href="/" className="flex items-center gap-2.5 group">
+          <a
+            href="https://relaython-ivc.vercel.app"
+            className="flex items-center gap-2.5 group"
+            title="Return to Relaython Circuit"
+          >
             <div className="px-2.5 py-1 bg-red-600 text-black font-black uppercase text-xs italic tracking-widest rounded-sm shadow-[0_0_15px_rgba(255,0,0,0.5)] group-hover:scale-105 transition-transform">
               EVENTRA
             </div>
-            <span className="font-mono text-xs uppercase tracking-widest text-red-500 font-bold">
+            <span className="font-mono text-xs uppercase tracking-widest text-red-500 font-bold group-hover:text-red-400 transition-colors">
               // RELAYATHON 2026
             </span>
-          </Link>
+          </a>
+
+          {/* Top Right: Back to Circuit / Main Site */}
+          <a
+            href="https://relaython-ivc.vercel.app"
+            className="text-xs font-mono text-neutral-300 hover:text-white transition-colors flex items-center gap-1.5 border border-white/10 hover:border-red-500/50 px-3 py-1.5 rounded bg-white/[0.04] hover:bg-white/[0.08]"
+          >
+            <span className="text-red-500 font-bold">←</span> BACK TO MAIN SITE
+          </a>
         </div>
       </header>
 

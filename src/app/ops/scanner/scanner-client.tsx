@@ -28,6 +28,7 @@ import {
   recordMemberAction,
   recordTeamBulkAction,
   manualTeamLookup,
+  searchTeams,
   getLiveScanActivityStream,
   getRecentlyScannedTeams,
   processAutomatedScan,
@@ -723,17 +724,41 @@ export default function ScannerClientView() {
     }
   };
 
-  // Manual team lookup for verification / inspection
-  const handleManualLookup = async (teamId: string) => {
-    if (!teamId) return;
+  // Manual team lookup with smart resolution (UUID or Team Name/Code search)
+  const handleManualLookup = async (queryOrId: string) => {
+    if (!queryOrId) return;
+    const trimmed = queryOrId.trim();
+    if (!trimmed) return;
+
     setLoading(true);
     try {
-      const res = await manualTeamLookup(teamId);
+      const isUuid = UUID_REGEX.test(trimmed);
+      let targetId = trimmed;
+
+      if (!isUuid) {
+        // Fallback: search team by name or code
+        const searchRes = await searchTeams(trimmed, 5);
+        if (searchRes.error || !searchRes.teams || searchRes.teams.length === 0) {
+          throw new Error(`No team found matching "${trimmed}". Try searching by team name, code, or UUID.`);
+        }
+        targetId = searchRes.teams[0].id;
+      }
+
+      const res = await manualTeamLookup(targetId);
       playScanSuccess();
       setTeamData(res);
       setRecentScans((prev) => {
         const filtered = prev.filter((id) => id !== res.team.id);
         return [res.team.id, ...filtered].slice(0, 3);
+      });
+      setScanFeedback({
+        status: "success",
+        title: "TEAM LOADED",
+        message: `Loaded roster for "${res.team.name}" (${res.members.length} members).`,
+        actionType: scanPurpose,
+        teamName: res.team.name,
+        teamId: res.team.id,
+        timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
       });
     } catch (err: unknown) {
       playScanError();
@@ -754,6 +779,65 @@ export default function ScannerClientView() {
     return teamData?.activityLogs?.find(
       (log) => log.participant_id === participantId && log.action_type === actionType && log.result === "success"
     );
+  };
+
+  // Number of team members that have NOT yet claimed the active action
+  const unclaimedMembersCount = useMemo(() => {
+    if (!teamData?.members) return 0;
+    return teamData.members.filter((m) => {
+      const pid = m.user_id || m.id;
+      return !getLogForAction(pid, scanPurpose);
+    }).length;
+  }, [teamData, scanPurpose]);
+
+  // 1-Tap Bulk Action for entire team (e.g. Check In All or Distribute Kits to All)
+  const handleBulkTeamAction = async () => {
+    if (!teamData?.team?.id) return;
+    setLoading(true);
+    try {
+      const res = await recordTeamBulkAction(teamData.team.id, scanPurpose, csrfToken, {
+        method: "manual",
+      });
+      playScanSuccess();
+      HapticFeedback.success();
+      setScanFeedback({
+        status: "success",
+        title: `ALL MEMBERS ${scanPurpose.toUpperCase()} RECORDED`,
+        message: `Successfully recorded ${scanPurpose} for ${res.claimedCount} member(s) of "${teamData.team.name}".`,
+        actionType: scanPurpose,
+        teamName: teamData.team.name,
+        teamId: teamData.team.id,
+        claimedCount: res.claimedCount,
+        totalMembers: teamData.members.length,
+        timestamp: new Date().toLocaleTimeString([], {
+          hour: "2-digit",
+          minute: "2-digit",
+          second: "2-digit",
+        }),
+      });
+
+      // Refresh team data
+      const updated = await fetchTeamMembersForScan(teamData.team.id);
+      setTeamData(updated);
+      fetchLiveStream();
+    } catch (err: unknown) {
+      playScanError();
+      const msg = err instanceof Error ? err.message : "Bulk action failed.";
+      setScanFeedback({
+        status: "error",
+        title: "BULK ACTION FAILED",
+        message: msg,
+        actionType: scanPurpose,
+        teamName: teamData?.team?.name,
+        timestamp: new Date().toLocaleTimeString([], {
+          hour: "2-digit",
+          minute: "2-digit",
+          second: "2-digit",
+        }),
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
   // Team-level distribution counts for lunch and snacks
@@ -1153,6 +1237,49 @@ export default function ScannerClientView() {
                 </span>
               </div>
             )}
+          </div>
+
+          {/* Team-Wide 1-Tap Bulk Action Banner */}
+          <div className="p-3.5 sm:p-4 bg-accent-primary/10 border border-accent-primary/30 rounded-xl flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 font-tech">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-lg bg-accent-primary/20 border border-accent-primary flex items-center justify-center shrink-0">
+                <Sparkles className="text-accent-primary" size={16} />
+              </div>
+              <div>
+                <p className="text-xs font-heading uppercase text-text-primary m-0">
+                  Team-Wide Quick Action
+                </p>
+                <p className="text-[11px] text-text-secondary m-0">
+                  {unclaimedMembersCount > 0
+                    ? `${unclaimedMembersCount} of ${teamData.members.length} member(s) pending for ${scanPurpose}`
+                    : `All ${teamData.members.length} members already recorded for ${scanPurpose}`}
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={handleBulkTeamAction}
+              disabled={loading || unclaimedMembersCount === 0}
+              className={`min-h-[40px] px-4 py-2 text-xs font-bold font-tech uppercase rounded-lg transition-all flex items-center justify-center gap-2 cursor-pointer shrink-0 ${
+                unclaimedMembersCount === 0
+                  ? "bg-status-success/15 border border-status-success/40 text-status-success disabled:opacity-100 cursor-not-allowed"
+                  : "bg-accent-primary hover:bg-accent-primary/80 text-black shadow-[0_0_15px_rgba(0,240,255,0.3)] disabled:opacity-50"
+              }`}
+            >
+              {unclaimedMembersCount === 0 ? (
+                <>
+                  <CheckCircle2 size={14} />
+                  <span>All Recorded ({teamData.members.length}/{teamData.members.length})</span>
+                </>
+              ) : (
+                <>
+                  <Sparkles size={14} />
+                  <span>
+                    1-Tap: {scanPurpose === "registration" ? "Check In All" : `Claim ${scanPurpose} for All`} ({unclaimedMembersCount})
+                  </span>
+                </>
+              )}
+            </button>
           </div>
 
           {/* Mobile Participant Cards (md:hidden) */}
