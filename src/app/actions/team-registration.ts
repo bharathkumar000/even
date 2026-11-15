@@ -111,7 +111,7 @@ export async function getSemesterRegistrationCounts(): Promise<{
   try {
     const { data, error } = await supabaseAdmin
       .from("team_registrations")
-      .select("leader_sem");
+      .select("leader_sem, team_name, generated_credentials, status");
 
     let firstSemCount = 0;
     let thirdSemCount = 0;
@@ -121,9 +121,14 @@ export async function getSemesterRegistrationCounts(): Promise<{
       if (error.message?.includes("Could not find the table") || error.code === "PGRST205") {
         const { data: teamsData } = await supabaseAdmin
           .from("teams")
-          .select("dietary_preference");
+          .select("dietary_preference, name, code");
 
         for (const t of teamsData || []) {
+          const tName = String(t.name || "").toLowerCase().trim();
+          const tCode = String(t.code || "").toUpperCase().trim();
+          if (tName === "code" || tCode.includes("TEST") || tCode.includes("ADMIN") || tCode.includes("DEV")) {
+            continue;
+          }
           if (!t.dietary_preference) continue;
           try {
             const parsed = JSON.parse(t.dietary_preference);
@@ -150,6 +155,21 @@ export async function getSemesterRegistrationCounts(): Promise<{
     }
 
     for (const row of data || []) {
+      const name = String((row as any).team_name || "").toLowerCase().trim();
+      const code = String((row as any).generated_credentials?.teamCode || (row as any).team_code || "").toUpperCase().trim();
+      const status = String((row as any).status || "").toLowerCase().trim();
+      // Exclude internal test / admin demo teams from consuming official participant & waitlist quotas
+      if (
+        name === "code" ||
+        code.includes("TEST") ||
+        code.includes("ADMIN") ||
+        code.includes("DEV") ||
+        status === "test" ||
+        name.startsWith("test")
+      ) {
+        continue;
+      }
+
       const sem = String(row.leader_sem || "").toLowerCase();
       if (sem.includes("1st") || sem === "1") {
         firstSemCount++;
@@ -452,8 +472,14 @@ export async function submitTeamRegistration(
       .select("code");
 
     let maxNum = 0;
+    let nonTestCount = 0;
     for (const r of allRegs) {
+      const name = String((r as any)?.team_name || "").toLowerCase().trim();
       const code = (r as any)?.team_code || (r.generated_credentials as any)?.teamCode || "";
+      if (name === "code" || code.includes("TEST") || code.includes("ADMIN") || code.includes("DEV")) {
+        continue;
+      }
+      nonTestCount++;
       const m = code.match(/IVC-(?:RY|VV)-(\d+)/i);
       if (m) {
         const n = parseInt(m[1], 10);
@@ -461,14 +487,19 @@ export async function submitTeamRegistration(
       }
     }
     for (const t of existingTeams || []) {
-      const m = (t.code || "").match(/IVC-(?:RY|VV)-(\d+)/i);
+      const name = String((t as any)?.name || "").toLowerCase().trim();
+      const code = String((t as any)?.code || "").toUpperCase();
+      if (name === "code" || code.includes("TEST") || code.includes("ADMIN") || code.includes("DEV")) {
+        continue;
+      }
+      const m = code.match(/IVC-(?:RY|VV)-(\d+)/i);
       if (m) {
         const n = parseInt(m[1], 10);
         if (n > maxNum) maxNum = n;
       }
     }
 
-    const nextNum = Math.max(maxNum + 1, allRegs.length + 1);
+    const nextNum = Math.max(maxNum + 1, nonTestCount + 1);
     const provisionalTeamCode = `IVC-RY-${String(nextNum).padStart(3, "0")}`;
 
     // 3. Insert into team_registrations table with pending status and empty password
@@ -873,9 +904,14 @@ export async function approveRegistration(registrationId: string): Promise<{
     }
 
     if (!teamCode) {
-      const { data: allTeams } = await supabaseAdmin.from("teams").select("code");
+      const { data: allTeams } = await supabaseAdmin.from("teams").select("code, name");
       let maxNum = 0;
       for (const t of allTeams || []) {
+        const name = String((t as any)?.name || "").toLowerCase().trim();
+        const code = String(t.code || "").toUpperCase();
+        if (name === "code" || code.includes("TEST") || code.includes("ADMIN") || code.includes("DEV")) {
+          continue;
+        }
         const m = (t.code || "").match(/IVC-(?:RY|VV)-(\d+)/i);
         if (m) {
           const n = parseInt(m[1], 10);
