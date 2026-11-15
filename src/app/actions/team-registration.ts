@@ -669,23 +669,20 @@ export async function submitTeamRegistration(
       emailDispatchStatus: "PENDING_APPROVAL",
     };
 
-    // Non-blocking background sync to Sheet 1 ("Registrations")
-    syncRegistrationToGoogleSheets(initialSheetRecord).then(async (res) => {
-      if (res.proofUrl && insertedRegId && isBase64Proof) {
-        try {
-          if (!isFallback) {
-            await supabaseAdmin
-              .from("team_registrations")
-              .update({ payment_proof_url: res.proofUrl })
-              .eq("id", insertedRegId);
-          }
-        } catch {
-          // ignore background update error
+    // Reliable sync to Sheet 1 ("Registrations") before completing Server Action
+    try {
+      const sheetRes = await syncRegistrationToGoogleSheets(initialSheetRecord);
+      if (sheetRes.proofUrl && insertedRegId && isBase64Proof) {
+        if (!isFallback) {
+          await supabaseAdmin
+            .from("team_registrations")
+            .update({ payment_proof_url: sheetRes.proofUrl })
+            .eq("id", insertedRegId);
         }
       }
-    }).catch((e) => {
-      console.error("[submitTeamRegistration] Background Google Sheets sync error:", e);
-    });
+    } catch (e) {
+      console.error("[submitTeamRegistration] Google Sheets sync error:", e);
+    }
 
     return {
       success: true,
