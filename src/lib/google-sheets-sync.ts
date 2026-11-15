@@ -755,6 +755,12 @@ function doPost(e) {
         .setMimeType(ContentService.MimeType.JSON);
     }
 
+    // Guard: Prevent empty requests, pings, or probe payloads from creating blank rows
+    if (!data.teamName && !data.teamCode && !data.leaderEmail && !data.loginEmail) {
+      return ContentService.createTextOutput(JSON.stringify({ success: false, error: "No team data provided" }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
     function formatTimestampToIST(raw) {
       if (!raw) return Utilities.formatDate(new Date(), "Asia/Kolkata", "dd/MM/yyyy, hh:mm:ss a");
       try {
