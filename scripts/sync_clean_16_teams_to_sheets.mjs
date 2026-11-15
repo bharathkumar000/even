@@ -154,19 +154,22 @@ async function run() {
     const resReg = await postToSheet(regPayload);
     console.log(`   -> Tab 'Registrations': ${resReg.ok ? "SUCCESS" : "FAIL"}`);
 
-    // 3. Sync to "Credentials" sheet
-    const leadContact = `${reg.leader_name} (${reg.leader_phone || reg.payment_phone || ""})`;
-    const memberContact = d2.name ? `${d2.name} (${d2.phone || d2.email || ""})` : "";
+    // 3. Sync to "Credentials" sheet (14 distinct columns matching Credentials header)
     const credPayload = {
       sheetName: "Credentials",
       decisionAt: decisionTime,
+      status: "Approved",
       teamName: reg.team_name,
-      loginEmail: reg.leader_email,
-      loginPassword: password,
-      teamId: reg.team_id || "",
       teamCode: teamCode,
-      leaderName: leadContact,
-      driver2Name: memberContact,
+      track: track,
+      leaderName: reg.leader_name || "",
+      leaderEmail: reg.leader_email || "",
+      leaderPhone: reg.leader_phone || reg.payment_phone || "",
+      leaderCollege: reg.leader_college || "Vidya Vardhaka College Of Engineering",
+      driver2Name: d2.name || "",
+      driver2Phone: d2.phone || "",
+      loginPassword: password,
+      whatsappGroup: "https://chat.whatsapp.com/LNqyZOwG0R8D2IEST6KSld",
       emailDispatchStatus: "PENDING",
     };
     const resCred = await postToSheet(credPayload);

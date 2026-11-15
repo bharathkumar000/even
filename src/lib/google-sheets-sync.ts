@@ -422,6 +422,8 @@ function convertTimestampsToIST() {
 function onOpen() {
   SpreadsheetApp.getUi()
     .createMenu("🚀 Eventra Dispatch")
+    .addItem("🔧 Fix & Realign Credentials Sheet (1-Click)", "fixCredentialsAlignment")
+    .addSeparator()
     .addItem("🧹 Deduplicate & Clean All Sheets (1-Click Fix)", "deduplicateAllSheets")
     .addSeparator()
     .addItem("🔄 Update All Team Codes to IVC-RY (In Sheet)", "updateAllTeamCodesToRy")
@@ -746,6 +748,13 @@ function doPost(e) {
         .setMimeType(ContentService.MimeType.JSON);
     }
 
+    // Remote Action: Realign & Fix Credentials Sheet
+    if (data.action === "fix_credentials_alignment") {
+      var fixedCount = fixCredentialsAlignmentInternal(ss);
+      return ContentService.createTextOutput(JSON.stringify({ success: true, count: fixedCount }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
     function formatTimestampToIST(raw) {
       if (!raw) return Utilities.formatDate(new Date(), "Asia/Kolkata", "dd/MM/yyyy, hh:mm:ss a");
       try {
@@ -762,17 +771,145 @@ function doPost(e) {
         return String(raw);
       }
     }
+
+    // Upload payment proof screenshot directly to Google Drive
+    var proofLink = data.paymentProofUrl || "";
+    if (data.paymentProofBase64 && data.paymentProofBase64.indexOf("data:") === 0) {
+      try {
+        var parts = data.paymentProofBase64.split(",");
+        var mimeMatch = parts[0].match(/:(.*?);/);
+        var mime = mimeMatch ? mimeMatch[1] : "image/jpeg";
+        var bytes = Utilities.base64Decode(parts[1]);
+        var cleanTeamName = (data.teamName || "team").replace(/[^a-zA-Z0-9]/g, "_");
+        var fileName = cleanTeamName + "_UTR_" + (data.transactionId || "proof") + ".jpg";
+        var fileBlob = Utilities.newBlob(bytes, mime, fileName);
+        
+        var folders = DriveApp.getFoldersByName("Eventra Payment Proofs");
+        var folder = folders.hasNext() ? folders.next() : DriveApp.createFolder("Eventra Payment Proofs");
+        var driveFile = folder.createFile(fileBlob);
+        driveFile.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+        proofLink = driveFile.getUrl();
+      } catch (uploadErr) {
+        proofLink = "Upload error: " + uploadErr.toString();
+      }
+    }
+    
+    // Universal dynamic row builder based on target sheet's actual headers
+    function buildRowFromHeaders(headers, itemData) {
+      var row = [];
+      for (var c = 0; c < headers.length; c++) {
+        var h = String(headers[c] || "").toLowerCase().trim();
+        var val = "";
+
+        if (h === "timestamp") {
+          val = formatTimestampToIST(itemData.decisionAt);
+        } else if (h === "status") {
+          val = itemData.status || "Approved";
+        } else if (h === "team name") {
+          val = itemData.teamName || "";
+        } else if (h === "team code") {
+          val = itemData.teamCode || "";
+        } else if (h === "track" || h === "track name") {
+          val = (function() {
+            var s = String(itemData.track || itemData.leaderSem || "").toLowerCase();
+            return s.indexOf("3") !== -1 ? "3rd Sem" : "1st Sem";
+          })();
+        } else if (h === "rejection reason") {
+          val = itemData.rejectionReason || "";
+        } else if (h === "leader name" || h === "team lead") {
+          val = itemData.leaderName || itemData.teamLead || "";
+        } else if (h === "leader email" || h === "login email id" || h === "login email" || h === "email") {
+          val = itemData.loginEmail || itemData.leaderEmail || "";
+        } else if (h === "leader phone" || h === "phone" || h === "team lead phone") {
+          val = itemData.leaderPhone || itemData.paymentPhone || "";
+        } else if (h === "leader college" || h === "college") {
+          val = itemData.leaderCollege || "Vidya Vardhaka College Of Engineering";
+        } else if (h === "leader usn") {
+          val = itemData.leaderUsn || "N/A";
+        } else if (h === "leader branch") {
+          val = itemData.leaderBranch || "";
+        } else if (h === "leader semester" || h === "leader sem" || h === "semester" || h === "sem") {
+          val = itemData.leaderSem || "";
+        } else if (h === "driver 2 name" || h === "member 2 name") {
+          val = itemData.driver2Name || itemData.member2Name || "";
+        } else if (h === "driver 2 email") {
+          val = itemData.driver2Email || "";
+        } else if (h === "driver 2 phone" || h === "member 2 phone") {
+          val = itemData.driver2Phone || "";
+        } else if (h === "driver 2 college") {
+          val = itemData.driver2College || "Vidya Vardhaka College Of Engineering";
+        } else if (h === "driver 2 usn") {
+          val = itemData.driver2Usn || "N/A";
+        } else if (h === "driver 2 branch") {
+          val = itemData.driver2Branch || "";
+        } else if (h === "driver 2 semester" || h === "driver 2 sem") {
+          val = itemData.driver2Sem || "";
+        } else if (h === "driver 3 name") {
+          val = itemData.driver3Name || "";
+        } else if (h === "driver 3 email") {
+          val = itemData.driver3Email || "";
+        } else if (h === "driver 3 phone") {
+          val = itemData.driver3Phone || "";
+        } else if (h === "driver 3 college") {
+          val = itemData.driver3College || "Vidya Vardhaka College Of Engineering";
+        } else if (h === "driver 3 usn") {
+          val = itemData.driver3Usn || "N/A";
+        } else if (h === "driver 3 branch") {
+          val = itemData.driver3Branch || "";
+        } else if (h === "driver 3 semester" || h === "driver 3 sem") {
+          val = itemData.driver3Sem || "";
+        } else if (h === "driver 4 name") {
+          val = itemData.driver4Name || "";
+        } else if (h === "driver 4 email") {
+          val = itemData.driver4Email || "";
+        } else if (h === "driver 4 phone") {
+          val = itemData.driver4Phone || "";
+        } else if (h === "driver 4 college") {
+          val = itemData.driver4College || "Vidya Vardhaka College Of Engineering";
+        } else if (h === "driver 4 usn") {
+          val = itemData.driver4Usn || "N/A";
+        } else if (h === "driver 4 branch") {
+          val = itemData.driver4Branch || "";
+        } else if (h === "driver 4 semester" || h === "driver 4 sem") {
+          val = itemData.driver4Sem || "";
+        } else if (h.indexOf("transaction id") !== -1 || h === "utr") {
+          val = itemData.transactionId || "";
+        } else if (h.indexOf("payment proof") !== -1 || h.indexOf("drive link") !== -1) {
+          val = proofLink || itemData.paymentProofUrl || "";
+        } else if (h === "login password" || h === "password") {
+          val = itemData.loginPassword || itemData.password || "";
+        } else if (h === "portal url") {
+          val = itemData.portalUrl || "";
+        } else if (h.indexOf("whatsapp") !== -1) {
+          val = itemData.whatsappGroup || "https://chat.whatsapp.com/LNqyZOwG0R8D2IEST6KSld";
+        } else if (h.indexOf("email dispatch status") !== -1 || h === "dispatch status") {
+          val = itemData.emailDispatchStatus || "PENDING";
+        } else if (h === "team id") {
+          val = itemData.teamId || "";
+        } else if (h === "one member contact info (driver 2)") {
+          var mName = itemData.driver2Name || itemData.member2Name || "";
+          var mContact = itemData.driver2Phone || itemData.member2Phone || itemData.driver2Email || "";
+          val = mName + (mContact ? " (" + mContact + ")" : "");
+        } else {
+          val = "";
+        }
+        row.push(val);
+      }
+      return row;
+    }
     
     // Universal UPSERT helper: Updates existing row matching team in-place, or appends if new
-    function upsertRow(sheet, rowValues, keyName, keyCode, keyEmail) {
+    function upsertRow(sheet, itemData) {
       var numRows = sheet.getLastRow();
+      var headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+      var rowValues = buildRowFromHeaders(headers, itemData);
+
       if (numRows <= 1) {
         sheet.appendRow(rowValues);
         return;
       }
       
-      var data = sheet.getRange(1, 1, numRows, sheet.getLastColumn()).getValues();
-      var headers = data[0];
+      var tableData = sheet.getRange(1, 1, numRows, sheet.getLastColumn()).getValues();
       var nameCol = -1;
       var codeCol = -1;
       var emailCol = -1;
@@ -784,17 +921,16 @@ function doPost(e) {
         if (h === "login email id" || h === "leader email" || h === "email") emailCol = c;
       }
 
-      var normKeyName = String(keyName || "").toLowerCase().replace(/[^a-z0-9]/g, "");
-      var normKeyCode = String(keyCode || "").toUpperCase().trim();
-      var normKeyEmail = String(keyEmail || "").toLowerCase().trim();
+      var normKeyName = String(itemData.teamName || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+      var normKeyCode = String(itemData.teamCode || "").toUpperCase().trim();
+      var normKeyEmail = String(itemData.loginEmail || itemData.leaderEmail || "").toLowerCase().trim();
 
       var matchRow = -1;
-      for (var r = 1; r < data.length; r++) {
-        var rowName = nameCol !== -1 ? String(data[r][nameCol] || "").toLowerCase().replace(/[^a-z0-9]/g, "") : "";
-        var rowCode = codeCol !== -1 ? String(data[r][codeCol] || "").toUpperCase().trim() : "";
-        var rowEmail = emailCol !== -1 ? String(data[r][emailCol] || "").toLowerCase().trim() : "";
+      for (var r = 1; r < tableData.length; r++) {
+        var rowName = nameCol !== -1 ? String(tableData[r][nameCol] || "").toLowerCase().replace(/[^a-z0-9]/g, "") : "";
+        var rowCode = codeCol !== -1 ? String(tableData[r][codeCol] || "").toUpperCase().trim() : "";
+        var rowEmail = emailCol !== -1 ? String(tableData[r][emailCol] || "").toLowerCase().trim() : "";
 
-        // Check matching by Code first, then Name, then Email
         if (normKeyCode && rowCode && normKeyCode === rowCode) {
           matchRow = r + 1;
           break;
@@ -819,7 +955,7 @@ function doPost(e) {
     var sheetName = data.sheetName || (data.status === "Approved" ? "Approved" : "Registrations");
     var sheet = ss.getSheetByName(sheetName);
     
-    // Dedicated compact layout for "Credentials" Sheet (Approved Teams only)
+    // Dedicated layout for "Credentials" Sheet (Approved Teams only)
     if (sheetName === "Credentials") {
       if (!sheet) {
         sheet = ss.insertSheet("Credentials");
@@ -827,39 +963,24 @@ function doPost(e) {
       if (sheet.getLastRow() === 0) {
         sheet.appendRow([
           "Timestamp",
+          "Status",
           "Team Name",
-          "Login Email ID",
-          "Password",
-          "Team ID",
           "Team Code",
-          "Team Lead",
-          "One Member Contact Info (Driver 2)",
+          "Track",
+          "Leader Name",
+          "Leader Email",
+          "Leader Phone",
+          "Leader College",
+          "Driver 2 Name",
+          "Driver 2 Phone",
+          "Login Password",
+          "WhatsApp Group",
           "Email Dispatch Status"
         ]);
-        sheet.getRange(1, 1, 1, 9).setFontWeight("bold").setBackground("#d9ead3");
+        sheet.getRange(1, 1, 1, 14).setFontWeight("bold").setBackground("#d9ead3");
       }
       
-      var leadContact = data.leaderName || data.teamLead || "";
-      var leadPhone = data.leaderPhone || data.teamLeadPhone || "";
-      if (leadPhone) leadContact += " (" + leadPhone + ")";
-      
-      var memberContact = data.driver2Name || data.member2Name || "";
-      var memberPhone = data.driver2Phone || data.member2Phone || data.driver2Email || "";
-      if (memberPhone) memberContact += " (" + memberPhone + ")";
-      
-      var credValues = [
-        formatTimestampToIST(data.decisionAt),
-        data.teamName || "",
-        data.loginEmail || data.leaderEmail || "",
-        data.loginPassword || data.password || "",
-        data.teamId || "",
-        data.teamCode || "",
-        leadContact,
-        memberContact,
-        data.emailDispatchStatus || "PENDING"
-      ];
-      
-      upsertRow(sheet, credValues, data.teamName, data.teamCode, data.loginEmail);
+      upsertRow(sheet, data);
       
       return ContentService.createTextOutput(JSON.stringify({ success: true, sheet: "Credentials" }))
         .setMimeType(ContentService.MimeType.JSON);
@@ -921,78 +1042,7 @@ function doPost(e) {
       sheet.getRange(1, 1, 1, 40).setFontWeight("bold").setBackground("#e0e0e0");
     }
     
-    // Upload payment proof screenshot directly to Google Drive
-    var proofLink = data.paymentProofUrl || "";
-    if (data.paymentProofBase64 && data.paymentProofBase64.indexOf("data:") === 0) {
-      try {
-        var parts = data.paymentProofBase64.split(",");
-        var mimeMatch = parts[0].match(/:(.*?);/);
-        var mime = mimeMatch ? mimeMatch[1] : "image/jpeg";
-        var bytes = Utilities.base64Decode(parts[1]);
-        var cleanTeamName = (data.teamName || "team").replace(/[^a-zA-Z0-9]/g, "_");
-        var fileName = cleanTeamName + "_UTR_" + (data.transactionId || "proof") + ".jpg";
-        var fileBlob = Utilities.newBlob(bytes, mime, fileName);
-        
-        var folders = DriveApp.getFoldersByName("Eventra Payment Proofs");
-        var folder = folders.hasNext() ? folders.next() : DriveApp.createFolder("Eventra Payment Proofs");
-        var driveFile = folder.createFile(fileBlob);
-        driveFile.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
-        proofLink = driveFile.getUrl();
-      } catch (uploadErr) {
-        proofLink = "Upload error: " + uploadErr.toString();
-      }
-    }
-    
-    var fullRowValues = [
-      formatTimestampToIST(data.decisionAt),
-      data.status || "Pending",
-      data.teamName || "",
-      data.teamCode || "",
-      (function(){ var s = String(data.leaderSem || data.track || "").toLowerCase(); return s.indexOf("3") !== -1 ? "3rd Sem" : "1st Sem"; })(),
-      data.rejectionReason || "",
-      // Leader
-      data.leaderName || "",
-      data.leaderEmail || "",
-      data.leaderPhone || "",
-      data.leaderCollege || "",
-      data.leaderUsn || "",
-      data.leaderBranch || "",
-      data.leaderSem || "",
-      // Driver 2
-      data.driver2Name || "",
-      data.driver2Email || "",
-      data.driver2Phone || "",
-      data.driver2College || "",
-      data.driver2Usn || "",
-      data.driver2Branch || "",
-      data.driver2Sem || "",
-      // Driver 3
-      data.driver3Name || "",
-      data.driver3Email || "",
-      data.driver3Phone || "",
-      data.driver3College || "",
-      data.driver3Usn || "",
-      data.driver3Branch || "",
-      data.driver3Sem || "",
-      // Driver 4
-      data.driver4Name || "",
-      data.driver4Email || "",
-      data.driver4Phone || "",
-      data.driver4College || "",
-      data.driver4Usn || "",
-      data.driver4Branch || "",
-      data.driver4Sem || "",
-      // Payment
-      data.transactionId || "",
-      proofLink,
-      // Credentials & Bulk Dispatch
-      data.loginPassword || "",
-      data.portalUrl || "",
-      data.whatsappGroup || "https://chat.whatsapp.com/LNqyZOwG0R8D2IEST6KSld",
-      data.emailDispatchStatus || "PENDING"
-    ];
-    
-    upsertRow(sheet, fullRowValues, data.teamName, data.teamCode, data.leaderEmail);
+    upsertRow(sheet, data);
     
     return ContentService.createTextOutput(JSON.stringify({ success: true, proofUrl: proofLink, sheet: sheetName }))
       .setMimeType(ContentService.MimeType.JSON);
@@ -1000,6 +1050,212 @@ function doPost(e) {
     return ContentService.createTextOutput(JSON.stringify({ success: false, error: err.toString() }))
       .setMimeType(ContentService.MimeType.JSON);
   }
+}
+
+/**
+ * 1-Click: Realign & Fix Credentials Sheet
+ * Automatically clears misaligned data in Credentials and repopulates it
+ * perfectly aligned with its 14 headers from the Approved sheet.
+ */
+function fixCredentialsAlignment() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var count = fixCredentialsAlignmentInternal(ss);
+  SpreadsheetApp.getUi().alert("✅ Successfully realigned Credentials sheet with " + count + " teams in perfect columns!");
+}
+
+function fixCredentialsAlignmentInternal(ss) {
+  var credSheet = ss.getSheetByName("Credentials");
+  var apprSheet = ss.getSheetByName("Approved");
+  var regSheet = ss.getSheetByName("Registrations");
+
+  if (!credSheet) {
+    credSheet = ss.insertSheet("Credentials");
+  }
+
+  // Set Row 1 strictly to the standard 14 headers
+  var targetHeaders = [
+    "Timestamp",
+    "Status",
+    "Team Name",
+    "Team Code",
+    "Track",
+    "Leader Name",
+    "Leader Email",
+    "Leader Phone",
+    "Leader College",
+    "Driver 2 Name",
+    "Driver 2 Phone",
+    "Login Password",
+    "WhatsApp Group",
+    "Email Dispatch Status"
+  ];
+
+  // Backup existing data in Credentials before modifying
+  var existingCredRows = [];
+  if (credSheet.getLastRow() > 1) {
+    existingCredRows = credSheet.getRange(2, 1, credSheet.getLastRow() - 1, credSheet.getLastColumn()).getValues();
+  }
+
+  // Clear all existing data rows
+  if (credSheet.getLastRow() > 1) {
+    credSheet.deleteRows(2, credSheet.getLastRow() - 1);
+  }
+  credSheet.getRange(1, 1, 1, targetHeaders.length).setValues([targetHeaders]).setFontWeight("bold").setBackground("#d9ead3");
+
+  var known3rdSem = ["corner four", "spark", "vs³", "vs3", "whtt the hack"];
+  var newRows = [];
+
+  // Source Option 1: Read from Approved sheet if available
+  // Source Option 2: Read from Registrations sheet if Approved is empty
+  var sourceSheet = (apprSheet && apprSheet.getLastRow() > 1) ? apprSheet : ((regSheet && regSheet.getLastRow() > 1) ? regSheet : null);
+
+  if (sourceSheet) {
+    var srcData = sourceSheet.getDataRange().getValues();
+    var sHeaders = srcData[0];
+    var colMap = {};
+    for (var c = 0; c < sHeaders.length; c++) {
+      colMap[String(sHeaders[c] || "").toLowerCase().trim()] = c;
+    }
+
+    function getVal(row, names) {
+      for (var i = 0; i < names.length; i++) {
+        var idx = colMap[names[i].toLowerCase()];
+        if (idx !== undefined && row[idx] !== undefined && String(row[idx]).trim()) {
+          return row[idx];
+        }
+      }
+      return "";
+    }
+
+    for (var r = 1; r < srcData.length; r++) {
+      var aRow = srcData[r];
+      var tName = getVal(aRow, ["Team Name"]);
+      if (!tName) continue;
+
+      var timestamp = aRow[0] || Utilities.formatDate(new Date(), "Asia/Kolkata", "dd/MM/yyyy, hh:mm:ss a");
+      var status = getVal(aRow, ["Status"]) || "Approved";
+      var teamCode = getVal(aRow, ["Team Code"]);
+      var semVal = String(getVal(aRow, ["Leader Semester", "Leader Sem", "Track", "Track Name"])).toLowerCase();
+      var track = (semVal.indexOf("3") !== -1 || known3rdSem.indexOf(tName.toLowerCase()) !== -1) ? "3rd Sem" : "1st Sem";
+      var leaderName = getVal(aRow, ["Leader Name", "Team Lead"]);
+      var leaderEmail = getVal(aRow, ["Leader Email", "Login Email ID", "Email"]);
+      var leaderPhone = getVal(aRow, ["Leader Phone", "Phone"]);
+      var leaderCollege = getVal(aRow, ["Leader College", "College"]) || "Vidya Vardhaka College Of Engineering";
+      var d2Name = getVal(aRow, ["Driver 2 Name", "Member 2 Name"]);
+      var d2Phone = getVal(aRow, ["Driver 2 Phone", "Member 2 Phone"]);
+      var password = getVal(aRow, ["Login Password", "Password"]);
+      var whatsapp = getVal(aRow, ["WhatsApp Group"]) || "https://chat.whatsapp.com/LNqyZOwG0R8D2IEST6KSld";
+      var dispatchStatus = getVal(aRow, ["Email Dispatch Status"]) || "PENDING";
+
+      newRows.push([
+        timestamp,
+        status,
+        tName,
+        teamCode,
+        track,
+        leaderName,
+        leaderEmail,
+        leaderPhone,
+        leaderCollege,
+        d2Name,
+        d2Phone,
+        password,
+        whatsapp,
+        dispatchStatus
+      ]);
+    }
+  } else if (existingCredRows.length > 0) {
+    // Source Option 3: Fallback - unshift existing shifted data directly from Credentials
+    for (var i = 0; i < existingCredRows.length; i++) {
+      var row = existingCredRows[i];
+      var tStamp = row[0] || Utilities.formatDate(new Date(), "Asia/Kolkata", "dd/MM/yyyy, hh:mm:ss a");
+      
+      // Check if row has shifted pattern: row[2] has '@' (e.g. email in Team Name col)
+      var isShifted = String(row[2] || "").indexOf("@") !== -1;
+      
+      if (isShifted) {
+        var tName = String(row[1] || "").trim();
+        var lEmail = String(row[2] || "").trim();
+        var lPass = String(row[3] || "").trim();
+        var tCode = String(row[5] || "").trim();
+        var lContact = String(row[6] || "").trim();
+        var d2Contact = String(row[7] || "").trim();
+
+        // Extract leader name and phone from "Name (Phone)"
+        var lMatch = lContact.match(/^(.*?)\s*\((.*?)\)$/);
+        var lName = lMatch ? lMatch[1].trim() : lContact;
+        var lPhone = lMatch ? lMatch[2].trim() : "";
+
+        // Extract driver 2 name and phone from "Name (Phone)"
+        var d2Match = d2Contact.match(/^(.*?)\s*\((.*?)\)$/);
+        var d2Name = d2Match ? d2Match[1].trim() : d2Contact;
+        var d2Phone = d2Match ? d2Match[2].trim() : "";
+
+        var track = (known3rdSem.indexOf(tName.toLowerCase()) !== -1) ? "3rd Sem" : "1st Sem";
+
+        if (tName) {
+          newRows.push([
+            tStamp,
+            "Approved",
+            tName,
+            tCode,
+            track,
+            lName,
+            lEmail,
+            lPhone,
+            "Vidya Vardhaka College Of Engineering",
+            d2Name,
+            d2Phone,
+            lPass,
+            "https://chat.whatsapp.com/LNqyZOwG0R8D2IEST6KSld",
+            "PENDING"
+          ]);
+        }
+      } else {
+        // Row already in 14-col alignment
+        var tName = String(row[2] || "").trim();
+        if (tName) {
+          newRows.push([
+            row[0] || tStamp,
+            row[1] || "Approved",
+            tName,
+            row[3] || "",
+            row[4] || ((known3rdSem.indexOf(tName.toLowerCase()) !== -1) ? "3rd Sem" : "1st Sem"),
+            row[5] || "",
+            row[6] || "",
+            row[7] || "",
+            row[8] || "Vidya Vardhaka College Of Engineering",
+            row[9] || "",
+            row[10] || "",
+            row[11] || "",
+            row[12] || "https://chat.whatsapp.com/LNqyZOwG0R8D2IEST6KSld",
+            row[13] || "PENDING"
+          ]);
+        }
+      }
+    }
+  }
+
+  // Deduplicate newRows by Team Name / Team Code
+  var seen = {};
+  var uniqueRows = [];
+  for (var u = 0; u < newRows.length; u++) {
+    var key = String(newRows[u][2] || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+    if (!key || seen[key]) continue;
+    seen[key] = true;
+    uniqueRows.push(newRows[u]);
+  }
+
+  // Sort by Team Code ascending (IVC-RY-001 ... IVC-RY-016)
+  uniqueRows.sort(function(a, b) {
+    return String(a[3]).localeCompare(String(b[3]));
+  });
+
+  if (uniqueRows.length > 0) {
+    credSheet.getRange(2, 1, uniqueRows.length, targetHeaders.length).setValues(uniqueRows);
+  }
+
+  return uniqueRows.length;
 }
 
 /**
