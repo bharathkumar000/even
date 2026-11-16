@@ -296,7 +296,23 @@ export function generateRegistrationsCsv(records: ComprehensiveTeamRecord[]): st
     return `"${str}"`;
   };
 
-  const rows = records.map((r) => [
+  const cleanRecords = (records || []).filter((r) => {
+    const name = String(r.teamName || "").toLowerCase().trim();
+    const code = String(r.teamCode || "").toUpperCase().trim();
+    const status = String(r.status || "").toLowerCase().trim();
+    const email = String(r.leaderEmail || "").toLowerCase().trim();
+    return !(
+      status === "test" ||
+      name === "code" ||
+      code.includes("TEST") ||
+      code.includes("ADMIN") ||
+      code.includes("DEV") ||
+      name.startsWith("test") ||
+      email === "rishithsgowda13@gmail.com"
+    );
+  });
+
+  const rows = cleanRecords.map((r) => [
     escapeCsv(formatToIST(r.decisionAt)),
     escapeCsv(r.status),
     escapeCsv(r.teamName),

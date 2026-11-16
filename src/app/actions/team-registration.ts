@@ -111,7 +111,7 @@ export async function getSemesterRegistrationCounts(): Promise<{
   try {
     const { data, error } = await supabaseAdmin
       .from("team_registrations")
-      .select("leader_sem, team_name, generated_credentials, status");
+      .select("leader_sem, team_name, leader_email, generated_credentials, status");
 
     let firstSemCount = 0;
     let thirdSemCount = 0;
@@ -121,12 +121,20 @@ export async function getSemesterRegistrationCounts(): Promise<{
       if (error.message?.includes("Could not find the table") || error.code === "PGRST205") {
         const { data: teamsData } = await supabaseAdmin
           .from("teams")
-          .select("dietary_preference, name, code");
+          .select("dietary_preference, name, code, status");
 
         for (const t of teamsData || []) {
           const tName = String(t.name || "").toLowerCase().trim();
           const tCode = String(t.code || "").toUpperCase().trim();
-          if (tName === "code" || tCode.includes("TEST") || tCode.includes("ADMIN") || tCode.includes("DEV")) {
+          const tStatus = String(t.status || "").toLowerCase().trim();
+          if (
+            tName === "code" ||
+            tCode.includes("TEST") ||
+            tCode.includes("ADMIN") ||
+            tCode.includes("DEV") ||
+            tStatus === "test" ||
+            tName.startsWith("test")
+          ) {
             continue;
           }
           if (!t.dietary_preference) continue;
@@ -158,6 +166,7 @@ export async function getSemesterRegistrationCounts(): Promise<{
       const name = String((row as any).team_name || "").toLowerCase().trim();
       const code = String((row as any).generated_credentials?.teamCode || (row as any).team_code || "").toUpperCase().trim();
       const status = String((row as any).status || "").toLowerCase().trim();
+      const email = String((row as any).leader_email || "").toLowerCase().trim();
       // Exclude internal test / admin demo teams from consuming official participant & waitlist quotas
       if (
         name === "code" ||
@@ -165,7 +174,8 @@ export async function getSemesterRegistrationCounts(): Promise<{
         code.includes("ADMIN") ||
         code.includes("DEV") ||
         status === "test" ||
-        name.startsWith("test")
+        name.startsWith("test") ||
+        email === "rishithsgowda13@gmail.com"
       ) {
         continue;
       }
@@ -756,8 +766,25 @@ export async function getRegistrations(statusFilter?: "all" | "pending" | "appro
       throw error;
     }
 
-    if (data && data.length > 0) {
-      const sorted = [...data].sort(
+    // Exclude internal test / admin demo teams so they are completely invisible from registered teams list
+    const cleanData = (data || []).filter((r: any) => {
+      const name = String(r.team_name || "").toLowerCase().trim();
+      const code = String(r.team_code || r.generated_credentials?.teamCode || "").toUpperCase().trim();
+      const status = String(r.status || "").toLowerCase().trim();
+      const email = String(r.leader_email || "").toLowerCase().trim();
+      return !(
+        status === "test" ||
+        name === "code" ||
+        code.includes("TEST") ||
+        code.includes("ADMIN") ||
+        code.includes("DEV") ||
+        name.startsWith("test") ||
+        email === "rishithsgowda13@gmail.com"
+      );
+    });
+
+    if (cleanData && cleanData.length > 0) {
+      const sorted = [...cleanData].sort(
         (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
       );
       const seenCodes = new Set<string>();
@@ -808,7 +835,7 @@ export async function getRegistrations(statusFilter?: "all" | "pending" | "appro
       }
     }
 
-    return { success: true, registrations: data || [], tableFallback: false };
+    return { success: true, registrations: cleanData, tableFallback: false };
   } catch (err: any) {
     console.error("getRegistrations error:", err);
     return { success: false, error: err.message, registrations: [] };
@@ -1346,12 +1373,28 @@ export async function syncAllApprovedRegistrationsAction(): Promise<{
       return { success: false, message: error.message, count: 0 };
     }
 
-    if (!approvedList || approvedList.length === 0) {
+    const cleanApprovedList = (approvedList || []).filter((r: any) => {
+      const name = String(r.team_name || "").toLowerCase().trim();
+      const code = String(r.team_code || r.generated_credentials?.teamCode || "").toUpperCase().trim();
+      const status = String(r.status || "").toLowerCase().trim();
+      const email = String(r.leader_email || "").toLowerCase().trim();
+      return !(
+        status === "test" ||
+        name === "code" ||
+        code.includes("TEST") ||
+        code.includes("ADMIN") ||
+        code.includes("DEV") ||
+        name.startsWith("test") ||
+        email === "rishithsgowda13@gmail.com"
+      );
+    });
+
+    if (cleanApprovedList.length === 0) {
       return { success: true, message: "No approved registrations to sync.", count: 0 };
     }
 
     let syncedCount = 0;
-    for (const reg of approvedList) {
+    for (const reg of cleanApprovedList) {
       const membersList: any[] = Array.isArray(reg.members) ? reg.members : [];
       const d2 = membersList[0] || {};
       const d3 = membersList[1] || {};
