@@ -953,17 +953,22 @@ function doPost(e) {
         var rowCode = codeCol !== -1 ? String(tableData[r][codeCol] || "").toUpperCase().trim() : "";
         var rowEmail = emailCol !== -1 ? String(tableData[r][emailCol] || "").toLowerCase().trim() : "";
 
+        // 1. Strict match by unique Team Code (e.g. IVC-RY-015 vs IVC-RY-025)
         if (normKeyCode && rowCode && normKeyCode === rowCode) {
           matchRow = r + 1;
           break;
         }
-        if (normKeyName && rowName && normKeyName === rowName) {
-          matchRow = r + 1;
-          break;
-        }
+        // 2. Strict match by Captain Email
         if (normKeyEmail && rowEmail && normKeyEmail === rowEmail) {
           matchRow = r + 1;
           break;
+        }
+        // 3. Match by Team Name ONLY if email does NOT conflict
+        if (normKeyName && rowName && normKeyName === rowName) {
+          if (!rowEmail || !normKeyEmail || rowEmail === normKeyEmail) {
+            matchRow = r + 1;
+            break;
+          }
         }
       }
 

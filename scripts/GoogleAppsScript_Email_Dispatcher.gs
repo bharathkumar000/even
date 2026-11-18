@@ -578,17 +578,22 @@ function doPost(e) {
         var rowCode = codeCol !== -1 ? String(tableData[r][codeCol] || "").toUpperCase().trim() : "";
         var rowEmail = emailCol !== -1 ? String(tableData[r][emailCol] || "").toLowerCase().trim() : "";
 
+        // 1. Strict match by unique Team Code (e.g. IVC-RY-015 vs IVC-RY-025)
         if (normKeyCode && rowCode && normKeyCode === rowCode) {
           matchRow = r + 1;
           break;
         }
-        if (normKeyName && rowName && normKeyName === rowName) {
-          matchRow = r + 1;
-          break;
-        }
+        // 2. Strict match by Captain's Email
         if (normKeyEmail && rowEmail && normKeyEmail === rowEmail) {
           matchRow = r + 1;
           break;
+        }
+        // 3. Match by Team Name ONLY if email is empty or identical (never overwrite different teams)
+        if (normKeyName && rowName && normKeyName === rowName) {
+          if (!rowEmail || !normKeyEmail || rowEmail === normKeyEmail) {
+            matchRow = r + 1;
+            break;
+          }
         }
       }
 
@@ -883,11 +888,14 @@ function fixCredentialsAlignmentInternal(ss) {
     }
   }
 
-  // Deduplicate newRows by Team Name / Team Code
+  // Deduplicate newRows by Team Code / Email (preserve squads sharing team name)
   var seen = {};
   var uniqueRows = [];
   for (var u = 0; u < newRows.length; u++) {
-    var key = String(newRows[u][2] || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+    var codeKey = String(newRows[u][3] || "").toUpperCase().trim();
+    var emailKey = String(newRows[u][4] || "").toLowerCase().trim();
+    var nameKey = String(newRows[u][2] || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+    var key = codeKey ? codeKey : (emailKey ? emailKey : nameKey);
     if (!key || seen[key]) continue;
     seen[key] = true;
     uniqueRows.push(newRows[u]);
