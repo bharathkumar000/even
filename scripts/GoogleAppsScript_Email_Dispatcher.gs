@@ -71,12 +71,174 @@ function onOpen() {
     .addSeparator()
     .addItem("🕒 Convert All Timestamps to IST", "convertTimestampsToIST")
     .addSeparator()
+    .addItem("✉️ Send Credentials to Selected Row (Single Team)", "sendCredentialsToSelectedTeam")
+    .addItem("🧪 Send Preview of Selected Row to My Email", "sendPreviewOfSelectedTeam")
+    .addSeparator()
     .addItem("🚀 Send All Credentials Emails (Approved Teams)", "sendCredentialsToAllApprovedTeams")
     .addSeparator()
-    .addItem("🧪 Send Test Email to Myself (Safe Preview)", "sendTestConfirmationEmail")
+    .addItem("🧪 Send Generic Test Email to Myself", "sendTestConfirmationEmail")
     .addSeparator()
     .addItem("⚠️ Clear Test Data (Registrations / Approved)", "clearAllTestData")
     .addToUi();
+}
+
+/**
+ * Sends credentials email to the single currently selected row in Google Sheets
+ * with a manual confirmation popup before sending.
+ */
+function sendCredentialsToSelectedTeam() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getActiveSheet();
+  var ui = SpreadsheetApp.getUi();
+  var rowIdx = sheet.getActiveCell().getRow();
+  
+  if (rowIdx <= 1) {
+    ui.alert("⚠️ Please click on a team row (row 2 or below) to select it first!");
+    return;
+  }
+  
+  var headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  var rowData = sheet.getRange(rowIdx, 1, 1, sheet.getLastColumn()).getValues()[0];
+  
+  var emailCol = headers.indexOf("Login Email ID") !== -1 ? headers.indexOf("Login Email ID") : headers.indexOf("Leader Email");
+  var nameCol = headers.indexOf("Team Lead") !== -1 ? headers.indexOf("Team Lead") : headers.indexOf("Leader Name");
+  var teamNameCol = headers.indexOf("Team Name");
+  var teamCodeCol = headers.indexOf("Team Code");
+  var passwordCol = headers.indexOf("Password") !== -1 ? headers.indexOf("Password") : headers.indexOf("Login Password");
+  var whatsappCol = headers.indexOf("WhatsApp Group");
+  var statusCol = headers.indexOf("Email Dispatch Status");
+  var semCol = headers.indexOf("Leader Semester") !== -1 ? headers.indexOf("Leader Semester") :
+               headers.indexOf("Leader Sem") !== -1 ? headers.indexOf("Leader Sem") :
+               headers.indexOf("Semester") !== -1 ? headers.indexOf("Semester") :
+               headers.indexOf("Sem");
+  var trackCol = headers.indexOf("Track") !== -1 ? headers.indexOf("Track") : headers.indexOf("Track Name");
+  
+  var email = String(rowData[emailCol] || "").trim();
+  var password = String(rowData[passwordCol] || "").trim();
+  var teamName = String(rowData[teamNameCol] || "").trim();
+  var teamCode = teamCodeCol !== -1 ? String(rowData[teamCodeCol] || "") : "";
+  var leaderNameRaw = nameCol !== -1 ? String(rowData[nameCol] || "") : "Team Leader";
+  var leaderName = leaderNameRaw.replace(/\s*\([^)]*\)/g, "").trim() || "Team Leader";
+  var whatsappUrl = (whatsappCol !== -1 && rowData[whatsappCol]) ? String(rowData[whatsappCol]) : "https://chat.whatsapp.com/LNqyZOwG0R8D2IEST6KSld";
+  
+  var semVal = (semCol !== -1 ? String(rowData[semCol] || "") : "").toLowerCase().trim();
+  var trackVal = (trackCol !== -1 ? String(rowData[trackCol] || "") : "").toLowerCase().trim();
+  var trackName = (semVal.indexOf("3") !== -1 || trackVal.indexOf("3") !== -1) ? "3rd Sem" : "1st Sem";
+
+  if (!email || !password) {
+    ui.alert("⚠️ Missing email or password on row " + rowIdx + "!");
+    return;
+  }
+  
+  var confirm = ui.alert(
+    "📨 Confirm Manual Email Dispatch",
+    "Are you sure you want to send credentials to:\n\n" +
+    "• Team: " + teamName + " (" + teamCode + ")\n" +
+    "• Track: " + trackName + "\n" +
+    "• Leader: " + leaderName + "\n" +
+    "• Recipient Email: " + email + "\n" +
+    "• Password: " + password + "\n\n" +
+    "Click YES to send official credentials now.",
+    ui.ButtonSet.YES_NO
+  );
+  
+  if (confirm !== ui.Button.YES) return;
+  
+  var subject = "[GRAND PRIX RELAYTHON’2026] Official Team Confirmation & Credentials - " + teamName + " (" + teamCode + ")";
+  var htmlContent = buildTeamConfirmationEmailHtml(leaderName, teamName, teamCode, trackName, email, password, whatsappUrl);
+  
+  try {
+    var mailOpts = {
+      to: email,
+      subject: subject,
+      body: "Official credentials for " + teamName,
+      htmlBody: htmlContent,
+      name: "Innovators & Visionaries Club (IVC)",
+      replyTo: "ivcofficial@vvce.ac.in"
+    };
+    var bBlob = getBannerBlob();
+    if (bBlob) mailOpts.inlineImages = { relaythonBanner: bBlob };
+    MailApp.sendEmail(mailOpts);
+    
+    if (statusCol !== -1) {
+      sheet.getRange(rowIdx, statusCol + 1).setValue("SENT: " + new Date().toLocaleString());
+    }
+    ui.alert("✅ Successfully sent credentials email to " + teamName + " (" + email + ")!");
+  } catch (err) {
+    ui.alert("❌ Error sending email: " + err.toString());
+  }
+}
+
+/**
+ * Sends a preview of the currently selected team's email to the admin's personal address.
+ */
+function sendPreviewOfSelectedTeam() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getActiveSheet();
+  var ui = SpreadsheetApp.getUi();
+  var rowIdx = sheet.getActiveCell().getRow();
+  
+  if (rowIdx <= 1) {
+    ui.alert("⚠️ Please click on a team row (row 2 or below) to select it first!");
+    return;
+  }
+  
+  var defaultEmail = Session.getActiveUser().getEmail() || "";
+  var prompt = ui.prompt(
+    "📧 Send Test Preview of Selected Team",
+    "Enter the email address you want to receive this team's preview at (or leave blank for " + defaultEmail + "):",
+    ui.ButtonSet.OK_CANCEL
+  );
+  if (prompt.getSelectedButton() !== ui.Button.OK) return;
+  var targetEmail = prompt.getResponseText().trim() || defaultEmail;
+  if (!targetEmail) return;
+
+  var headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  var rowData = sheet.getRange(rowIdx, 1, 1, sheet.getLastColumn()).getValues()[0];
+  
+  var emailCol = headers.indexOf("Login Email ID") !== -1 ? headers.indexOf("Login Email ID") : headers.indexOf("Leader Email");
+  var nameCol = headers.indexOf("Team Lead") !== -1 ? headers.indexOf("Team Lead") : headers.indexOf("Leader Name");
+  var teamNameCol = headers.indexOf("Team Name");
+  var teamCodeCol = headers.indexOf("Team Code");
+  var passwordCol = headers.indexOf("Password") !== -1 ? headers.indexOf("Password") : headers.indexOf("Login Password");
+  var whatsappCol = headers.indexOf("WhatsApp Group");
+  var semCol = headers.indexOf("Leader Semester") !== -1 ? headers.indexOf("Leader Semester") :
+               headers.indexOf("Leader Sem") !== -1 ? headers.indexOf("Leader Sem") :
+               headers.indexOf("Semester") !== -1 ? headers.indexOf("Semester") :
+               headers.indexOf("Sem");
+  var trackCol = headers.indexOf("Track") !== -1 ? headers.indexOf("Track") : headers.indexOf("Track Name");
+  
+  var email = String(rowData[emailCol] || "").trim();
+  var password = String(rowData[passwordCol] || "").trim();
+  var teamName = String(rowData[teamNameCol] || "").trim();
+  var teamCode = teamCodeCol !== -1 ? String(rowData[teamCodeCol] || "") : "";
+  var leaderNameRaw = nameCol !== -1 ? String(rowData[nameCol] || "") : "Team Leader";
+  var leaderName = leaderNameRaw.replace(/\s*\([^)]*\)/g, "").trim() || "Team Leader";
+  var whatsappUrl = (whatsappCol !== -1 && rowData[whatsappCol]) ? String(rowData[whatsappCol]) : "https://chat.whatsapp.com/LNqyZOwG0R8D2IEST6KSld";
+  
+  var semVal = (semCol !== -1 ? String(rowData[semCol] || "") : "").toLowerCase().trim();
+  var trackVal = (trackCol !== -1 ? String(rowData[trackCol] || "") : "").toLowerCase().trim();
+  var trackName = (semVal.indexOf("3") !== -1 || trackVal.indexOf("3") !== -1) ? "3rd Sem" : "1st Sem";
+
+  var subject = "[TEST PREVIEW] Official Team Confirmation & Credentials - " + teamName + " (" + teamCode + ")";
+  var htmlContent = buildTeamConfirmationEmailHtml(leaderName, teamName, teamCode, trackName, email, password, whatsappUrl);
+  
+  try {
+    var mailOpts = {
+      to: targetEmail,
+      subject: subject,
+      body: "Test preview for " + teamName,
+      htmlBody: htmlContent,
+      name: "Innovators & Visionaries Club (IVC)",
+      replyTo: "ivcofficial@vvce.ac.in"
+    };
+    var bBlob = getBannerBlob();
+    if (bBlob) mailOpts.inlineImages = { relaythonBanner: bBlob };
+    MailApp.sendEmail(mailOpts);
+    ui.alert("✅ Preview of " + teamName + "'s email successfully sent to: " + targetEmail + "!");
+  } catch (err) {
+    ui.alert("❌ Error sending preview: " + err.toString());
+  }
 }
 
 /**
