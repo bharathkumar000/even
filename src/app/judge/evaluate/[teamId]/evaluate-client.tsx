@@ -273,13 +273,7 @@ export default function EvaluateClientView({
         round_id: activeRound?.id,
         team_id: teamId,
       });
-      // Show the actual error message for business logic failures,
-      // only use generic message for truly unexpected system errors.
-      if (msg.includes("Server Components render")) {
-        setErrorMsg("Server error processing evaluation. Please check your network connection and try again.");
-      } else {
-        setErrorMsg(msg || "Failed to process evaluation");
-      }
+      setErrorMsg(msg || "Failed to process evaluation");
     } finally {
       setLoading(false);
     }

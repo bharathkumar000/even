@@ -67,6 +67,7 @@ import {
   Edit2,
 } from "lucide-react";
 import { format, formatDistanceToNow } from "date-fns";
+import { getContentForPortal } from "@/app/actions/content-hub";
 
 export type ContentType =
   | "problem_statement"
@@ -389,6 +390,63 @@ export default function ContentActivityHub({
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notification, setNotification] = useState<{ type: "success" | "error"; message: string } | null>(null);
+  const [hasLoaded, setHasLoaded] = useState(false);
+
+  // Client-side content fetching on mount - non-blocking with retry
+  useEffect(() => {
+    let mounted = true;
+    let retryCount = 0;
+    const MAX_RETRIES = 2;
+
+    const fetchContent = async () => {
+      if (mounted && initialItems.length === 0) {
+        setIsLoading(true);
+        setError(null);
+      }
+
+      while (retryCount <= MAX_RETRIES) {
+        try {
+          const result = await getContentForPortal(portalAudience, undefined, undefined, "published", 50, 0);
+          if (!mounted) return;
+
+          if (result.timedOut && retryCount < MAX_RETRIES) {
+            retryCount += 1;
+            // Exponential backoff: 1s, 2s
+            await new Promise((resolve) => setTimeout(resolve, 1000 * retryCount));
+            continue;
+          }
+
+          if (result.items && result.items.length > 0) {
+            setItems(result.items);
+            setError(null);
+          } else if (result.error && !result.timedOut) {
+            setError(result.error);
+          }
+          break;
+        } catch (err) {
+          if (!mounted) return;
+          if (retryCount < MAX_RETRIES) {
+            retryCount += 1;
+            await new Promise((resolve) => setTimeout(resolve, 1000 * retryCount));
+            continue;
+          }
+          setError(err instanceof Error ? err.message : "Failed to load content.");
+          break;
+        }
+      }
+
+      if (mounted) {
+        setIsLoading(false);
+        setHasLoaded(true);
+      }
+    };
+
+    fetchContent();
+
+    return () => {
+      mounted = false;
+    };
+  }, [portalAudience, initialItems.length]);
 
   // Filters
   const [filters, setFilters] = useState<ContentHubFilters>({

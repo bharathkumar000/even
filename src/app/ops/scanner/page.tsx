@@ -1,6 +1,5 @@
 import ScannerClientView from "./scanner-client";
 import { getActiveAnnouncements } from "@/app/actions/announcements";
-import { getContentForPortal } from "@/app/actions/content-hub";
 import AnnouncementBanner from "@/components/AnnouncementBanner";
 
 import RealtimeRoundsListener from "@/components/RealtimeRoundsListener";
@@ -12,15 +11,6 @@ import { ContentActivityHub } from "@/components/content-hub";
 export const dynamic = "force-dynamic";
 
 export default async function OpsScannerPage() {
-  // Fetch content for ops portal
-  let contentItems: any[] = [];
-  try {
-    const contentData = await getContentForPortal("operations", undefined, undefined, "published", 20);
-    contentItems = contentData.items || [];
-  } catch (err) {
-    console.error("Failed to load content for ops portal:", err);
-  }
-
   const [announcements, roundRes] = await Promise.all([
     getActiveAnnouncements("ops"),
     supabaseAdmin
@@ -33,6 +23,10 @@ export default async function OpsScannerPage() {
   ]);
 
   const activeRound = roundRes.data;
+
+  // ContentActivityHub fetches its own content client-side to avoid blocking the scanner
+  // initialItems is empty - the component will load data on mount
+  const contentItems: any[] = [];
 
   return (
     <div className="space-y-6 animate-fade-in font-tech">
@@ -105,13 +99,13 @@ export default async function OpsScannerPage() {
         audience="ops"
       />
 
-      {/* Content & Activity Hub for Operations */}
+      {/* Content & Activity Hub for Operations - loads content client-side to avoid blocking scanner */}
       <ContentActivityHub
         portalAudience="operations"
         showFilters={true}
         showSearch={true}
         showCreateButton={false}
-        initialItems={[]}
+        initialItems={contentItems}
         emptyMessage="No operational content published yet."
         loadingMessage="Loading operational content..."
         errorMessage="Failed to load operational content."

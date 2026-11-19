@@ -1279,7 +1279,7 @@ export async function processAutomatedScan(params: {
   // 3. Fetch team details
   const { data: team, error: teamErr } = await supabaseAdmin
     .from("teams")
-    .select("id, name, code, track, leader_name, qr_token, status")
+    .select("id, name, code, track, leader_name, qr_token, last_scanned_at, status")
     .eq("id", resolvedTeamId)
     .maybeSingle();
 
@@ -1314,6 +1314,75 @@ export async function processAutomatedScan(params: {
       },
     };
   }
+
+  // 5. Fetch ALL activity logs for this team ONCE (for all action types)
+  // This replaces multiple fetchTeamMembersForScan calls throughout the function
+  const { data: allLogsRaw, error: allLogsErr } = await supabaseAdmin
+    .from("event_activity_logs")
+    .select("id, participant_id, action_type, created_at, scanned_by, result")
+    .eq("team_id", team.id)
+    .eq("result", "success");
+
+  const allLogs = allLogsRaw || [];
+  if (allLogsErr) {
+    console.warn("Activity logs query notice:", allLogsErr.message);
+  }
+
+  // Fetch scanner profiles for all logs at once
+  const scannerIds = Array.from(new Set(allLogs.map((l) => l.scanned_by).filter(Boolean)));
+  let scannerMap: Record<string, { full_name: string; email: string }> = {};
+
+  if (scannerIds.length > 0) {
+    const { data: scanners } = await supabaseAdmin
+      .from("profiles")
+      .select("id, full_name, email")
+      .in("id", scannerIds);
+
+    if (scanners) {
+      scannerMap = Object.fromEntries(
+        scanners.map((s) => [
+          s.id,
+          {
+            full_name: s.full_name || "Club Member",
+            email: s.email || "",
+          },
+        ])
+      );
+    }
+  }
+
+  // Build enriched logs from cached data
+  const enrichedLogs: EnrichedActivityLog[] = allLogs.map((l) => ({
+    id: l.id,
+    participant_id: l.participant_id,
+    action_type: l.action_type,
+    created_at: l.created_at,
+    scanned_by: l.scanned_by,
+    scanner_name: l.scanned_by ? scannerMap[l.scanned_by]?.full_name || "Club Member" : "System",
+    scanner_email: l.scanned_by ? scannerMap[l.scanned_by]?.email || "" : "",
+    result: l.result,
+  }));
+
+  // Local function to build TeamScanData from cached data (replaces fetchTeamMembersForScan)
+  const buildTeamData = (): TeamScanData => ({
+    team: {
+      id: team.id,
+      name: team.name,
+      track: team.track,
+      leader_name: team.leader_name,
+      code: team.code,
+      qr_token: team.qr_token,
+      last_scanned_at: team.last_scanned_at,
+    },
+    members: members.map((m) => ({
+      id: m.id,
+      user_id: m.user_id,
+      role: m.role || "member",
+      name: m.name || "Member",
+      email: m.email || "",
+    })),
+    activityLogs: enrichedLogs,
+  });
 
   const nowIso = new Date().toISOString();
   const formatTime = (iso: string) => {
@@ -1361,8 +1430,6 @@ export async function processAutomatedScan(params: {
     }
     const timeStr = existing?.created_at ? formatTime(existing.created_at) : "";
 
-    const teamData = await fetchTeamMembersForScan(teamId).catch(() => null);
-
     return {
       success: false,
       status: "already_completed",
@@ -1377,7 +1444,7 @@ export async function processAutomatedScan(params: {
         id: participantId,
         name: participantName,
       },
-      teamData,
+      teamData: buildTeamData(),
     };
   };
 
@@ -1407,7 +1474,6 @@ export async function processAutomatedScan(params: {
 
       const teamActionCount = (teamActionLogs || []).length;
       if (teamActionCount >= 3) {
-        const teamData = await fetchTeamMembersForScan(team.id).catch(() => null);
         return {
           success: false,
           status: "limit_reached",
@@ -1426,29 +1492,23 @@ export async function processAutomatedScan(params: {
             email: targetMember.email,
             role: targetMember.role,
           },
-          teamData,
+          teamData: buildTeamData(),
           claimedCount: teamActionCount,
           totalMembers: members.length,
         };
       }
     }
 
-    // Duplicate check in event_activity_logs
-    const { data: existingLogs } = await supabaseAdmin
-      .from("event_activity_logs")
-      .select("id, created_at, operator_name, result")
-      .eq("participant_id", targetMember.user_id)
-      .eq("action_type", params.actionType)
-      .eq("result", "success")
-      .order("created_at", { ascending: false });
+    // Duplicate check in event_activity_logs (use cached enrichedLogs)
+    const existingLogs = enrichedLogs.filter(
+      (l) => l.participant_id === targetMember.user_id && l.action_type === params.actionType
+    );
 
-    const existingCount = (existingLogs || []).length;
+    const existingCount = existingLogs.length;
     if (existingCount > 0) {
-      const prev = existingLogs![0];
+      const prev = existingLogs[0];
       const prevTime = formatTime(prev.created_at);
-      const prevOp = prev.operator_name || "Operations Staff";
-
-      const teamData = await fetchTeamMembersForScan(team.id).catch(() => null);
+      const prevOp = prev.scanner_name || "Operations Staff";
 
       return {
         success: false,
@@ -1471,7 +1531,7 @@ export async function processAutomatedScan(params: {
           email: targetMember.email,
           role: targetMember.role,
         },
-        teamData,
+        teamData: buildTeamData(),
       };
     }
 
@@ -1555,8 +1615,6 @@ export async function processAutomatedScan(params: {
       ]);
     } catch {}
 
-    const teamData = await fetchTeamMembersForScan(team.id).catch(() => null);
-
     return {
       success: true,
       status: "success",
@@ -1575,7 +1633,7 @@ export async function processAutomatedScan(params: {
         email: targetMember.email,
         role: targetMember.role,
       },
-      teamData,
+      teamData: buildTeamData(),
     };
   }
 
@@ -1609,8 +1667,6 @@ export async function processAutomatedScan(params: {
     const prevTime = prev?.created_at ? formatTime(prev.created_at) : "";
     const prevOp = prev?.operator_name || "Operations Staff";
 
-    const teamData = await fetchTeamMembersForScan(team.id).catch(() => null);
-
     return {
       success: false,
       status: "limit_reached",
@@ -1625,7 +1681,7 @@ export async function processAutomatedScan(params: {
       },
       totalMembers: members.length,
       claimedCount: (existingTeamLogs || []).length,
-      teamData,
+      teamData: buildTeamData(),
     };
   }
 
@@ -1642,8 +1698,6 @@ export async function processAutomatedScan(params: {
     const prev = existingTeamLogs?.[0];
     const prevTime = prev?.created_at ? formatTime(prev.created_at) : "";
     const prevOp = prev?.operator_name || "Operations Staff";
-
-    const teamData = await fetchTeamMembersForScan(team.id).catch(() => null);
 
     return {
       success: false,
@@ -1664,7 +1718,7 @@ export async function processAutomatedScan(params: {
       },
       totalMembers: members.length,
       claimedCount: 0,
-      teamData,
+      teamData: buildTeamData(),
     };
   }
 
@@ -1741,8 +1795,6 @@ export async function processAutomatedScan(params: {
         }
         const timeStr = prev?.created_at ? formatTime(prev.created_at) : "";
 
-        const teamData = await fetchTeamMembersForScan(team.id).catch(() => null);
-
         return {
           success: false,
           status: "already_completed",
@@ -1758,7 +1810,7 @@ export async function processAutomatedScan(params: {
           },
           totalMembers: members.length,
           claimedCount: 0,
-          teamData,
+          teamData: buildTeamData(),
         };
       }
 
@@ -1832,8 +1884,6 @@ export async function processAutomatedScan(params: {
         ]);
       } catch {}
 
-      const teamData = await fetchTeamMembersForScan(team.id).catch(() => null);
-
       return {
         success: true,
         status: "success",
@@ -1848,7 +1898,7 @@ export async function processAutomatedScan(params: {
         },
         claimedCount: newlyClaimed.length,
         totalMembers: members.length,
-        teamData,
+        teamData: buildTeamData(),
       };
     }
 
@@ -1897,8 +1947,6 @@ export async function processAutomatedScan(params: {
     ]);
   } catch {}
 
-  const teamData = await fetchTeamMembersForScan(team.id).catch(() => null);
-
   return {
     success: true,
     status: "success",
@@ -1913,6 +1961,6 @@ export async function processAutomatedScan(params: {
     },
     claimedCount: membersToClaim.length,
     totalMembers: members.length,
-    teamData,
+    teamData: buildTeamData(),
   };
 }

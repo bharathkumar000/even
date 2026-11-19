@@ -220,6 +220,7 @@ export async function getContentHubData(filters?: ContentHubFilters): Promise<{
 export async function getContentForPortal(audience?: string, contentType?: string, category?: string, status: "published" = "published", limit = 50, offset = 0): Promise<{
   items: ContentHubItem[];
   error?: string;
+  timedOut?: boolean;
 }> {
   // Derive the authenticated user from the session — never trust a client-supplied audience
   const supabase = await createClient();
@@ -232,10 +233,16 @@ export async function getContentForPortal(audience?: string, contentType?: strin
     };
   }
 
+  // Timeout wrapper to prevent upstream request timeout
+  const RPC_TIMEOUT_MS = 8000;
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    setTimeout(() => reject(new Error("RPC_TIMEOUT")), RPC_TIMEOUT_MS);
+  });
+
   try {
     // Call the SECURITY INVOKER RPC with the user's session so RLS applies.
     // The caller's JWT enforces content_hub_can_access_audience() and RLS policies.
-    const { data, error } = await supabase.rpc("get_content_for_portal", {
+    const rpcPromise = supabase.rpc("get_content_for_portal", {
       p_audience: audience || null,
       p_content_type: contentType || null,
       p_category: category || null,
@@ -243,6 +250,8 @@ export async function getContentForPortal(audience?: string, contentType?: strin
       p_limit: limit,
       p_offset: offset,
     });
+
+    const { data, error } = await Promise.race([rpcPromise, timeoutPromise]);
 
     if (error) {
       console.error("Failed to load content for portal:", error.message);
@@ -254,6 +263,15 @@ export async function getContentForPortal(audience?: string, contentType?: strin
 
     return { items: (data || []) as ContentHubItem[] };
   } catch (err) {
+    const isTimeout = err instanceof Error && err.message === "RPC_TIMEOUT";
+    if (isTimeout) {
+      console.warn("getContentForPortal timed out after 8s, returning empty result");
+      return {
+        items: [],
+        error: "Content loading timed out. Retrying in background...",
+        timedOut: true,
+      };
+    }
     console.error("Failed to load content for portal:", err);
     return {
       items: [],
