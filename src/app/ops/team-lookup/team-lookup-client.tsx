@@ -206,8 +206,8 @@ export default function TeamLookupClientView({ initialTeamId }: TeamLookupClient
       )}
 
       {/* Search Section */}
-      <div className="glass-panel p-6 border border-border-color rounded-lg">
-        <div className="flex flex-col sm:flex-row gap-4 items-end">
+      <div className="glass-panel p-4 sm:p-6 border border-border-color rounded-xl">
+        <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-end">
           <div className="relative flex-1">
             <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-secondary" />
             <input
@@ -216,14 +216,14 @@ export default function TeamLookupClientView({ initialTeamId }: TeamLookupClient
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && handleSearch(searchQuery)}
-              className="w-full pl-9 pr-4 py-3 bg-surface-color border border-border-color rounded text-text-primary outline-none focus:border-accent-tertiary text-sm font-sans"
+              className="w-full pl-9 pr-4 py-3 bg-surface-color border border-border-color rounded-lg text-text-primary outline-none focus:border-accent-tertiary text-sm font-sans"
             />
           </div>
           <div className="flex gap-2">
             <button
               onClick={() => handleSearch(searchQuery)}
               disabled={searchLoading || !searchQuery.trim()}
-              className="px-5 py-3 bg-gradient-to-r from-accent-secondary to-accent-primary text-black font-tech font-bold uppercase text-xs rounded transition-all disabled:opacity-50 hover:opacity-90 shadow-[0_0_18px_rgba(255,0,127,0.28)] flex items-center gap-2"
+              className="flex-1 sm:flex-initial px-5 py-3 bg-gradient-to-r from-accent-secondary to-accent-primary text-black font-tech font-bold uppercase text-xs rounded-lg transition-all disabled:opacity-50 hover:opacity-90 shadow-[0_0_18px_rgba(255,0,127,0.28)] flex items-center justify-center gap-2"
             >
               <Search size={14} />
               <span>Search</span>
@@ -231,7 +231,7 @@ export default function TeamLookupClientView({ initialTeamId }: TeamLookupClient
             <button
               onClick={clearSearch}
               disabled={!searchQuery && !selectedTeam}
-              className="px-4 py-3 bg-surface-color border border-border-color text-text-primary font-tech font-bold uppercase text-xs rounded transition-all hover:bg-surface-color-light"
+              className="px-4 py-3 bg-surface-color border border-border-color text-text-primary font-tech font-bold uppercase text-xs rounded-lg transition-all hover:bg-surface-color-light flex items-center justify-center gap-1.5 disabled:opacity-50"
             >
               <X size={14} />
               <span>Clear</span>
@@ -241,13 +241,13 @@ export default function TeamLookupClientView({ initialTeamId }: TeamLookupClient
 
         {searchQuery && !searchLoading && searchResults.length === 0 && !searchError && (
           <p className="mt-4 text-center text-xs text-text-secondary/60 italic">
-            No teams found matching "{searchQuery}".
+            No teams found matching &quot;{searchQuery}&quot;.
           </p>
         )}
 
         {searchResults.length > 0 && (
-          <div className="mt-6 border border-border-color rounded-lg overflow-hidden">
-            <table className="w-full text-left border-collapse text-xs">
+          <div className="mt-6 border border-border-color rounded-xl overflow-x-auto">
+            <table className="w-full text-left border-collapse text-xs min-w-[560px]">
               <thead className="bg-surface-color-light/40 text-text-secondary uppercase tracking-wider">
                 <tr>
                   <th className="p-3 w-48">Team Name</th>
@@ -324,10 +324,10 @@ export default function TeamLookupClientView({ initialTeamId }: TeamLookupClient
           </div>
 
           {/* Team Header */}
-          <div className="glass-panel p-6 border border-accent-tertiary/40 rounded-lg">
+          <div className="glass-panel p-4 sm:p-6 border border-accent-tertiary/40 rounded-xl">
             <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 mb-6">
-              <div>
-                <div className="flex items-center gap-3">
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2 flex-wrap">
                   <span className="px-2 py-1 rounded text-[10px] font-bold uppercase border accent-tertiary/20 text-accent-tertiary border-accent-tertiary/40">
                     {selectedTeam.team.track || "GENERAL"}
                   </span>
@@ -342,10 +342,10 @@ export default function TeamLookupClientView({ initialTeamId }: TeamLookupClient
                     READ-ONLY
                   </span>
                 </div>
-                <h2 className="font-heading text-2xl text-text-primary uppercase m-0 mt-2">
+                <h2 className="font-heading text-xl sm:text-2xl text-text-primary uppercase m-0 mt-2 truncate">
                   {selectedTeam.team.name}
                 </h2>
-                <p className="text-xs text-text-secondary m-0 mt-1 font-mono">
+                <p className="text-xs text-text-secondary m-0 mt-1 font-mono break-all">
                   Team ID: {selectedTeam.team.id}
                 </p>
                 {selectedTeam.team.leader_name && (
@@ -357,8 +357,8 @@ export default function TeamLookupClientView({ initialTeamId }: TeamLookupClient
                   Verification only — no status changes permitted.
                 </p>
               </div>
-              <div className="flex items-center gap-4">
-                <div className="p-3 bg-surface-color border border-border-color rounded text-center">
+              <div className="grid grid-cols-2 gap-3 sm:flex sm:items-center sm:gap-4">
+                <div className="p-3 bg-surface-color border border-border-color rounded-lg text-center flex-1 sm:flex-initial">
                   <span className="block text-[10px] text-text-secondary uppercase font-bold">
                     Members
                   </span>
@@ -366,11 +366,11 @@ export default function TeamLookupClientView({ initialTeamId }: TeamLookupClient
                     {selectedTeam.members.length}
                   </span>
                 </div>
-                <div className="p-3 bg-surface-color border border-border-color rounded text-center">
+                <div className="p-3 bg-surface-color border border-border-color rounded-lg text-center flex-1 sm:flex-initial">
                   <span className="block text-[10px] text-text-secondary uppercase font-bold">
                     Last Scanned
                   </span>
-                  <span className="block text-xs font-mono text-text-secondary">
+                  <span className="block text-xs font-mono text-text-secondary truncate">
                     {selectedTeam.team.last_scanned_at
                       ? formatTimestamp(selectedTeam.team.last_scanned_at)
                       : "—"}
@@ -381,7 +381,7 @@ export default function TeamLookupClientView({ initialTeamId }: TeamLookupClient
           </div>
 
           {/* Member Roster (Read-Only) */}
-          <div className="glass-panel p-6 border border-border-color rounded-lg">
+          <div className="glass-panel p-4 sm:p-6 border border-border-color rounded-xl">
             <div className="flex items-center justify-between mb-4">
               <h3 className="font-heading text-sm text-text-primary uppercase m-0">
                 Team Members ({selectedTeam.members.length})
@@ -395,19 +395,9 @@ export default function TeamLookupClientView({ initialTeamId }: TeamLookupClient
                 No team members found.
               </p>
             ) : (
-              <table className="w-full text-left border-collapse text-xs">
-                <thead className="bg-surface-color-light/40 text-text-secondary uppercase tracking-wider">
-                  <tr>
-                    <th className="p-3">Member</th>
-                    <th className="p-3 w-20 text-center">Role</th>
-                    <th className="p-3 w-24 text-center">Registration</th>
-                    <th className="p-3 w-24 text-center">Kit / Goodies</th>
-                    <th className="p-3 w-20 text-center">Lunch</th>
-                    <th className="p-3 w-20 text-center">Snacks</th>
-                    <th className="p-3 w-24 text-center">Certificates</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border-color/30">
+              <>
+                {/* Mobile Cards View (md:hidden) */}
+                <div className="block md:hidden space-y-3">
                   {selectedTeam.members.map((member) => {
                     const regLog = selectedTeam.activity.find(
                       (a) => a.action_type === "registration" && a.result === "success"
@@ -425,30 +415,22 @@ export default function TeamLookupClientView({ initialTeamId }: TeamLookupClient
                       (a) => a.action_type === "certificates" && a.result === "success"
                     );
 
-                    const statusBadge = (claimed: boolean, label: string) => (
-                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase border ${
-                        claimed
-                          ? "bg-status-success/10 text-status-success border-status-success/40"
-                          : "bg-surface-color text-text-secondary border-border-color"
-                      }`}>
-                        {claimed ? <CheckCircle2 size={11} className="text-status-success" /> : ""}
-                        {label}
-                      </span>
-                    );
-
                     return (
-                      <tr key={member.id} className="hover:bg-surface-color-light/20 transition-colors">
-                        <td className="p-3">
-                          <p className="font-heading text-sm text-text-primary uppercase m-0 leading-none">
-                            {member.name || member.email?.split("@")[0] || "Member"}
-                          </p>
-                          <span className="text-[10px] font-mono text-text-secondary">
-                            {member.email || member.user_id.slice(0, 8)}
-                          </span>
-                        </td>
-                        <td className="p-3 text-center">
+                      <div
+                        key={member.id}
+                        className="p-3 bg-surface-color/50 border border-border-color rounded-lg space-y-2.5"
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="min-w-0 flex-1">
+                            <p className="font-heading text-sm text-text-primary uppercase m-0 truncate">
+                              {member.name || member.email?.split("@")[0] || "Member"}
+                            </p>
+                            <span className="text-[10px] font-mono text-text-secondary truncate block">
+                              {member.email || member.user_id.slice(0, 8)}
+                            </span>
+                          </div>
                           <span
-                            className={`px-2 py-0.5 border text-[10px] font-bold uppercase ${
+                            className={`px-2 py-0.5 border text-[9px] font-bold uppercase rounded shrink-0 ${
                               member.role === "leader"
                                 ? "bg-accent-secondary/15 text-accent-secondary border-accent-secondary"
                                 : "bg-surface-color text-text-secondary border-border-color"
@@ -456,48 +438,141 @@ export default function TeamLookupClientView({ initialTeamId }: TeamLookupClient
                           >
                             {member.role || "Member"}
                           </span>
-                        </td>
-                        <td className="p-3 text-center">
-                          {statusBadge(Boolean(regLog), regLog ? "Checked-In" : "Pending")}
-                          {regLog && (
-                            <p className="text-[9px] text-text-secondary font-mono m-0 mt-1">
-                              {formatRelative(regLog.created_at)}
-                            </p>
-                          )}
-                        </td>
-                        <td className="p-3 text-center">
-                          {statusBadge(Boolean(goodiesLog), goodiesLog ? "Distributed" : "Pending")}
-                          {goodiesLog && (
-                            <p className="text-[9px] text-text-secondary font-mono m-0 mt-1">
-                              {formatRelative(goodiesLog.created_at)}
-                            </p>
-                          )}
-                        </td>
-                        <td className="p-3 text-center">
-                          {statusBadge(lunchLogs.length > 0, `${lunchLogs.length}/3`)}
-                        </td>
-                        <td className="p-3 text-center">
-                          {statusBadge(snacksLogs.length > 0, `${snacksLogs.length}/3`)}
-                        </td>
-                        <td className="p-3 text-center">
-                          {statusBadge(Boolean(certLog), certLog ? "Issued" : "Pending")}
-                          {certLog && (
-                            <p className="text-[9px] text-text-secondary font-mono m-0 mt-1">
-                              {formatRelative(certLog.created_at)}
-                            </p>
-                          )}
-                        </td>
-                      </tr>
+                        </div>
+
+                        {/* Status Badges */}
+                        <div className="grid grid-cols-3 xs:grid-cols-5 gap-1.5 pt-2 border-t border-border-color/30 text-center">
+                          <div className={`p-1 rounded border text-[9px] font-bold uppercase ${regLog ? "bg-status-success/15 text-status-success border-status-success/40" : "bg-surface-color text-text-secondary/60 border-border-color/40"}`}>
+                            <span>Check-In</span>
+                            {regLog && <CheckCircle2 size={9} className="inline ml-0.5" />}
+                          </div>
+                          <div className={`p-1 rounded border text-[9px] font-bold uppercase ${goodiesLog ? "bg-status-success/15 text-status-success border-status-success/40" : "bg-surface-color text-text-secondary/60 border-border-color/40"}`}>
+                            <span>Goodies</span>
+                            {goodiesLog && <CheckCircle2 size={9} className="inline ml-0.5" />}
+                          </div>
+                          <div className={`p-1 rounded border text-[9px] font-bold uppercase ${lunchLogs.length > 0 ? "bg-status-success/15 text-status-success border-status-success/40" : "bg-surface-color text-text-secondary/60 border-border-color/40"}`}>
+                            <span>Lunch ({lunchLogs.length}/3)</span>
+                          </div>
+                          <div className={`p-1 rounded border text-[9px] font-bold uppercase ${snacksLogs.length > 0 ? "bg-status-success/15 text-status-success border-status-success/40" : "bg-surface-color text-text-secondary/60 border-border-color/40"}`}>
+                            <span>Snacks ({snacksLogs.length}/3)</span>
+                          </div>
+                          <div className={`p-1 rounded border text-[9px] font-bold uppercase ${certLog ? "bg-status-success/15 text-status-success border-status-success/40" : "bg-surface-color text-text-secondary/60 border-border-color/40"}`}>
+                            <span>Cert</span>
+                            {certLog && <CheckCircle2 size={9} className="inline ml-0.5" />}
+                          </div>
+                        </div>
+                      </div>
                     );
                   })}
-                </tbody>
-              </table>
+                </div>
+
+                {/* Desktop Table View (hidden md:block) */}
+                <div className="hidden md:block overflow-x-auto">
+                  <table className="w-full text-left border-collapse text-xs min-w-[620px]">
+                    <thead className="bg-surface-color-light/40 text-text-secondary uppercase tracking-wider">
+                      <tr>
+                        <th className="p-3">Member</th>
+                        <th className="p-3 w-20 text-center">Role</th>
+                        <th className="p-3 w-24 text-center">Registration</th>
+                        <th className="p-3 w-24 text-center">Kit / Goodies</th>
+                        <th className="p-3 w-20 text-center">Lunch</th>
+                        <th className="p-3 w-20 text-center">Snacks</th>
+                        <th className="p-3 w-24 text-center">Certificates</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border-color/30">
+                      {selectedTeam.members.map((member) => {
+                        const regLog = selectedTeam.activity.find(
+                          (a) => a.action_type === "registration" && a.result === "success"
+                        );
+                        const goodiesLog = selectedTeam.activity.find(
+                          (a) => a.action_type === "goodies" && a.result === "success"
+                        );
+                        const lunchLogs = selectedTeam.activity.filter(
+                          (a) => a.action_type === "lunch" && a.result === "success"
+                        );
+                        const snacksLogs = selectedTeam.activity.filter(
+                          (a) => a.action_type === "snacks" && a.result === "success"
+                        );
+                        const certLog = selectedTeam.activity.find(
+                          (a) => a.action_type === "certificates" && a.result === "success"
+                        );
+
+                        const statusBadge = (claimed: boolean, label: string) => (
+                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase border ${
+                            claimed
+                              ? "bg-status-success/10 text-status-success border-status-success/40"
+                              : "bg-surface-color text-text-secondary border-border-color"
+                          }`}>
+                            {claimed ? <CheckCircle2 size={11} className="text-status-success" /> : ""}
+                            {label}
+                          </span>
+                        );
+
+                        return (
+                          <tr key={member.id} className="hover:bg-surface-color-light/20 transition-colors">
+                            <td className="p-3">
+                              <p className="font-heading text-sm text-text-primary uppercase m-0 leading-none">
+                                {member.name || member.email?.split("@")[0] || "Member"}
+                              </p>
+                              <span className="text-[10px] font-mono text-text-secondary">
+                                {member.email || member.user_id.slice(0, 8)}
+                              </span>
+                            </td>
+                            <td className="p-3 text-center">
+                              <span
+                                className={`px-2 py-0.5 border text-[10px] font-bold uppercase ${
+                                  member.role === "leader"
+                                    ? "bg-accent-secondary/15 text-accent-secondary border-accent-secondary"
+                                    : "bg-surface-color text-text-secondary border-border-color"
+                                }`}
+                              >
+                                {member.role || "Member"}
+                              </span>
+                            </td>
+                            <td className="p-3 text-center">
+                              {statusBadge(Boolean(regLog), regLog ? "Checked-In" : "Pending")}
+                              {regLog && (
+                                <p className="text-[9px] text-text-secondary font-mono m-0 mt-1">
+                                  {formatRelative(regLog.created_at)}
+                                </p>
+                              )}
+                            </td>
+                            <td className="p-3 text-center">
+                              {statusBadge(Boolean(goodiesLog), goodiesLog ? "Distributed" : "Pending")}
+                              {goodiesLog && (
+                                <p className="text-[9px] text-text-secondary font-mono m-0 mt-1">
+                                  {formatRelative(goodiesLog.created_at)}
+                                </p>
+                              )}
+                            </td>
+                            <td className="p-3 text-center">
+                              {statusBadge(lunchLogs.length > 0, `${lunchLogs.length}/3`)}
+                            </td>
+                            <td className="p-3 text-center">
+                              {statusBadge(snacksLogs.length > 0, `${snacksLogs.length}/3`)}
+                            </td>
+                            <td className="p-3 text-center">
+                              {statusBadge(Boolean(certLog), certLog ? "Issued" : "Pending")}
+                              {certLog && (
+                                <p className="text-[9px] text-text-secondary font-mono m-0 mt-1">
+                                  {formatRelative(certLog.created_at)}
+                                </p>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </>
             )}
           </div>
 
           {/* Activity Log (Read-Only) */}
           {selectedTeam.activity.length > 0 && (
-            <div className="glass-panel p-6 border border-border-color rounded-lg">
+            <div className="glass-panel p-4 sm:p-6 border border-border-color rounded-xl">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="font-heading text-sm text-text-primary uppercase m-0">
                   Activity History
@@ -507,7 +582,7 @@ export default function TeamLookupClientView({ initialTeamId }: TeamLookupClient
                 </span>
               </div>
               <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse text-xs">
+                <table className="w-full text-left border-collapse text-xs min-w-[560px]">
                   <thead className="bg-surface-color-light/40 text-text-secondary uppercase tracking-wider">
                     <tr>
                       <th className="p-3 w-32">Time</th>

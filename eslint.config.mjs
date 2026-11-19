@@ -15,8 +15,14 @@ const eslintConfig = [
     rules: {
       "@typescript-eslint/no-explicit-any": "warn",
       "@typescript-eslint/no-unused-vars": "warn",
+      "@typescript-eslint/no-require-imports": "warn",
       "react/no-unescaped-entities": "warn",
+      "react/jsx-no-comment-textnodes": "warn",
       "react-hooks/set-state-in-effect": "warn",
+      "react-hooks/immutability": "warn",
+      "react-hooks/refs": "warn",
+      "react-hooks/preserve-manual-memoization": "warn",
+      "prefer-const": "warn",
     },
   },
   {
@@ -26,6 +32,11 @@ const eslintConfig = [
       "out/**",
       "build/**",
       "next-env.d.ts",
+      "tailwind.config.js",
+      "*.mjs",
+      "*.js",
+      "*.gs",
+      "scripts/**",
     ],
   },
 ];

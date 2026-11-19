@@ -82,5 +82,11 @@ export interface JudgeEvaluationMatrixResponse {
   rows?: JudgeEvaluationMatrixRow[];
   kpis?: JudgeEvaluationMatrixKPIs;
   uniqueJudges?: string[];
+  availableRounds?: Array<{
+    id: string;
+    title: string;
+    status: string;
+    sequence_order?: number;
+  }>;
 }
 

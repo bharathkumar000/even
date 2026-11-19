@@ -19,12 +19,14 @@ import {
   ScrollText,
 } from "lucide-react";
 import SignOutButton from "@/components/SignOutButton";
+import { isDeliverablesUnlocked } from "@/lib/event-schedule";
 
 interface TeamSidebarProps {
   teamName?: string;
   leaderName?: string;
   track?: string;
   isLeader?: boolean;
+  isUnlocked?: boolean;
 }
 
 export default function TeamSidebar({
@@ -32,8 +34,10 @@ export default function TeamSidebar({
   leaderName = "Team Member",
   track = "Innovation",
   isLeader = true,
+  isUnlocked,
 }: TeamSidebarProps) {
   const pathname = usePathname();
+  const unlocked = isUnlocked ?? isDeliverablesUnlocked();
 
   const navItems = [
     {
@@ -43,24 +47,32 @@ export default function TeamSidebar({
       badge: "Console",
       exact: true,
     },
-    {
-      href: "/team/submission",
-      icon: FileUp,
-      label: "Project Deliverables",
-      badge: isLeader ? "Required" : "View",
-    },
+    ...(unlocked
+      ? [
+          {
+            href: "/team/submission",
+            icon: FileUp,
+            label: "Project Deliverables",
+            badge: isLeader ? "Required" : "View",
+          },
+        ]
+      : []),
     {
       href: "/team/qr",
       icon: QrCode,
       label: "Event QR Pass",
       badge: "Check-in",
     },
+    ...(unlocked
+      ? [
+          {
+            href: "/team/problem-statements",
+            icon: ScrollText,
+            label: "Problem Statements",
+          },
+        ]
+      : []),
     {
-      href: "/team/problem-statements",
-      icon: ScrollText,
-      label: "Problem Statements",
-    },
-      {
       href: "/team/results",
       icon: Trophy,
       label: "Results & Standings",

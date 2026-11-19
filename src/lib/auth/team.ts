@@ -73,18 +73,18 @@ export async function requireAuthenticatedTeamUser() {
   let teamId = membership?.team_id || null;
   let role = membership?.role || "member";
 
-  // Fallback: If user is not in team_members, check teams table by user email
+  // Fallback: If user is not in team_members, check team_registrations by user email
   if (!teamId && user.email) {
     try {
-      const { data: teamByLeader } = await supabaseAdmin
-        .from("teams")
-        .select("id, leader_name")
-        .ilike("leader_email", user.email)
+      const { data: regByLeader } = await supabaseAdmin
+        .from("team_registrations")
+        .select("team_id")
+        .or(`leader_email.ilike.${user.email},login_email.ilike.${user.email}`)
         .limit(1)
         .maybeSingle();
 
-      if (teamByLeader) {
-        teamId = teamByLeader.id;
+      if (regByLeader?.team_id) {
+        teamId = regByLeader.team_id;
         role = "leader";
       }
     } catch {

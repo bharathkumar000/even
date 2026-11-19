@@ -412,14 +412,14 @@ export default function AssignedTeamsClientView({
                   </span>
                 </div>
 
-                <div className="pt-2 border-t border-border-color/40 flex items-center justify-between">
-                  <div className="flex items-center gap-2 text-xs text-text-secondary">
+                <div className="pt-2 border-t border-border-color/40 flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex flex-wrap items-center gap-2 text-xs text-text-secondary">
                     <span className="flex items-center gap-1">
                       <Shield size={12} className="text-accent-secondary" />
                       SPOC: {team.assignment.spoc_name}
                     </span>
                     <span>•</span>
-                    <span className="font-mono">
+                    <span className="font-mono text-[11px]">
                       Assigned: {team.assignment.allotted_at ? formatDateShort(team.assignment.allotted_at) : "—"}
                     </span>
                   </div>
@@ -430,34 +430,30 @@ export default function AssignedTeamsClientView({
                     <p className="text-[10px] text-text-secondary uppercase tracking-wider font-bold mb-1.5">
                       Team Leader
                     </p>
-                    <div className="flex items-center gap-2 text-xs text-text-primary">
-                      <User size={12} />
-                      <span className="font-medium">{team.leader_name}</span>
+                    <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1.5 text-xs text-text-primary">
+                      <span className="flex items-center gap-1 shrink-0">
+                        <User size={12} />
+                        <span className="font-medium">{team.leader_name}</span>
+                      </span>
                       {team.leader_email && (
-                        <>
-                          <span className="text-text-secondary">•</span>
-                          <a
-                            href={`mailto:${team.leader_email}`}
-                            className="text-accent-secondary hover:underline font-mono"
-                            onClick={(e) => e.stopPropagation()}
-                          >
-                            <Mail size={10} />
-                            {team.leader_email}
-                          </a>
-                        </>
+                        <a
+                          href={`mailto:${team.leader_email}`}
+                          className="flex items-center gap-1 text-accent-secondary hover:underline font-mono break-all max-w-[200px] truncate"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <Mail size={10} className="shrink-0" />
+                          <span className="truncate">{team.leader_email}</span>
+                        </a>
                       )}
                       {team.leader_phone && (
-                        <>
-                          <span className="text-text-secondary">•</span>
-                          <a
-                            href={`tel:${team.leader_phone}`}
-                            className="text-accent-secondary hover:underline font-mono"
-                            onClick={(e) => e.stopPropagation()}
-                          >
-                            <Phone size={10} />
-                            {team.leader_phone}
-                          </a>
-                        </>
+                        <a
+                          href={`tel:${team.leader_phone}`}
+                          className="flex items-center gap-1 text-accent-secondary hover:underline font-mono shrink-0"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <Phone size={10} className="shrink-0" />
+                          <span>{team.leader_phone}</span>
+                        </a>
                       )}
                     </div>
                   </div>

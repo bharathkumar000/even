@@ -510,18 +510,13 @@ export default function ContentHubClientView({
     loading: false,
   });
 
-  // Filter states
+  // Filter states for SIH fields
   const [departmentFilter, setDepartmentFilter] = useState<string>("all");
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
   const [sihYearFilter, setSihYearFilter] = useState<string>("all");
 
   // SIH Import dialog state
   const [sihImportOpen, setSihImportOpen] = useState(false);
-
-  // Filter states for SIH fields
-  const [departmentFilter, setDepartmentFilter] = useState<string>("all");
-  const [categoryFilter, setCategoryFilter] = useState<string>("all");
-  const [sihYearFilter, setSihYearFilter] = useState<string>("all");
 
 
   const selectedActivity = useMemo(

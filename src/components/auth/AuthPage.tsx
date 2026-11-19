@@ -2,7 +2,6 @@
 
 import React, { useState, useEffect, startTransition } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
 import Image from "next/image";
 import { createClient } from "@/lib/supabase/client";
 import { signInWithCredentials } from "@/app/actions/auth-login";
@@ -409,7 +408,7 @@ export default function AuthPage({ isSignUp = false }: { isSignUp?: boolean }) {
               <div className="absolute top-3 left-3 w-2.5 h-2.5 border-t-1.5 border-l-1.5 border-white/15 pointer-events-none" />
               <div className="absolute bottom-3 right-3 w-2.5 h-2.5 border-b-1.5 border-r-1.5 border-white/15 pointer-events-none" />
               
-              <div className="p-5 sm:p-6 lg:p-7 space-y-5">
+              <div className="p-4 sm:p-6 lg:p-7 space-y-4 sm:space-y-5">
                 
                 {/* Card Header */}
                 <div className="flex flex-col items-center text-center">
@@ -635,7 +634,7 @@ export default function AuthPage({ isSignUp = false }: { isSignUp?: boolean }) {
                     <button
                       type="submit"
                       disabled={loading || (!isDev && rateLimitCooldown > 0)}
-                      className="w-full py-3 px-5 bg-[#ff007f] hover:bg-[#e60072] disabled:opacity-50 text-white font-bold text-[10px] uppercase tracking-[1.2px] rounded-lg transition-all shadow-[0_0_18px_rgba(255,0,127,0.35)] flex items-center justify-center gap-2 mt-1 cursor-pointer active:scale-[0.99]"
+                      className="w-full py-3 px-5 bg-[#ff007f] hover:bg-[#e60072] disabled:opacity-50 text-white font-bold text-[10px] uppercase tracking-[1.2px] rounded-lg transition-all shadow-[0_0_18px_rgba(255,0,127,0.35)] flex items-center justify-center gap-2 mt-1 cursor-pointer active:scale-[0.99] min-h-[44px]"
                     >
                       <span>
                         {!isDev && rateLimitCooldown > 0
@@ -650,7 +649,6 @@ export default function AuthPage({ isSignUp = false }: { isSignUp?: boolean }) {
                       </span>
                       <ArrowRight size={13} />
                     </button>
-
                     </form>
                 )}
 

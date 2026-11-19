@@ -53,7 +53,7 @@ export default async function AdminDashboardPage() {
     ] = await Promise.allSettled([
       supabaseAdmin.from("profiles").select("role"),
       supabaseAdmin.from("team_members").select("id", { count: "exact", head: true }).eq("role", "leader"),
-      supabaseAdmin.from("teams").select("id", { count: "exact", head: true }),
+      supabaseAdmin.from("teams").select("id, name, code, status"),
       supabaseAdmin.from("evaluation_rounds").select("id", { count: "exact", head: true }).eq("status", "open"),
       supabaseAdmin.from("evaluations").select("id", { count: "exact", head: true }).eq("status", "draft"),
       supabaseAdmin.from("event_results").select("is_published").eq("is_published", true).limit(1),
@@ -69,8 +69,20 @@ export default async function AdminDashboardPage() {
       const tmLeaders = teamMembersRes.status === "fulfilled" && typeof teamMembersRes.value.count === "number" ? teamMembersRes.value.count : 0;
       leaderCount = Math.max(profileLeaders, tmLeaders);
     }
-    if (teamsRes.status === "fulfilled" && teamsRes.value && typeof teamsRes.value.count === "number") {
-      totalTeams = teamsRes.value.count;
+    if (teamsRes.status === "fulfilled" && teamsRes.value && Array.isArray(teamsRes.value.data)) {
+      totalTeams = teamsRes.value.data.filter((t: any) => {
+        const name = String(t.name || "").toLowerCase().trim();
+        const code = String(t.code || "").toUpperCase().trim();
+        const status = String(t.status || "").toLowerCase().trim();
+        return !(
+          status === "test" ||
+          name === "code" ||
+          code.includes("TEST") ||
+          code.includes("ADMIN") ||
+          code.includes("DEV") ||
+          name.startsWith("test")
+        );
+      }).length;
     }
     if (roundsRes.status === "fulfilled" && roundsRes.value && typeof roundsRes.value.count === "number") {
       activeRounds = roundsRes.value.count;

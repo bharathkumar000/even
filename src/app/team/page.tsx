@@ -35,23 +35,25 @@ import PitchAlertListener from "@/components/team/PitchAlertListener";
 import TeamActivitySyncListener from "@/components/team/TeamActivitySyncListener";
 import { getTeamRegistrationByEmail } from "@/lib/googleSheet";
 import { ContentActivityHub } from "@/components/content-hub";
+import TeamPullToRefresh from "@/components/team/TeamPullToRefresh";
+import { isDeliverablesUnlocked } from "@/lib/event-schedule";
 
 export const dynamic = "force-dynamic";
 
-const SPOC_CONTACTS = [
-  { name: "Monish", phone: "9591755995", email: "vvce25ec0308@vvce.ac.in" },
-  { name: "Ananya", phone: "9742993151", email: "vvce25cse0005@vvce.ac.in" },
-  { name: "Anirudh", phone: "7975211494", email: "vvce25cse0129@vvce.ac.in" },
-  { name: "Anish", phone: "7975274945", email: "vvce25cse0342@vvce.ac.in" },
-  { name: "PSP", phone: "8073565631", email: "vvce25cse0402@vvce.ac.in" },
-  { name: "Vaishnavi", phone: "9845019351", email: "vvce25cseaiml0180@vvce.ac.in" },
-  { name: "Bhavana", phone: "9632327370", email: "vvce25ec0220@vvce.ac.in" },
-  { name: "Ramya", phone: "9035677873", email: "vvce25cse0158@vvce.ac.in" },
-  { name: "Vidhith", phone: "8147526812", email: "vvce25cse0089@vvce.ac.in" },
-  { name: "Charan", phone: "8088436353", email: "vvce25ec0244@vvce.ac.in" },
-  { name: "Mamatha", phone: "9743777121", email: "vvce25ec0183@vvce.ac.in" },
-  { name: "Rahul", phone: "7348877344", email: "vvce25cse0647@vvce.ac.in" },
-];
+const SPOC_PHONE_MAP: Record<string, string> = {
+  monish: "9591755995",
+  ananya: "9742993151",
+  anirudh: "7975211494",
+  anish: "7975274945",
+  psp: "8073565631",
+  vaishnavi: "9845019351",
+  bhavana: "9632327370",
+  ramya: "9035677873",
+  vidhith: "8147526812",
+  charan: "8088436353",
+  mamatha: "9743777121",
+  rahul: "7348877344",
+};
 
 export default async function TeamDashboardPage() {
   const { teamId, user, role } = await requireAuthenticatedTeamUser();
@@ -65,6 +67,7 @@ export default async function TeamDashboardPage() {
   let publishedResult: any = null;
   let announcements: any[] = [];
   let assignedSpoc: any = null;
+  let assignedPS: any = null;
 
   // Fetch content for team portal
   let contentItems: any[] = [];
@@ -76,7 +79,7 @@ export default async function TeamDashboardPage() {
   }
 
   try {
-    const [teamRes, membersRes, logsRes, subRes, roundRes, resultRes, annRes, spocAssignRes] =
+    const [teamRes, membersRes, logsRes, subRes, roundRes, resultRes, annRes, spocAssignRes, psAssignRes] =
       await Promise.all([
         supabaseAdmin
           .from("teams")
@@ -126,6 +129,18 @@ export default async function TeamDashboardPage() {
           `)
           .eq("team_id", effectiveTeamId)
           .maybeSingle(),
+        supabaseAdmin
+          .from("team_problem_statement_assignments")
+          .select(`
+            problem_statement_id,
+            problem_statements (
+              id,
+              reference_number,
+              title
+            )
+          `)
+          .eq("team_id", effectiveTeamId)
+          .maybeSingle(),
       ]);
 
     if (teamRes.data) teamInfo = teamRes.data;
@@ -157,12 +172,25 @@ export default async function TeamDashboardPage() {
     if (spocAssignRes.data && (spocAssignRes.data as any).spocs) {
       assignedSpoc = (spocAssignRes.data as any).spocs;
     }
+    if (psAssignRes?.data && (psAssignRes.data as any).problem_statements) {
+      assignedPS = (psAssignRes.data as any).problem_statements;
+    }
   } catch (err) {
     console.error("Failed to load team dashboard data:", err);
   }
 
+  const isUnlocked = isDeliverablesUnlocked();
   const isLeader = role === "leader" || !teamId;
   const totalMembers = Math.max(members.length, 1);
+
+  const psDisplayTitle =
+    assignedPS?.reference_number || assignedPS?.title || "Track Deliverable";
+
+  const assignedSpocPhone =
+    assignedSpoc?.phone ||
+    (assignedSpoc?.name
+      ? SPOC_PHONE_MAP[assignedSpoc.name.trim().toLowerCase()]
+      : null);
 
   // Distribution counters
   const regCount = activityLogs.filter((l) => l.action_type === "registration").length;
@@ -178,7 +206,8 @@ export default async function TeamDashboardPage() {
   const hasSubmitted = !!currentSubmission?.ppt_url;
 
   return (
-    <div className="space-y-8 animate-fade-in font-tech">
+    <TeamPullToRefresh>
+      <div className="space-y-8 animate-fade-in font-tech">
       {/* Real-time Jury Pitch Call Alert */}
       <PitchAlertListener teamId={effectiveTeamId} teamName={teamInfo?.name} />
 
@@ -189,26 +218,26 @@ export default async function TeamDashboardPage() {
 
 
       {/* Top Header */}
-      <div className="border-b border-border-color pb-6">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="border-b border-border-color pb-4 sm:pb-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
           <div>
-            <p className="font-tech text-xs uppercase tracking-[3px] text-accent-secondary font-bold mb-1">
+            <p className="font-tech text-[10px] sm:text-xs uppercase tracking-[3px] text-accent-secondary font-bold mb-1">
               Event Console // Team Lead
             </p>
-            <h1 className="text-3xl md:text-5xl font-heading text-text-primary tracking-wider uppercase m-0 flex items-center gap-3">
+            <h1 className="text-2xl sm:text-3xl md:text-5xl font-heading text-text-primary tracking-wider uppercase m-0 flex flex-wrap items-center gap-2 sm:gap-3">
               <span>{teamInfo?.name || "Team Console"}</span>
               <span className="text-accent-secondary">Dashboard</span>
             </h1>
-            <p className="font-tech text-text-secondary text-xs mt-2">
+            <p className="font-tech text-text-secondary text-xs mt-1.5 sm:mt-2">
               ViceVerse Ideathon 2026 — team deliverables, roster distribution & evaluation status.
             </p>
           </div>
 
-          <div className="flex items-center gap-2">
-            <span className="px-3 py-1 bg-surface-color border border-border-color text-text-secondary text-xs uppercase font-mono">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="px-2.5 py-1 bg-surface-color border border-border-color text-text-secondary text-[11px] sm:text-xs uppercase font-mono">
               Track: <span className="text-accent-primary font-bold">{teamInfo?.track || "GENERAL"}</span>
             </span>
-            <span className="px-3 py-1 bg-accent-secondary/15 border border-accent-secondary text-accent-secondary text-xs uppercase font-mono font-bold">
+            <span className="px-2.5 py-1 bg-accent-secondary/15 border border-accent-secondary text-accent-secondary text-[11px] sm:text-xs uppercase font-mono font-bold">
               {isLeader ? "LEADER CONSOLE" : "MEMBER"}
             </span>
           </div>
@@ -223,9 +252,9 @@ export default async function TeamDashboardPage() {
       />
 
       {/* Primary KPI Row: Team Status & Submission State */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+      <div className={`grid grid-cols-1 sm:grid-cols-2 ${isUnlocked ? "lg:grid-cols-4" : "lg:grid-cols-2"} gap-3 sm:gap-5`}>
         {/* Approved Roster Card */}
-        <div className="glass-panel p-5 border border-border-color rounded-xl flex flex-col justify-between relative overflow-hidden transition-all hover:border-border-color/80 group">
+        <div className="glass-panel p-4 sm:p-5 border border-border-color rounded-xl flex flex-col justify-between relative overflow-hidden transition-all hover:border-border-color/80 group">
           <div className="flex items-start justify-between gap-3 mb-2">
             <div className="min-w-0 flex-1">
               <span className="text-[10px] uppercase tracking-wider text-text-secondary font-bold block mb-1 truncate">
@@ -235,104 +264,115 @@ export default async function TeamDashboardPage() {
                 {totalMembers}
               </p>
             </div>
-            <div className="p-2.5 bg-accent-tertiary/10 border border-accent-tertiary/30 text-accent-tertiary rounded-lg shrink-0 flex items-center justify-center transition-transform group-hover:scale-105">
-              <Users size={20} />
+            <div className="p-2 sm:p-2.5 bg-accent-tertiary/10 border border-accent-tertiary/30 text-accent-tertiary rounded-lg shrink-0 flex items-center justify-center transition-transform group-hover:scale-105">
+              <Users size={18} className="sm:w-5 sm:h-5" />
             </div>
           </div>
-          <div className="pt-3 border-t border-border-color/50 mt-3 flex items-center justify-between text-xs gap-2">
+          <div className="pt-3 sm:pt-4 border-t border-border-color/50 mt-3 flex items-center justify-between text-xs gap-2">
             <span className="text-status-success flex items-center gap-1 font-bold shrink-0">
               <CheckCircle2 size={13} /> Active Roster
             </span>
-            <span className="text-text-secondary font-mono truncate">{teamInfo?.leader_name || "Leader"}</span>
-          </div>
-        </div>
-
-        {/* Problem Statements Card */}
-        <div className="glass-panel p-5 border border-border-color rounded-xl flex flex-col justify-between relative overflow-hidden transition-all hover:border-border-color/80 group">
-          <div className="flex items-start justify-between gap-3 mb-2">
-            <div className="min-w-0 flex-1">
-              <span className="text-[10px] uppercase tracking-wider text-text-secondary font-bold block mb-1 truncate">
-                Problem Statement
-              </span>
-              <p
-                className="font-heading text-xl sm:text-2xl text-accent-tertiary uppercase m-0 font-bold tracking-tight truncate"
-                title="Track Deliverable"
-              >
-                Track Deliverable
-              </p>
-            </div>
-            <div className="p-2.5 bg-accent-tertiary/10 border border-accent-tertiary/30 text-accent-tertiary rounded-lg shrink-0 flex items-center justify-center transition-transform group-hover:scale-105">
-              <ScrollText size={20} />
-            </div>
-          </div>
-          <div className="pt-3 border-t border-border-color/50 mt-3 flex items-center justify-between text-xs gap-2">
-            <span className="text-text-secondary truncate">
-              Domain: <span className="text-text-primary font-bold">{teamInfo?.track || "Innovation"}</span>
+            <span className="text-text-secondary font-mono text-[11px] sm:text-xs truncate text-right">
+              {teamInfo?.leader_name || "Leader"}
             </span>
-            <Link
-              href="/team/problem-statements"
-              className="text-accent-tertiary hover:underline font-bold uppercase text-[11px] flex items-center gap-1 shrink-0"
-            >
-              <span>View Statements</span>
-              <ArrowRight size={12} />
-            </Link>
           </div>
         </div>
 
-        {/* Deliverables Submission Card */}
-        <div className="glass-panel p-5 border border-border-color rounded-xl flex flex-col justify-between relative overflow-hidden transition-all hover:border-border-color/80 group">
-          <div className="flex items-start justify-between gap-3 mb-2">
-            <div className="min-w-0 flex-1">
-              <span className="text-[10px] uppercase tracking-wider text-text-secondary font-bold block mb-1 truncate">
-                Deliverables Status
+        {/* Problem Statements Card (Revealed Nov 25th 10:00 AM IST) */}
+        {isUnlocked && (
+          <div className="glass-panel p-4 sm:p-5 border border-border-color rounded-xl flex flex-col justify-between relative overflow-hidden transition-all hover:border-border-color/80 group">
+            <div className="flex items-start justify-between gap-3 mb-2">
+              <div className="min-w-0 flex-1">
+                <span className="text-[10px] uppercase tracking-wider text-text-secondary font-bold block mb-1 truncate">
+                  Problem Statement
+                </span>
+                <p
+                  className="font-heading text-lg sm:text-xl text-accent-tertiary uppercase m-0 font-bold tracking-tight truncate leading-snug"
+                  title={psDisplayTitle}
+                >
+                  {psDisplayTitle}
+                </p>
+              </div>
+              <div className="p-2 sm:p-2.5 bg-accent-tertiary/10 border border-accent-tertiary/30 text-accent-tertiary rounded-lg shrink-0 flex items-center justify-center transition-transform group-hover:scale-105">
+                <ScrollText size={18} className="sm:w-5 sm:h-5" />
+              </div>
+            </div>
+            <div className="pt-3 sm:pt-4 border-t border-border-color/50 mt-3 flex items-center justify-between gap-2 text-xs">
+              <span className="text-text-secondary truncate">
+                Domain: <span className="text-text-primary font-bold">{teamInfo?.track || "Innovation"}</span>
               </span>
-              <p
-                className={`font-heading text-xl sm:text-2xl uppercase m-0 font-bold tracking-tight truncate ${hasSubmitted ? "text-status-success" : "text-status-warning"
+              <Link
+                href="/team/problem-statements"
+                className="text-accent-tertiary hover:underline font-bold uppercase text-[11px] flex items-center gap-1 shrink-0"
+              >
+                <span>{assignedPS ? "Change PS" : "View Statements"}</span>
+                <ArrowRight size={12} />
+              </Link>
+            </div>
+          </div>
+        )}
+
+        {/* Deliverables Submission Card (Revealed Nov 25th 10:00 AM IST) */}
+        {isUnlocked && (
+          <div className="glass-panel p-4 sm:p-5 border border-border-color rounded-xl flex flex-col justify-between relative overflow-hidden transition-all hover:border-border-color/80 group">
+            <div className="flex items-start justify-between gap-3 mb-2">
+              <div className="min-w-0 flex-1">
+                <span className="text-[10px] uppercase tracking-wider text-text-secondary font-bold block mb-1 truncate">
+                  Deliverables Status
+                </span>
+                <p
+                  className={`font-heading text-lg sm:text-xl uppercase m-0 font-bold tracking-tight truncate leading-snug ${
+                    hasSubmitted ? "text-status-success" : "text-status-warning"
                   }`}
-                title={hasSubmitted ? "Submitted" : "Pending Action"}
-              >
-                {hasSubmitted ? "Submitted" : "Pending Action"}
-              </p>
-            </div>
-            <div
-              className={`p-2.5 rounded-lg border shrink-0 flex items-center justify-center transition-transform group-hover:scale-105 ${hasSubmitted
-                ? "bg-status-success/10 border-status-success text-status-success"
-                : "bg-status-warning/10 border-status-warning text-status-warning"
+                  title={hasSubmitted ? "Submitted" : "Pending Action"}
+                >
+                  {hasSubmitted ? "Submitted" : "Pending Action"}
+                </p>
+              </div>
+              <div
+                className={`p-2 sm:p-2.5 rounded-lg border shrink-0 flex items-center justify-center transition-transform group-hover:scale-105 ${
+                  hasSubmitted
+                    ? "bg-status-success/10 border-status-success text-status-success"
+                    : "bg-status-warning/10 border-status-warning text-status-warning"
                 }`}
-            >
-              <FileUp size={20} />
+              >
+                <FileUp size={18} className="sm:w-5 sm:h-5" />
+              </div>
+            </div>
+            <div className="pt-3 sm:pt-4 border-t border-border-color/50 mt-3 flex items-center justify-between gap-2 text-xs">
+              <span className="text-text-secondary truncate">
+                Round: <span className="text-text-primary font-bold">{activeRound?.title || "Round 1"}</span>
+              </span>
+              <Link
+                href="/team/submission"
+                className="text-accent-secondary hover:underline font-bold uppercase text-[11px] flex items-center gap-1 shrink-0"
+              >
+                <span>{hasSubmitted ? "Review" : "Upload Now"}</span>
+                <ArrowRight size={12} />
+              </Link>
             </div>
           </div>
-          <div className="pt-3 border-t border-border-color/50 mt-3 flex items-center justify-between text-xs gap-2">
-            <span className="text-text-secondary truncate">
-              Round: <span className="text-text-primary font-bold">{activeRound?.title || "Round 1"}</span>
-            </span>
-            <Link
-              href="/team/submission"
-              className="text-accent-secondary hover:underline font-bold uppercase text-[11px] flex items-center gap-1 shrink-0"
-            >
-              <span>{hasSubmitted ? "Review" : "Upload Now"}</span>
-              <ArrowRight size={12} />
-            </Link>
-          </div>
-        </div>
+        )}
 
         {/* Results / Standings Card */}
-        <div className="glass-panel p-5 border border-border-color rounded-xl flex flex-col justify-between relative overflow-hidden transition-all hover:border-border-color/80 group">
+        <div className="glass-panel p-4 sm:p-5 border border-border-color rounded-xl flex flex-col justify-between relative overflow-hidden transition-all hover:border-border-color/80 group">
           <div className="flex items-start justify-between gap-3 mb-2">
             <div className="min-w-0 flex-1">
               <span className="text-[10px] uppercase tracking-wider text-text-secondary font-bold block mb-1 truncate">
                 Evaluation Standing
               </span>
-              <p className="font-heading text-xl sm:text-2xl text-accent-primary uppercase m-0 font-bold tracking-tight truncate">
+              <p
+                className="font-heading text-lg sm:text-xl text-accent-primary uppercase m-0 font-bold tracking-tight truncate leading-snug"
+                title={publishedResult ? `Rank #${publishedResult.rank || 1}` : "Under Review"}
+              >
                 {publishedResult ? `Rank #${publishedResult.rank || 1}` : "Under Review"}
               </p>
             </div>
-            <div className="p-2.5 bg-accent-primary/10 border border-accent-primary/30 text-accent-primary rounded-lg shrink-0 flex items-center justify-center transition-transform group-hover:scale-105">
-              <Trophy size={20} />
+            <div className="p-2 sm:p-2.5 bg-accent-primary/10 border border-accent-primary/30 text-accent-primary rounded-lg shrink-0 flex items-center justify-center transition-transform group-hover:scale-105">
+              <Trophy size={18} className="sm:w-5 sm:h-5" />
             </div>
           </div>
-          <div className="pt-3 border-t border-border-color/50 mt-3 flex items-center justify-between text-xs gap-2">
+          <div className="pt-3 sm:pt-4 border-t border-border-color/50 mt-3 flex items-center justify-between gap-2 text-xs">
             <span className="text-text-secondary truncate">
               {publishedResult ? `${publishedResult.total_score} Points` : "Judging in Progress"}
             </span>
@@ -413,116 +453,147 @@ export default async function TeamDashboardPage() {
           )}
       </div>
 
-      {/* SPOC Contact Directory */}
+      {/* Assigned Team SPOC Section */}
       <div className="space-y-4">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
           <div className="flex items-center gap-2">
-            <Users className="w-5 h-5 text-accent-secondary shrink-0" />
-            <h2 className="font-heading text-xl text-text-primary uppercase m-0 font-bold tracking-wide">
-              SPOC Contact Directory
+            <UserCheck className="w-5 h-5 text-accent-secondary shrink-0" />
+            <h2 className="font-heading text-lg sm:text-xl text-text-primary uppercase m-0 font-bold tracking-wide">
+              Your Assigned SPOC
             </h2>
           </div>
-          <p className="text-[11px] text-text-secondary/70 font-mono">
-            Single Point of Contact — Event Coordination
+          <p className="text-[10px] sm:text-[11px] text-text-secondary/70 font-mono m-0">
+            Single Point of Contact — Dedicated Club Coordinator
           </p>
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-          {SPOC_CONTACTS.map((spoc) => (
-            <div
-              key={spoc.name}
-              className="glass-panel p-6 sm:p-8 border border-border-color rounded-xl bg-[#0a0a0f]/50 flex flex-col h-full"
-            >
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="font-heading text-lg sm:text-xl text-text-primary uppercase m-0 font-bold tracking-wide leading-tight">
-                  {spoc.name}
-                </h3>
-                <div className="flex items-center gap-1 text-accent-secondary">
-                  <Users className="w-4 h-4 shrink-0" />
-                  <span className="text-[10px] text-text-secondary/60 uppercase tracking-wider font-bold font-mono">
-                    SPOC
-                  </span>
-                </div>
-              </div>
 
-              <div className="space-y-4 flex-1">
-                <div className="flex items-center gap-3">
-                  <Phone className="w-5 h-5 text-accent-secondary shrink-0" />
-                  <div>
-                    <p className="text-[11px] uppercase tracking-wider text-text-secondary/60 font-mono m-0">
-                      Contact Number
-                    </p>
-                    <a
-                      href={`tel:${spoc.phone}`}
-                      className="text-text-primary text-base font-mono font-bold hover:text-accent-primary hover:underline transition-colors"
-                    >
-                      {spoc.phone}
-                    </a>
-                  </div>
+        {assignedSpoc ? (
+          <div className="glass-panel p-5 sm:p-6 border border-border-color rounded-xl bg-[#0a0a0f]/60 max-w-2xl">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-border-color/30">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-full bg-accent-secondary/10 border-2 border-accent-secondary/40 flex items-center justify-center text-accent-secondary font-bold font-mono text-lg shrink-0">
+                  {assignedSpoc.name ? assignedSpoc.name.charAt(0).toUpperCase() : "S"}
                 </div>
-                <div className="flex items-center gap-3 pt-2 border-t border-border-color/40">
-                  <Mail className="w-5 h-5 text-accent-secondary shrink-0" />
-                  <div>
-                    <p className="text-[11px] uppercase tracking-wider text-text-secondary/60 font-mono m-0">
-                      Email Address
-                    </p>
-                    <a
-                      href={`mailto:${spoc.email}`}
-                      className="text-text-primary text-base font-mono font-bold hover:text-accent-primary hover:underline transition-colors"
-                    >
-                      {spoc.email}
-                    </a>
+                <div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h3 className="font-heading text-lg sm:text-xl text-text-primary uppercase m-0 font-bold tracking-wide">
+                      {assignedSpoc.name}
+                    </h3>
+                    <span className="text-[9px] sm:text-[10px] text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/30 uppercase tracking-wider font-bold font-mono">
+                      ASSIGNED
+                    </span>
                   </div>
+                  <p className="text-xs text-text-secondary font-mono m-0 mt-0.5">
+                    {assignedSpoc.department ? `${assignedSpoc.department} • ` : ""}Official Squad Mentor / SPOC
+                  </p>
                 </div>
-              </div>
-
-              <div className="mt-5 pt-4 border-t border-border-color/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                <a
-                  href={`tel:${spoc.phone}`}
-                  className="flex-1 sm:w-1/2 px-4 py-3 bg-accent-secondary border border-accent-secondary/30 text-black text-xs sm:text-base uppercase font-bold tracking-wider rounded-lg transition-all hover:bg-accent-primary hover:border-accent-primary flex items-center justify-center gap-2"
-                >
-                  <Phone className="w-4 h-4 shrink-0" />
-                  <span>Call</span>
-                </a>
-                <a
-                  href={`mailto:${spoc.email}`}
-                  className="flex-1 sm:w-1/2 px-4 py-3 bg-transparent border border-border-color hover:border-accent-secondary text-text-primary text-xs sm:text-base uppercase font-bold tracking-wider rounded-lg transition-all hover:bg-surface-color-light hover:text-text-primary flex items-center justify-center gap-2"
-                >
-                  <Mail className="w-4 h-4 shrink-0" />
-                  <span>Email</span>
-                </a>
               </div>
             </div>
-          ))}
-        </div>
-        <p className="text-[10px] text-text-secondary/50 italic mt-3">
-          Tap Call to dial directly or Email to open your default mail client.
-        </p>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 my-4">
+              {assignedSpocPhone ? (
+                <div className="p-3 bg-black/40 border border-border-color/40 rounded-lg">
+                  <p className="text-[9px] uppercase tracking-wider text-text-secondary/60 font-mono m-0 mb-1">
+                    Contact Phone
+                  </p>
+                  <a
+                    href={`tel:${assignedSpocPhone}`}
+                    className="text-text-primary text-xs sm:text-sm font-mono font-bold hover:text-accent-primary hover:underline transition-colors block truncate"
+                  >
+                    +91 {assignedSpocPhone}
+                  </a>
+                </div>
+              ) : null}
+
+              {assignedSpoc.email ? (
+                <div className="p-3 bg-black/40 border border-border-color/40 rounded-lg">
+                  <p className="text-[9px] uppercase tracking-wider text-text-secondary/60 font-mono m-0 mb-1">
+                    Official Email
+                  </p>
+                  <a
+                    href={`mailto:${assignedSpoc.email}`}
+                    className="text-text-primary text-xs sm:text-sm font-mono font-bold hover:text-accent-primary hover:underline transition-colors block truncate"
+                    title={assignedSpoc.email}
+                  >
+                    {assignedSpoc.email}
+                  </a>
+                </div>
+              ) : null}
+            </div>
+
+            <div className="flex flex-col sm:flex-row items-center gap-2 pt-2 border-t border-border-color/30">
+              {assignedSpocPhone && (
+                <a
+                  href={`tel:${assignedSpocPhone}`}
+                  className="w-full sm:flex-1 py-2.5 px-4 bg-accent-secondary border border-accent-secondary/30 text-black text-xs uppercase font-bold tracking-wider rounded-lg transition-all hover:bg-accent-primary hover:border-accent-primary flex items-center justify-center gap-2 min-h-[42px]"
+                >
+                  <Phone className="w-4 h-4 shrink-0" />
+                  <span>Call SPOC</span>
+                </a>
+              )}
+              {assignedSpocPhone && (
+                <a
+                  href={`https://wa.me/91${assignedSpocPhone}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-full sm:flex-1 py-2.5 px-4 bg-[#25D366] hover:bg-[#20ba59] text-white text-xs uppercase font-bold tracking-wider rounded-lg transition-all flex items-center justify-center gap-2 min-h-[42px]"
+                >
+                  <MessageCircle className="w-4 h-4 shrink-0" />
+                  <span>WhatsApp</span>
+                </a>
+              )}
+              {assignedSpoc.email && (
+                <a
+                  href={`mailto:${assignedSpoc.email}`}
+                  className="w-full sm:flex-1 py-2.5 px-4 bg-surface-color-light border border-border-color hover:border-accent-secondary text-text-primary text-xs uppercase font-bold tracking-wider rounded-lg transition-all hover:bg-surface-color flex items-center justify-center gap-2 min-h-[42px]"
+                >
+                  <Mail className="w-4 h-4 shrink-0" />
+                  <span>Email SPOC</span>
+                </a>
+              )}
+            </div>
+          </div>
+        ) : (
+          <div className="glass-panel p-5 sm:p-6 border border-border-color rounded-xl bg-[#0a0a0f]/40 max-w-2xl flex flex-col sm:flex-row sm:items-center gap-4">
+            <div className="w-12 h-12 rounded-xl bg-yellow-500/10 border border-yellow-500/30 flex items-center justify-center text-yellow-400 shrink-0">
+              <Users className="w-6 h-6" />
+            </div>
+            <div className="space-y-1">
+              <h3 className="font-heading text-base sm:text-lg text-text-primary uppercase m-0 font-bold tracking-wide">
+                SPOC Assignment in Progress
+              </h3>
+              <p className="text-xs text-text-secondary leading-relaxed m-0 font-sans">
+                Your dedicated Single Point of Contact (SPOC) is being assigned by the admin team. Once allotted, their direct contact details will appear right here.
+              </p>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Distribution Progress Section (Identical to Ops Progress Cards) */}
       <div className="space-y-3">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
           <p className="text-xs uppercase tracking-[2px] text-text-secondary font-bold m-0 flex items-center gap-2">
-            <Activity size={15} className="text-accent-secondary" />
+            <Activity size={15} className="text-accent-secondary shrink-0" />
             Distribution & Check-in Progress
           </p>
-          <span className="text-[11px] text-text-secondary font-mono">
+          <span className="text-[10px] sm:text-[11px] text-text-secondary font-mono">
             {regCount}/{totalMembers} Members Checked In
           </span>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
           {/* Registrations */}
-          <div className="glass-panel p-4 border border-border-color space-y-3">
+          <div className="glass-panel p-3.5 sm:p-4 border border-border-color space-y-2 sm:space-y-3">
             <div className="flex items-center justify-between text-xs">
-              <span className="text-status-success font-bold uppercase flex items-center gap-1.5">
-                <CheckCircle2 size={14} /> Registrations
+              <span className="text-status-success font-bold uppercase flex items-center gap-1 text-[11px] sm:text-xs truncate">
+                <CheckCircle2 size={13} className="shrink-0" /> Registrations
               </span>
-              <span className="text-text-secondary font-mono text-[11px]">{regPct}%</span>
+              <span className="text-text-secondary font-mono text-[10px] sm:text-[11px]">{regPct}%</span>
             </div>
             <div className="flex items-baseline justify-between">
-              <p className="font-heading text-2xl text-text-primary m-0">
-                {regCount} <span className="text-text-secondary text-sm">/ {totalMembers}</span>
+              <p className="font-heading text-xl sm:text-2xl text-text-primary m-0">
+                {regCount} <span className="text-text-secondary text-xs sm:text-sm">/ {totalMembers}</span>
               </p>
             </div>
             <div className="w-full bg-surface-color h-1.5 rounded-full overflow-hidden">
@@ -534,16 +605,16 @@ export default async function TeamDashboardPage() {
           </div>
 
           {/* Goodies */}
-          <div className="glass-panel p-4 border border-border-color space-y-3">
+          <div className="glass-panel p-3.5 sm:p-4 border border-border-color space-y-2 sm:space-y-3">
             <div className="flex items-center justify-between text-xs">
-              <span className="text-accent-primary font-bold uppercase flex items-center gap-1.5">
-                <Gift size={14} /> Goodies / Kits
+              <span className="text-accent-primary font-bold uppercase flex items-center gap-1 text-[11px] sm:text-xs truncate">
+                <Gift size={13} className="shrink-0" /> Goodies Kit
               </span>
-              <span className="text-text-secondary font-mono text-[11px]">{goodiesPct}%</span>
+              <span className="text-text-secondary font-mono text-[10px] sm:text-[11px]">{goodiesPct}%</span>
             </div>
             <div className="flex items-baseline justify-between">
-              <p className="font-heading text-2xl text-text-primary m-0">
-                {goodiesCount} <span className="text-text-secondary text-sm">/ {totalMembers}</span>
+              <p className="font-heading text-xl sm:text-2xl text-text-primary m-0">
+                {goodiesCount} <span className="text-text-secondary text-xs sm:text-sm">/ {totalMembers}</span>
               </p>
             </div>
             <div className="w-full bg-surface-color h-1.5 rounded-full overflow-hidden">
@@ -555,16 +626,16 @@ export default async function TeamDashboardPage() {
           </div>
 
           {/* Lunch */}
-          <div className="glass-panel p-4 border border-border-color space-y-3">
+          <div className="glass-panel p-3.5 sm:p-4 border border-border-color space-y-2 sm:space-y-3">
             <div className="flex items-center justify-between text-xs">
-              <span className="text-accent-secondary font-bold uppercase flex items-center gap-1.5">
-                <Utensils size={14} /> Lunch Token
+              <span className="text-accent-secondary font-bold uppercase flex items-center gap-1 text-[11px] sm:text-xs truncate">
+                <Utensils size={13} className="shrink-0" /> Lunch Token
               </span>
-              <span className="text-text-secondary font-mono text-[11px]">{lunchPct}%</span>
+              <span className="text-text-secondary font-mono text-[10px] sm:text-[11px]">{lunchPct}%</span>
             </div>
             <div className="flex items-baseline justify-between">
-              <p className="font-heading text-2xl text-text-primary m-0">
-                {lunchCount} <span className="text-text-secondary text-sm">/ {totalMembers}</span>
+              <p className="font-heading text-xl sm:text-2xl text-text-primary m-0">
+                {lunchCount} <span className="text-text-secondary text-xs sm:text-sm">/ {totalMembers}</span>
               </p>
             </div>
             <div className="w-full bg-surface-color h-1.5 rounded-full overflow-hidden">
@@ -576,16 +647,16 @@ export default async function TeamDashboardPage() {
           </div>
 
           {/* Snacks */}
-          <div className="glass-panel p-4 border border-border-color space-y-3">
+          <div className="glass-panel p-3.5 sm:p-4 border border-border-color space-y-2 sm:space-y-3">
             <div className="flex items-center justify-between text-xs">
-              <span className="text-accent-tertiary font-bold uppercase flex items-center gap-1.5">
-                <Coffee size={14} /> Refreshments
+              <span className="text-accent-tertiary font-bold uppercase flex items-center gap-1 text-[11px] sm:text-xs truncate">
+                <Coffee size={13} className="shrink-0" /> Refreshments
               </span>
-              <span className="text-text-secondary font-mono text-[11px]">{snacksPct}%</span>
+              <span className="text-text-secondary font-mono text-[10px] sm:text-[11px]">{snacksPct}%</span>
             </div>
             <div className="flex items-baseline justify-between">
-              <p className="font-heading text-2xl text-text-primary m-0">
-                {snacksCount} <span className="text-text-secondary text-sm">/ {totalMembers}</span>
+              <p className="font-heading text-xl sm:text-2xl text-text-primary m-0">
+                {snacksCount} <span className="text-text-secondary text-xs sm:text-sm">/ {totalMembers}</span>
               </p>
             </div>
             <div className="w-full bg-surface-color h-1.5 rounded-full overflow-hidden">
@@ -610,5 +681,6 @@ export default async function TeamDashboardPage() {
         errorMessage="Failed to load team content."
       />
     </div>
+    </TeamPullToRefresh>
   );
 }

@@ -14,6 +14,7 @@ export default function ClubJudgesRosterClient({ initialData }: Props) {
     initialData.judges[0]?.id || ""
   );
   const [trackFilter, setTrackFilter] = useState("all");
+  const [mobileTab, setMobileTab] = useState<"directory" | "teams">("directory");
 
   const { judges, teams } = initialData;
 
@@ -101,10 +102,42 @@ export default function ClubJudgesRosterClient({ initialData }: Props) {
         </div>
       </div>
 
+      {/* Mobile Tab Switcher */}
+      <div className="flex lg:hidden rounded-lg bg-surface-color border border-border-color p-1 gap-1">
+        <button
+          type="button"
+          onClick={() => setMobileTab("directory")}
+          className={`flex-1 py-2 px-3 text-xs font-heading uppercase rounded-md transition-all flex items-center justify-center gap-1.5 ${
+            mobileTab === "directory"
+              ? "bg-accent-tertiary text-black font-bold shadow"
+              : "text-text-secondary hover:text-text-primary"
+          }`}
+        >
+          <Shield size={14} />
+          <span>Jury Directory ({filteredJudges.length})</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => setMobileTab("teams")}
+          className={`flex-1 py-2 px-3 text-xs font-heading uppercase rounded-md transition-all flex items-center justify-center gap-1.5 ${
+            mobileTab === "teams"
+              ? "bg-accent-tertiary text-black font-bold shadow"
+              : "text-text-secondary hover:text-text-primary"
+          }`}
+        >
+          <Gavel size={14} />
+          <span>Allotted Teams ({activeAssignedTeams.length})</span>
+        </button>
+      </div>
+
       {/* Main 2-column Layout */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
         {/* Left Column: Judges Roster List (5 cols) */}
-        <div className="lg:col-span-5 bg-surface-color/40 border border-border-color rounded p-4 flex flex-col space-y-3">
+        <div
+          className={`lg:col-span-5 bg-surface-color/40 border border-border-color rounded-xl p-4 flex flex-col space-y-3 ${
+            mobileTab === "directory" ? "block" : "hidden lg:flex"
+          }`}
+        >
           <div className="flex items-center justify-between pb-2 border-b border-border-color/60">
             <span className="text-xs uppercase font-bold text-accent-tertiary tracking-wider flex items-center gap-2">
               <Shield size={14} />
@@ -120,7 +153,7 @@ export default function ClubJudgesRosterClient({ initialData }: Props) {
               placeholder="Search judge or allotted team..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-9 pr-3 py-2 bg-surface-color border border-border-color rounded text-xs text-text-primary placeholder:text-text-secondary/60 focus:border-accent-tertiary outline-none font-mono"
+              className="w-full pl-9 pr-3 py-2 bg-surface-color border border-border-color rounded-lg text-xs text-text-primary placeholder:text-text-secondary/60 focus:border-accent-tertiary outline-none font-mono"
             />
           </div>
 
@@ -138,18 +171,21 @@ export default function ClubJudgesRosterClient({ initialData }: Props) {
                 return (
                   <button
                     key={j.id}
-                    onClick={() => setSelectedJudgeId(j.id)}
-                    className={`w-full text-left p-3 rounded border transition-all cursor-pointer flex items-center justify-between ${
+                    onClick={() => {
+                      setSelectedJudgeId(j.id);
+                      setMobileTab("teams");
+                    }}
+                    className={`w-full text-left p-3 rounded-lg border transition-all cursor-pointer flex items-center justify-between ${
                       isSelected
                         ? "bg-accent-tertiary/15 border-accent-tertiary shadow-[0_0_15px_rgba(0,240,255,0.15)]"
                         : "bg-surface-color/50 border-border-color/70 hover:border-accent-tertiary/40 hover:bg-surface-color"
                     }`}
                   >
-                    <div>
-                      <p className="font-heading text-sm text-text-primary m-0 uppercase tracking-wide">
+                    <div className="min-w-0 flex-1 pr-2">
+                      <p className="font-heading text-sm text-text-primary m-0 uppercase tracking-wide truncate">
                         {j.full_name || "Judge"}
                       </p>
-                      <p className="text-[11px] text-text-secondary font-mono m-0 truncate max-w-[200px]">
+                      <p className="text-[11px] text-text-secondary font-mono m-0 truncate">
                         {j.email}
                       </p>
                     </div>
@@ -174,22 +210,35 @@ export default function ClubJudgesRosterClient({ initialData }: Props) {
         </div>
 
         {/* Right Column: Allotted Teams Showcase (7 cols) */}
-        <div className="lg:col-span-7 bg-surface-color/40 border border-border-color rounded p-5 flex flex-col space-y-4">
+        <div
+          className={`lg:col-span-7 bg-surface-color/40 border border-border-color rounded-xl p-4 sm:p-5 flex flex-col space-y-4 ${
+            mobileTab === "teams" ? "block" : "hidden lg:flex"
+          }`}
+        >
           {activeJudge ? (
             <>
               {/* Judge Profile Header */}
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-border-color/60">
                 <div>
-                  <span className="font-tech text-[10px] uppercase tracking-[2px] text-accent-tertiary font-bold block mb-1">
-                    Inspecting Jury Member
-                  </span>
-                  <h2 className="font-heading text-xl text-text-primary uppercase m-0 flex items-center gap-2">
-                    <Gavel className="w-5 h-5 text-accent-tertiary" />
-                    {activeJudge.full_name || "Judge"}
+                  <div className="flex items-center gap-2 mb-1">
+                    <button
+                      type="button"
+                      onClick={() => setMobileTab("directory")}
+                      className="lg:hidden text-accent-tertiary hover:underline text-xs font-mono font-bold flex items-center gap-1"
+                    >
+                      ← Back to Jury
+                    </button>
+                    <span className="hidden lg:inline font-tech text-[10px] uppercase tracking-[2px] text-accent-tertiary font-bold">
+                      Inspecting Jury Member
+                    </span>
+                  </div>
+                  <h2 className="font-heading text-lg sm:text-xl text-text-primary uppercase m-0 flex items-center gap-2">
+                    <Gavel className="w-5 h-5 text-accent-tertiary shrink-0" />
+                    <span>{activeJudge.full_name || "Judge"}</span>
                   </h2>
-                  <p className="text-xs font-mono text-text-secondary m-0 mt-0.5 flex items-center gap-1.5">
-                    <Mail size={12} />
-                    {activeJudge.email}
+                  <p className="text-xs font-mono text-text-secondary m-0 mt-0.5 flex items-center gap-1.5 break-all">
+                    <Mail size={12} className="shrink-0" />
+                    <span>{activeJudge.email}</span>
                   </p>
                 </div>
 
@@ -197,7 +246,7 @@ export default function ClubJudgesRosterClient({ initialData }: Props) {
                 <select
                   value={trackFilter}
                   onChange={(e) => setTrackFilter(e.target.value)}
-                  className="bg-surface-color border border-border-color rounded text-xs text-text-primary px-3 py-1.5 font-mono outline-none focus:border-accent-tertiary uppercase cursor-pointer"
+                  className="bg-surface-color border border-border-color rounded-lg text-xs text-text-primary px-3 py-2 font-mono outline-none focus:border-accent-tertiary uppercase cursor-pointer"
                 >
                   <option value="all">All Tracks</option>
                   {tracks.map((tr) => (
@@ -212,7 +261,7 @@ export default function ClubJudgesRosterClient({ initialData }: Props) {
               <div className="flex items-center justify-between text-xs text-text-secondary">
                 <span className="uppercase font-bold tracking-wider text-text-primary flex items-center gap-1.5">
                   <Layers size={14} className="text-accent-primary" />
-                  Teams Allotted for Evaluation ({activeAssignedTeams.length}):
+                  Teams Allotted ({activeAssignedTeams.length}):
                 </span>
                 <span className="font-mono text-[11px]">
                   {activeJudge.assigned_team_ids.length} total allotted
@@ -222,7 +271,7 @@ export default function ClubJudgesRosterClient({ initialData }: Props) {
               {/* Team Cards Grid */}
               <div className="space-y-2.5 overflow-y-auto max-h-[500px] pr-1">
                 {activeAssignedTeams.length === 0 ? (
-                  <div className="p-10 border border-dashed border-border-color rounded text-center text-text-secondary text-xs">
+                  <div className="p-8 sm:p-10 border border-dashed border-border-color rounded-xl text-center text-text-secondary text-xs">
                     {activeJudge.assigned_team_ids.length === 0
                       ? "No teams currently allotted to this judge."
                       : "No allotted teams match the selected track filter."}
@@ -231,14 +280,14 @@ export default function ClubJudgesRosterClient({ initialData }: Props) {
                   activeAssignedTeams.map((team, idx) => (
                     <div
                       key={team.id}
-                      className="p-3.5 bg-surface-color/60 border border-border-color/80 rounded flex items-center justify-between hover:border-accent-primary/50 transition-colors"
+                      className="p-3.5 bg-surface-color/60 border border-border-color/80 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 hover:border-accent-primary/50 transition-colors"
                     >
-                      <div className="space-y-1">
-                        <div className="flex items-center gap-2">
+                      <div className="space-y-1 min-w-0 flex-1">
+                        <div className="flex items-center gap-2 flex-wrap">
                           <span className="font-mono text-xs text-accent-tertiary font-bold">
                             #{idx + 1}
                           </span>
-                          <span className="font-heading text-sm text-text-primary uppercase tracking-wide">
+                          <span className="font-heading text-sm text-text-primary uppercase tracking-wide truncate">
                             {team.name}
                           </span>
                           {team.code && (
@@ -248,7 +297,7 @@ export default function ClubJudgesRosterClient({ initialData }: Props) {
                           )}
                         </div>
 
-                        <div className="flex items-center gap-2 text-[10px] font-mono text-text-secondary">
+                        <div className="flex items-center gap-2 text-[10px] font-mono text-text-secondary flex-wrap">
                           {team.track && (
                             <span className="text-accent-secondary uppercase font-bold">
                               [{team.track}]
@@ -261,7 +310,7 @@ export default function ClubJudgesRosterClient({ initialData }: Props) {
                         </div>
                       </div>
 
-                      <div className="px-2.5 py-1 rounded bg-surface-color-light border border-border-color text-xs font-mono text-text-secondary">
+                      <div className="self-start sm:self-auto px-2.5 py-1 rounded bg-surface-color-light border border-border-color text-[11px] font-mono text-text-secondary shrink-0">
                         Table Evaluation
                       </div>
                     </div>

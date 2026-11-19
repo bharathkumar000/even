@@ -7,6 +7,7 @@ import SessionSync from "@/components/auth/SessionSync";
 import { getTeamRegistrationByEmail } from "@/lib/googleSheet";
 import TeamMobileNav from "@/components/team/MobileNavDrawer";
 import { getAuthorizedPortalUrl } from "@/lib/auth/portal-route";
+import { isDeliverablesUnlocked } from "@/lib/event-schedule";
 
 export const dynamic = "force-dynamic";
 
@@ -107,6 +108,8 @@ export default async function TeamLayout({
   const leaderName = effectiveTeam?.leader_name || user.email?.split("@")[0] || "Leader";
   const track = effectiveTeam?.track || "Innovation";
 
+  const isUnlocked = isDeliverablesUnlocked();
+
   return (
     <div className="flex flex-col md:flex-row min-h-screen md:h-screen md:overflow-hidden bg-[#050508] text-text-primary">
       <div className="hidden md:block">
@@ -115,10 +118,11 @@ export default async function TeamLayout({
           leaderName={leaderName}
           track={track}
           isLeader={isLeader}
+          isUnlocked={isUnlocked}
         />
       </div>
       <div className="md:hidden sticky top-0 z-30">
-        <TeamMobileNav />
+        <TeamMobileNav isUnlocked={isUnlocked} />
       </div>
         <main
           className="flex-1 p-3.5 sm:p-6 md:p-10 md:overflow-y-auto overscroll-contain h-full"

@@ -116,21 +116,43 @@ function extractEvaluationScore(
  * Executes without N+1 queries.
  */
 export async function getJudgeEvaluationMatrix(
-  roundId: string = FINAL_JUDGING_ROUND_ID
+  roundId?: string
 ): Promise<JudgeEvaluationMatrixResponse> {
   try {
     await requireAdmin();
 
-    const targetRoundId = roundId || FINAL_JUDGING_ROUND_ID;
+    // 1. Fetch available rounds so admin can switch and active round can be resolved dynamically
+    const { data: allRoundsData } = await supabaseAdmin
+      .from("evaluation_rounds")
+      .select("id, title, status, sequence_order")
+      .order("sequence_order", { ascending: true });
+
+    const allRounds = allRoundsData || [];
+
+    // 2. Resolve target round:
+    // a. Check if specified roundId exists
+    let targetRound = allRounds.find((r) => r.id === roundId) || null;
+
+    // b. If not, try active open round
+    if (!targetRound) {
+      targetRound = allRounds.find((r) => r.status === "open") || null;
+    }
+
+    // c. If not, try by FINAL_JUDGING_ROUND_ID
+    if (!targetRound) {
+      targetRound = allRounds.find((r) => r.id === FINAL_JUDGING_ROUND_ID) || null;
+    }
+
+    // d. If not, take the first available round
+    if (!targetRound && allRounds.length > 0) {
+      targetRound = allRounds[0];
+    }
+
+    const targetRoundId = targetRound?.id || roundId || FINAL_JUDGING_ROUND_ID;
 
     // Concurrently fetch all necessary datasets in a single Promise.all
-    const [roundRes, criteriaRes, teamsRes, assignmentsRes, evalsRes, judgesRes] =
+    const [criteriaRes, teamsRes, assignmentsRes, evalsRes, judgesRes] =
       await Promise.all([
-        supabaseAdmin
-          .from("evaluation_rounds")
-          .select("id, title, status")
-          .eq("id", targetRoundId)
-          .maybeSingle(),
         supabaseAdmin
           .from("evaluation_criteria")
           .select("id, round_id, title, description, max_marks, is_required")
@@ -165,7 +187,7 @@ export async function getJudgeEvaluationMatrix(
       throw new Error(`Failed to load evaluations: ${evalsRes.error.message}`);
     }
 
-    const round = roundRes.data || { id: targetRoundId, title: "FINAL JUDGING", status: "open" };
+    const round = targetRound || { id: targetRoundId, title: "FINAL JUDGING", status: "open" };
     const criteria: EvaluationCriterion[] = criteriaRes.data || [];
     const teams = teamsRes.data || [];
     const assignments = assignmentsRes.data || [];
@@ -388,6 +410,7 @@ export async function getJudgeEvaluationMatrix(
       rows,
       kpis,
       uniqueJudges,
+      availableRounds: allRounds,
     };
   } catch (err: unknown) {
     const errorMsg =

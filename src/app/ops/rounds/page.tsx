@@ -189,17 +189,17 @@ export default async function OpsRoundsPage() {
             return (
               <div
                 key={round.id}
-                className={`glass-panel border transition-all ${
+                className={`glass-panel border rounded-xl overflow-hidden transition-all ${
                   isActive
                     ? "border-accent-tertiary/40 shadow-[0_0_20px_rgba(0,240,255,0.06)]"
                     : "border-border-color"
                 }`}
               >
                 {/* Round Header */}
-                <div className="p-5 border-b border-border-color flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div className="p-4 sm:p-5 border-b border-border-color flex flex-col md:flex-row md:items-center justify-between gap-4">
                   <div className="flex items-center gap-3">
                     <div
-                      className={`p-2.5 rounded border ${
+                      className={`p-2.5 rounded-lg border ${
                         isActive
                           ? "bg-accent-tertiary/10 border-accent-tertiary/40 text-accent-tertiary"
                           : "bg-surface-color-light border-border-color text-text-secondary"
@@ -207,42 +207,42 @@ export default async function OpsRoundsPage() {
                     >
                       <Layers size={18} />
                     </div>
-                    <div>
-                      <div className="flex items-center gap-2">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <span className="text-[10px] font-mono text-text-secondary uppercase tracking-wider">
                           Stage {round.sequence_order}
                         </span>
                         {isActive && (
-                          <span className="text-[9px] px-1.5 py-0.5 bg-status-success text-black font-bold uppercase tracking-wider">
+                          <span className="text-[9px] px-1.5 py-0.5 bg-status-success text-black font-bold uppercase tracking-wider rounded">
                             ACTIVE NOW
                           </span>
                         )}
                       </div>
-                      <h2 className="font-heading text-xl text-text-primary uppercase m-0 mt-0.5">
+                      <h2 className="font-heading text-lg sm:text-xl text-text-primary uppercase m-0 mt-0.5 truncate">
                         {round.title}
                       </h2>
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-2.5 flex-wrap">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <span
-                      className={`inline-flex items-center gap-1.5 px-3 py-1.5 border text-xs font-bold uppercase ${statusInfo.cls}`}
+                      className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 border text-xs font-bold uppercase rounded-lg ${statusInfo.cls}`}
                     >
                       <span className={`w-1.5 h-1.5 rounded-full ${statusInfo.dot}`} />
                       {statusInfo.label}
                     </span>
 
-                    <div className="flex items-center gap-1.5 px-3 py-1.5 bg-surface-color border border-border-color text-xs font-bold text-text-primary">
+                    <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-surface-color border border-border-color text-xs font-bold text-text-primary rounded-lg">
                       <Award size={13} className="text-accent-secondary" />
                       <span>{totalMarks} Max Pts</span>
                     </div>
 
-                    <div className="flex items-center gap-1.5 px-3 py-1.5 bg-surface-color border border-border-color text-xs font-bold text-text-secondary">
+                    <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-surface-color border border-border-color text-xs font-bold text-text-secondary rounded-lg">
                       <FileCheck2 size={13} />
                       <span>{roundCriteria.length} Criteria</span>
                     </div>
 
-                    <div className="flex items-center gap-1.5 px-3 py-1.5 bg-surface-color border border-border-color text-xs font-bold text-accent-tertiary">
+                    <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-surface-color border border-border-color text-xs font-bold text-accent-tertiary rounded-lg">
                       <Activity size={13} />
                       <span>{recordedEvals} Evals In</span>
                     </div>
@@ -256,7 +256,7 @@ export default async function OpsRoundsPage() {
                   </div>
                 ) : (
                   <div className="overflow-x-auto">
-                    <table className="w-full text-left border-collapse text-xs">
+                    <table className="w-full text-left border-collapse text-xs min-w-[540px]">
 <thead>
                         <tr className="border-b border-border-color bg-surface-color-light/40 text-text-secondary uppercase tracking-wider text-[10px]">
                           <th className="p-3 pl-5">#</th>

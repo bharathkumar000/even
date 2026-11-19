@@ -10,6 +10,7 @@ export const SITE_CONFIG = {
     name: "Innovators and Visionaries Club (IVC)",
     college: "Vidyavardhaka College of Engineering (VVCE)",
     collegeUrl: "https://vvce.ac.in",
+    email: "ivcofficial@vvce.ac.in",
     partner: "InUnity",
     city: "Mysuru",
     state: "Karnataka",

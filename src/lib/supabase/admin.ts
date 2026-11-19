@@ -20,6 +20,15 @@ function getAdminClient() {
       persistSession: false,
       autoRefreshToken: false,
     },
+    global: {
+      fetch: (url: RequestInfo | URL, options?: RequestInit) => {
+        const timeoutSignal = AbortSignal.timeout(10000);
+        const signal = options?.signal
+          ? AbortSignal.any([options.signal, timeoutSignal])
+          : timeoutSignal;
+        return fetch(url, { ...options, signal });
+      },
+    },
   });
 }
 

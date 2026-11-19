@@ -196,7 +196,7 @@ export default function JudgeSidebar() {
         aria-label="Mobile Judge Navigation"
         className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-[#0c0c14]/95 backdrop-blur-xl border-t border-border-color/80 px-2 pt-2 font-tech shadow-[0_-10px_35px_rgba(0,0,0,0.85)] pb-[max(0.6rem,env(safe-area-inset-bottom))]"
       >
-        <div className="grid grid-cols-3 gap-1.5 max-w-md mx-auto items-stretch">
+        <div className="grid grid-cols-2 gap-2 max-w-sm mx-auto items-stretch">
           {navItems.map((item) => {
             const isActive = isItemActive(item);
 

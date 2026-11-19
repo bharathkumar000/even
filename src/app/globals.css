@@ -41,6 +41,8 @@
     font-family: var(--font-family-fredoka) !important;
     min-height: 100vh;
     overflow-x: hidden;
+    -webkit-tap-highlight-color: transparent;
+    -webkit-text-size-adjust: 100%;
   }
   button,
   input,
@@ -60,6 +62,14 @@
   textarea,
   select {
     letter-spacing: normal !important;
+  }
+  /* Prevent iOS Safari aggressive auto-zoom on form fields */
+  @media (max-width: 768px) {
+    input:not([type="checkbox"]):not([type="radio"]),
+    select,
+    textarea {
+      font-size: 16px !important;
+    }
   }
   input::placeholder,
   textarea::placeholder {

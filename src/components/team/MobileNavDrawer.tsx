@@ -6,8 +6,13 @@ import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
 import SignOutButton from "@/components/SignOutButton";
+import { isDeliverablesUnlocked } from "@/lib/event-schedule";
 
-export default function TeamMobileNav() {
+interface TeamMobileNavProps {
+  isUnlocked?: boolean;
+}
+
+export default function TeamMobileNav({ isUnlocked }: TeamMobileNavProps) {
   const [open, setOpen] = useState(false);
   const pathname = usePathname();
   const [prevPathname, setPrevPathname] = useState(pathname);
@@ -16,10 +21,16 @@ export default function TeamMobileNav() {
     setOpen(false);
   }
 
+  const unlocked = isUnlocked ?? isDeliverablesUnlocked();
+
   const navItems = [
     { href: "/team", icon: LayoutDashboard, label: "Dashboard" },
-    { href: "/team/problem-statements", icon: ScrollText, label: "Problem Statements" },
-    { href: "/team/submission", icon: FileUp, label: "Project Deliverables" },
+    ...(unlocked
+      ? [
+          { href: "/team/problem-statements", icon: ScrollText, label: "Problem Statements" },
+          { href: "/team/submission", icon: FileUp, label: "Project Deliverables" },
+        ]
+      : []),
     { href: "/team/qr", icon: QrCode, label: "Event QR Pass" },
     { href: "/team/results", icon: Trophy, label: "Results & Standings" },
   ];

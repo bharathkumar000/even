@@ -28,14 +28,19 @@ import {
   recordMemberAction,
   recordTeamBulkAction,
   manualTeamLookup,
+  searchTeams,
   getLiveScanActivityStream,
   getRecentlyScannedTeams,
   processAutomatedScan,
+  getDeskProgressSummary,
   type ProcessScanResult,
   type LiveActivityFeedItem,
   type EnrichedActivityLog,
+  type DeskProgressSummary,
 } from "@/app/actions/operations";
 import type { ActionType } from "@/lib/validations/operations";
+import { HapticFeedback } from "@/lib/haptic";
+import PullToRefresh from "@/components/mobile/PullToRefresh";
 import { CSRF_CONSTANTS } from "@/lib/csrf-constants";
 import ScannerDesk from "@/components/ops/ScannerDesk";
 import RecentlyScannedTeams from "@/components/ops/RecentlyScannedTeams";
@@ -219,16 +224,19 @@ export default function ScannerClientView() {
   const [isSyncingQueue, setIsSyncingQueue] = useState<boolean>(false);
   const isSyncingQueueRef = useRef(false);
 
-  // Auto-cooldown to prevent duplicate reads and auto-resume live scanning
-  const [isCoolingDown, setIsCoolingDown] = useState(false);
-  const [cooldownSeconds, setCooldownSeconds] = useState(0);
+  // Continuous Multi-QR Scanning Engine
+  // Smart per-badge deduplication allows scanning new codes immediately with 0s cooldown
+  const [continuousScanCount, setContinuousScanCount] = useState<number>(0);
   const isProcessingRef = useRef(false);
-  const isCoolingDownRef = useRef(false);
-  const cooldownTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const lastScannedCodeRef = useRef<string | null>(null);
+  const lastScannedTimeRef = useRef<number>(0);
+  const lastScanEndTimeRef = useRef<number>(0);
+  const processingSafetyTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const html5QrCodeRef = useRef<any>(null);
   const scanPurposeRef = useRef<ActionType>(scanPurpose);
   const isPollingRef = useRef(false);
+  const [progressSummary, setProgressSummary] = useState<DeskProgressSummary | null>(null);
 
   useEffect(() => {
     scanPurposeRef.current = scanPurpose;
@@ -240,6 +248,8 @@ export default function ScannerClientView() {
       setIsOnline(navigator.onLine);
     }
     setOfflineQueueCount(getOfflineQueue().length);
+
+    void getDeskProgressSummary().then(setProgressSummary).catch(() => {});
 
     void fetch("/api/csrf/init")
       .then((res) => res.json())
@@ -257,8 +267,12 @@ export default function ScannerClientView() {
   const fetchLiveStream = useCallback(async () => {
     try {
       setStreamLoading(true);
-      const data = await getLiveScanActivityStream(35);
-      setLiveStreamLogs(data);
+      const [streamData, summary] = await Promise.all([
+        getLiveScanActivityStream(35),
+        getDeskProgressSummary().catch(() => null),
+      ]);
+      setLiveStreamLogs(streamData);
+      if (summary) setProgressSummary(summary);
       setLastSyncTime(new Date());
     } catch (err) {
       console.warn("Notice: Real-time stream sync notice:", err);
@@ -434,36 +448,31 @@ export default function ScannerClientView() {
       })
       .subscribe();
 
+    // Event-driven refresh: when staff returns to tab or window gains focus
+    const handleVisibilityChange = () => {
+      if (typeof document !== "undefined" && document.visibilityState === "visible") {
+        fetchLiveStream();
+      }
+    };
+    window.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("focus", handleVisibilityChange);
+
+    // Relaxed 60s fallback sync (instead of aggressive 4s polling) to prevent DB CPU spikes
+    const gentleFallbackInterval = setInterval(() => {
+      if (typeof document !== "undefined" && document.visibilityState === "visible") {
+        fetchLiveStream();
+      }
+    }, 60000);
+
     return () => {
       supabase.removeChannel(channel);
-    };
-  }, [fetchLiveStream, teamData?.team?.id]);
-
-  // Separate polling effect to avoid calling Server Actions during render
-  useEffect(() => {
-    if (!teamData?.team?.id) return;
-
-    const pollInterval = setInterval(() => {
-      if (!isPollingRef.current) {
-        isPollingRef.current = true;
-        fetchTeamMembersForScan(teamData.team.id)
-          .then((updated) => {
-            setTeamData(updated);
-            isPollingRef.current = false;
-          })
-          .catch(() => {
-            isPollingRef.current = false;
-          });
-      }
-      fetchLiveStream();
-    }, 4000);
-
-    return () => {
-      clearInterval(pollInterval);
+      window.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("focus", handleVisibilityChange);
+      clearInterval(gentleFallbackInterval);
     };
   }, [teamData?.team?.id, fetchLiveStream]);
 
-  const stopScanner = async () => {
+  const stopScanner = useCallback(async () => {
     try {
       if (html5QrCodeRef.current) {
         if (html5QrCodeRef.current.isScanning) {
@@ -479,9 +488,21 @@ export default function ScannerClientView() {
     } finally {
       setScanning(false);
     }
-  };
+  }, []);
 
-  const startScanner = async () => {
+  const handleClearBadgeLock = useCallback(() => {
+    lastScannedCodeRef.current = null;
+    lastScanEndTimeRef.current = 0;
+  }, []);
+
+  const handleScanPurposeChange = useCallback((newPurpose: ActionType) => {
+    setScanPurpose(newPurpose);
+    // Reset badge deduplication cache when changing operation mode so any badge can scan immediately
+    lastScannedCodeRef.current = null;
+    lastScanEndTimeRef.current = 0;
+  }, []);
+
+  const startScanner = useCallback(async () => {
     try {
       await stopScanner();
 
@@ -489,19 +510,56 @@ export default function ScannerClientView() {
       const scanner = new Html5Qrcode("qr-reader-container");
       html5QrCodeRef.current = scanner;
 
-      await scanner.start(
-        { facingMode: "environment" },
-        {
-          fps: 10,
-          qrbox: { width: 350, height: 350 },
+      const scanConfig = {
+        fps: 15, // Responsive 15fps frame capture
+        qrbox: (viewfinderWidth: number, viewfinderHeight: number) => {
+          const minEdge = Math.min(viewfinderWidth, viewfinderHeight);
+          const size = Math.max(200, Math.floor(minEdge * 0.75));
+          return { width: size, height: size };
         },
-        (decodedText) => {
-          // Continuous scanning: ignore incoming camera frames while busy or in cooldown
-          if (isProcessingRef.current || isCoolingDownRef.current) return;
-          void handleDetectedCode(decodedText);
-        },
-        () => { }
-      );
+      };
+
+      const onScanSuccess = (decodedText: string) => {
+        if (!decodedText || isProcessingRef.current) return;
+
+        const now = Date.now();
+        const candidateId = extractTeamId(decodedText) || decodedText.trim();
+        const lastId = lastScannedCodeRef.current;
+
+        // 1. Same-badge deduplication:
+        // If the exact same QR badge is still in front of the camera, ignore duplicate frames
+        // for 3.5s so it won't loop "ALREADY REGISTERED" errors while the participant is lowering their phone.
+        if (lastId && (decodedText === lastId || candidateId === lastId)) {
+          if (now - lastScannedTimeRef.current < 3500) {
+            return;
+          }
+        }
+
+        // 2. Different / Next badge in queue:
+        // Ultra-low 250ms guard after previous scan finishes allows instant continuous multi-scanning!
+        if (now - lastScanEndTimeRef.current < 250) {
+          return;
+        }
+
+        void handleDetectedCode(decodedText);
+      };
+
+      try {
+        await scanner.start(
+          { facingMode: "environment" },
+          scanConfig,
+          onScanSuccess,
+          () => {}
+        );
+      } catch (camErr) {
+        console.warn("Back camera unavailable, attempting default camera:", camErr);
+        await scanner.start(
+          { facingMode: "user" },
+          scanConfig,
+          onScanSuccess,
+          () => {}
+        );
+      }
       setScanning(true);
     } catch (err: unknown) {
       console.error("Scanner start failure:", err);
@@ -522,22 +580,30 @@ export default function ScannerClientView() {
         timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
       });
     }
-  };
+  }, [stopScanner, scanPurpose]);
 
   /**
    * Executes the selected operation automatically upon QR detection or manual submission.
-   * Confirms database transaction, updates roster, triggers cooldown, and re-arms scanner.
+   * Confirms database transaction, updates roster, and immediately re-arms scanner for continuous multi-scanning.
    */
   const handleDetectedCode = useCallback(async (
     rawCode: string,
     targetParticipantId?: string,
     overrideActionType?: ActionType
   ) => {
-    if (isProcessingRef.current || isCoolingDownRef.current) return;
+    if (!rawCode || isProcessingRef.current) return;
     isProcessingRef.current = true;
     setLoading(true);
 
+    // Watchdog safety timeout: prevent scanner from freezing if network hangs
+    if (processingSafetyTimeoutRef.current) clearTimeout(processingSafetyTimeoutRef.current);
+    processingSafetyTimeoutRef.current = setTimeout(() => {
+      isProcessingRef.current = false;
+      setLoading(false);
+    }, 10000);
+
     const effectiveActionType = overrideActionType ?? scanPurposeRef.current;
+    const candidateId = extractTeamId(rawCode) || rawCode.trim();
 
     try {
       const res = await processAutomatedScan({
@@ -553,9 +619,34 @@ export default function ScannerClientView() {
 
       if (res.status === "success") {
         playScanSuccess();
+        if (typeof navigator !== "undefined" && navigator.vibrate) {
+          navigator.vibrate([80, 40, 80]);
+        }
+        setContinuousScanCount((c) => c + 1);
+
+        // Smart deduplication: cache this badge so holding it won't re-trigger duplicate scans
+        lastScannedCodeRef.current = candidateId;
+        lastScannedTimeRef.current = Date.now();
+
+        // Increment in-memory Desk Progress HUD counters in 0ms without hitting database
+        setProgressSummary((prev) => {
+          if (!prev) return prev;
+          return {
+            ...prev,
+            checkedInTeams:
+              res.action_type === "registration" ? prev.checkedInTeams + 1 : prev.checkedInTeams,
+            lunchClaimedCount:
+              res.action_type === "lunch" ? prev.lunchClaimedCount + 1 : prev.lunchClaimedCount,
+            goodiesClaimedCount:
+              res.action_type === "goodies" ? prev.goodiesClaimedCount + 1 : prev.goodiesClaimedCount,
+          };
+        });
+
+        HapticFeedback.success();
+
         setScanFeedback({
           status: "success",
-          title: `${res.action_type.toUpperCase()} RECORDED SUCCESSFULLY`,
+          title: `${res.action_type.toUpperCase()} RECORDED`,
           message: res.message,
           actionType: res.action_type,
           teamName: res.team?.name,
@@ -571,6 +662,13 @@ export default function ScannerClientView() {
         });
       } else if (res.status === "already_completed") {
         playScanError();
+        if (typeof navigator !== "undefined" && navigator.vibrate) {
+          navigator.vibrate(200);
+        }
+        // Cache this code so it doesn't repeatedly loop the error buzzer
+        lastScannedCodeRef.current = candidateId;
+        lastScannedTimeRef.current = Date.now();
+
         setScanFeedback({
           status: "already_completed",
           title: res.action_type === "registration" ? "ALREADY REGISTERED" : "ALREADY CLAIMED",
@@ -588,6 +686,13 @@ export default function ScannerClientView() {
         });
       } else {
         playScanError();
+        if (typeof navigator !== "undefined" && navigator.vibrate) {
+          navigator.vibrate(200);
+        }
+        // Shorter deduplication on rejection so retry is possible after 1.5s
+        lastScannedCodeRef.current = candidateId;
+        lastScannedTimeRef.current = Date.now() - 2000;
+
         setScanFeedback({
           status: res.status || "error",
           title: res.status === "not_found" ? "NOT FOUND" : "SCAN REJECTED",
@@ -629,39 +734,48 @@ export default function ScannerClientView() {
         }),
       });
     } finally {
+      if (processingSafetyTimeoutRef.current) clearTimeout(processingSafetyTimeoutRef.current);
       setLoading(false);
       isProcessingRef.current = false;
-
-      // Start automatic cooldown to resume continuous scanning without stopping camera
-      isCoolingDownRef.current = true;
-      setIsCoolingDown(true);
-      setCooldownSeconds(3);
-
-      if (cooldownTimerRef.current) clearInterval(cooldownTimerRef.current);
-      let remaining = 3;
-      cooldownTimerRef.current = setInterval(() => {
-        remaining -= 1;
-        setCooldownSeconds(remaining);
-        if (remaining <= 0) {
-          if (cooldownTimerRef.current) clearInterval(cooldownTimerRef.current);
-          isCoolingDownRef.current = false;
-          setIsCoolingDown(false);
-        }
-      }, 1000);
+      lastScanEndTimeRef.current = Date.now();
     }
   }, [csrfToken, fetchLiveStream, playScanError, playScanSuccess]);
 
-  // Manual team lookup for verification / inspection
-  const handleManualLookup = async (teamId: string) => {
-    if (!teamId) return;
+  // Manual team lookup with smart resolution (UUID or Team Name/Code search)
+  const handleManualLookup = async (queryOrId: string) => {
+    if (!queryOrId) return;
+    const trimmed = queryOrId.trim();
+    if (!trimmed) return;
+
     setLoading(true);
     try {
-      const res = await manualTeamLookup(teamId);
+      const isUuid = UUID_REGEX.test(trimmed);
+      let targetId = trimmed;
+
+      if (!isUuid) {
+        // Fallback: search team by name or code
+        const searchRes = await searchTeams(trimmed, 5);
+        if (searchRes.error || !searchRes.teams || searchRes.teams.length === 0) {
+          throw new Error(`No team found matching "${trimmed}". Try searching by team name, code, or UUID.`);
+        }
+        targetId = searchRes.teams[0].id;
+      }
+
+      const res = await manualTeamLookup(targetId);
       playScanSuccess();
       setTeamData(res);
       setRecentScans((prev) => {
         const filtered = prev.filter((id) => id !== res.team.id);
         return [res.team.id, ...filtered].slice(0, 3);
+      });
+      setScanFeedback({
+        status: "success",
+        title: "TEAM LOADED",
+        message: `Loaded roster for "${res.team.name}" (${res.members.length} members).`,
+        actionType: scanPurpose,
+        teamName: res.team.name,
+        teamId: res.team.id,
+        timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
       });
     } catch (err: unknown) {
       playScanError();
@@ -682,6 +796,65 @@ export default function ScannerClientView() {
     return teamData?.activityLogs?.find(
       (log) => log.participant_id === participantId && log.action_type === actionType && log.result === "success"
     );
+  };
+
+  // Number of team members that have NOT yet claimed the active action
+  const unclaimedMembersCount = useMemo(() => {
+    if (!teamData?.members) return 0;
+    return teamData.members.filter((m) => {
+      const pid = m.user_id || m.id;
+      return !getLogForAction(pid, scanPurpose);
+    }).length;
+  }, [teamData, scanPurpose]);
+
+  // 1-Tap Bulk Action for entire team (e.g. Check In All or Distribute Kits to All)
+  const handleBulkTeamAction = async () => {
+    if (!teamData?.team?.id) return;
+    setLoading(true);
+    try {
+      const res = await recordTeamBulkAction(teamData.team.id, scanPurpose, csrfToken, {
+        method: "manual",
+      });
+      playScanSuccess();
+      HapticFeedback.success();
+      setScanFeedback({
+        status: "success",
+        title: `ALL MEMBERS ${scanPurpose.toUpperCase()} RECORDED`,
+        message: `Successfully recorded ${scanPurpose} for ${res.claimedCount} member(s) of "${teamData.team.name}".`,
+        actionType: scanPurpose,
+        teamName: teamData.team.name,
+        teamId: teamData.team.id,
+        claimedCount: res.claimedCount,
+        totalMembers: teamData.members.length,
+        timestamp: new Date().toLocaleTimeString([], {
+          hour: "2-digit",
+          minute: "2-digit",
+          second: "2-digit",
+        }),
+      });
+
+      // Refresh team data
+      const updated = await fetchTeamMembersForScan(teamData.team.id);
+      setTeamData(updated);
+      fetchLiveStream();
+    } catch (err: unknown) {
+      playScanError();
+      const msg = err instanceof Error ? err.message : "Bulk action failed.";
+      setScanFeedback({
+        status: "error",
+        title: "BULK ACTION FAILED",
+        message: msg,
+        actionType: scanPurpose,
+        teamName: teamData?.team?.name,
+        timestamp: new Date().toLocaleTimeString([], {
+          hour: "2-digit",
+          minute: "2-digit",
+          second: "2-digit",
+        }),
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
   // Team-level distribution counts for lunch and snacks
@@ -709,7 +882,7 @@ export default function ScannerClientView() {
 
   useEffect(() => {
     return () => {
-      if (cooldownTimerRef.current) clearInterval(cooldownTimerRef.current);
+      if (processingSafetyTimeoutRef.current) clearTimeout(processingSafetyTimeoutRef.current);
       if (html5QrCodeRef.current) {
         try {
           html5QrCodeRef.current.stop();
@@ -718,9 +891,14 @@ export default function ScannerClientView() {
     };
   }, []);
 
+  const handleLookup = useCallback((id: string) => {
+    void handleDetectedCode(id);
+  }, [csrfToken, scanPurpose]);
+
   return (
-    <div className="space-y-6">
-      {/* 1. OPERATION SELECTOR (Determines exactly what happens on scan) */}
+    <PullToRefresh onRefresh={fetchLiveStream}>
+      <div className="space-y-6">
+        {/* 1. OPERATION SELECTOR (Determines exactly what happens on scan) */}
       <div className="glass-panel p-4 border border-border-color space-y-3 font-tech">
         <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-3 border-b border-border-color pb-3">
           <div>
@@ -765,11 +943,12 @@ export default function ScannerClientView() {
               <button
                 key={p.value}
                 type="button"
-                onClick={() => setScanPurpose(p.value)}
-                className={`p-3 rounded border text-left transition-all cursor-pointer flex flex-col justify-between gap-2 ${isSelected
-                  ? "bg-accent-primary/15 border-accent-primary text-text-primary shadow-[0_0_15px_rgba(0,240,255,0.2)]"
-                  : "bg-surface-color/40 border-border-color/60 text-text-secondary hover:border-accent-secondary/50 hover:text-text-primary"
-                  }`}
+                onClick={() => handleScanPurposeChange(p.value)}
+                className={`p-3 rounded border text-left transition-all cursor-pointer flex flex-col justify-between gap-2 ${
+                  isSelected
+                    ? "bg-accent-primary/15 border-accent-primary text-text-primary shadow-[0_0_15px_rgba(0,240,255,0.2)]"
+                    : "bg-surface-color/40 border-border-color/60 text-text-secondary hover:border-accent-secondary/50 hover:text-text-primary"
+                }`}
               >
                 <div className="flex items-center justify-between">
                   <Icon
@@ -794,29 +973,71 @@ export default function ScannerClientView() {
         </div>
       </div>
 
+      {/* 1.5 LIVE DESK PROGRESS HUD (Ultra-light, in-memory cached metric strip) */}
+      {progressSummary && (
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 font-tech text-xs">
+          <div className="glass-panel p-3 border border-border-color rounded flex items-center justify-between">
+            <span className="text-text-secondary uppercase">Teams Checked In</span>
+            <span className="font-heading text-sm text-status-success font-bold font-mono">
+              {progressSummary.checkedInTeams} / {progressSummary.totalTeams || "—"}
+            </span>
+          </div>
+          <div className="glass-panel p-3 border border-border-color rounded flex items-center justify-between">
+            <span className="text-text-secondary uppercase">Check-In Rate</span>
+            <span className="font-heading text-sm text-accent-primary font-bold font-mono">
+              {progressSummary.totalTeams > 0
+                ? `${Math.round((progressSummary.checkedInTeams / progressSummary.totalTeams) * 100)}%`
+                : "0%"}
+            </span>
+          </div>
+          <div className="glass-panel p-3 border border-border-color rounded flex items-center justify-between">
+            <span className="text-text-secondary uppercase">Lunch Claimed</span>
+            <span className="font-heading text-sm text-status-warning font-bold font-mono">
+              {progressSummary.lunchClaimedCount}
+            </span>
+          </div>
+          <div className="glass-panel p-3 border border-border-color rounded flex items-center justify-between">
+            <span className="text-text-secondary uppercase">Kits / Goodies</span>
+            <span className="font-heading text-sm text-accent-secondary font-bold font-mono">
+              {progressSummary.goodiesClaimedCount}
+            </span>
+          </div>
+        </div>
+      )}
+
       {/* 2. TRANSACTION RESULT BANNER (Instant, High-Visibility Feedback) */}
       {scanFeedback && (
         <div
-          className={`p-5 rounded-lg border font-tech transition-all animate-fade-in ${scanFeedback.status === "success"
-            ? "bg-status-success/15 border-status-success text-status-success shadow-[0_0_25px_rgba(0,255,157,0.15)]"
-            : scanFeedback.status === "already_completed"
+          className={`p-4 sm:p-5 rounded-xl border font-tech transition-all animate-fade-in relative ${
+            scanFeedback.status === "success"
+              ? "bg-status-success/15 border-status-success text-status-success shadow-[0_0_25px_rgba(0,255,157,0.15)]"
+              : scanFeedback.status === "already_completed"
               ? "bg-yellow-500/15 border-yellow-500 text-yellow-300 shadow-[0_0_25px_rgba(234,179,8,0.15)]"
               : "bg-status-error/15 border-status-error text-status-error shadow-[0_0_25px_rgba(255,59,48,0.15)]"
             }`}
         >
-          <div className="flex items-start justify-between gap-4">
-            <div className="flex items-start gap-3.5">
+          <button
+            type="button"
+            onClick={() => setScanFeedback(null)}
+            className="absolute top-3 right-3 text-text-secondary hover:text-white transition-colors p-1"
+            title="Dismiss"
+          >
+            <X size={18} />
+          </button>
+
+          <div className="flex flex-col sm:flex-row items-start justify-between gap-4 pr-6 sm:pr-0">
+            <div className="flex items-start gap-3 min-w-0 flex-1">
               {scanFeedback.status === "success" ? (
-                <CheckCircle2 size={26} className="text-status-success shrink-0 mt-0.5" />
+                <CheckCircle2 size={24} className="text-status-success shrink-0 mt-0.5" />
               ) : scanFeedback.status === "already_completed" ? (
-                <AlertCircle size={26} className="text-yellow-400 shrink-0 mt-0.5" />
+                <AlertCircle size={24} className="text-yellow-400 shrink-0 mt-0.5" />
               ) : (
-                <ShieldAlert size={26} className="text-status-error shrink-0 mt-0.5" />
+                <ShieldAlert size={24} className="text-status-error shrink-0 mt-0.5" />
               )}
 
-              <div className="space-y-1">
-                <div className="flex items-center gap-2.5 flex-wrap">
-                  <h3 className="font-heading text-base uppercase tracking-wider m-0">
+              <div className="space-y-1 min-w-0 flex-1">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h3 className="font-heading text-sm sm:text-base uppercase tracking-wider m-0">
                     {scanFeedback.title}
                   </h3>
                   <span className="text-[10px] font-mono uppercase px-2 py-0.5 rounded border border-current opacity-80">
@@ -827,7 +1048,7 @@ export default function ScannerClientView() {
                   </span>
                 </div>
 
-                <p className="text-sm font-bold m-0 text-white">
+                <p className="text-xs sm:text-sm font-bold m-0 text-white break-words">
                   {scanFeedback.message}
                 </p>
 
@@ -847,22 +1068,20 @@ export default function ScannerClientView() {
               </div>
             </div>
 
-            <div className="flex flex-col items-end gap-2 shrink-0">
-              <button
-                type="button"
-                onClick={() => setScanFeedback(null)}
-                className="text-text-secondary hover:text-white transition-colors"
-                title="Dismiss"
-              >
-                <X size={16} />
-              </button>
-
-              {/* Live Cooldown & Next Scan Ready Indicator */}
-              {isCoolingDown && (
-                <div className="px-2.5 py-1 bg-black/60 border border-current rounded text-[10px] font-mono flex items-center gap-1.5 animate-pulse">
-                  <Clock size={11} />
-                  <span>Next scan in {cooldownSeconds}s</span>
-                </div>
+            {/* Continuous Ready Indicator & Re-scan Button */}
+            <div className="flex items-center sm:items-end justify-between sm:justify-start gap-2 w-full sm:w-auto pt-2 sm:pt-0 border-t border-current/20 sm:border-t-0 shrink-0">
+              <div className="px-2.5 py-1 bg-black/60 border border-status-success/50 text-status-success rounded text-[10px] font-mono flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-status-success animate-ping" />
+                <span>Ready for Next QR</span>
+              </div>
+              {lastScannedCodeRef.current && (
+                <button
+                  type="button"
+                  onClick={handleClearBadgeLock}
+                  className="text-[10px] text-text-secondary hover:text-accent-primary underline font-mono cursor-pointer transition-colors"
+                >
+                  Scan Same Badge Again
+                </button>
               )}
             </div>
           </div>
@@ -878,19 +1097,21 @@ export default function ScannerClientView() {
           onStartScanner={startScanner}
           onStopScanner={stopScanner}
           onManualIdChange={setManualId}
-          onLookup={(id) => handleDetectedCode(id)}
-          onManualLookup={(id) => handleDetectedCode(id)}
+          onLookup={handleLookup}
+          onManualLookup={handleManualLookup}
           recentScans={recentScans}
+          continuousScanCount={continuousScanCount}
+          onClearBadgeLock={handleClearBadgeLock}
         />
       </div>
 
       {/* 4. SCANNED TEAM ROSTER PANEL WITH 1-TAP INDIVIDUAL PARTICIPANT ACTIONS */}
       {teamData && (
-        <div className="glass-panel p-6 border border-accent-primary/40 space-y-6 animate-fade-in font-tech">
+        <div className="glass-panel p-4 sm:p-6 border border-accent-primary/40 space-y-6 animate-fade-in font-tech rounded-xl">
           {/* Team Header */}
-          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-border-color pb-4">
-            <div>
-              <div className="flex items-center gap-2">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border-color pb-4">
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2 flex-wrap">
                 <span className="text-[10px] text-accent-primary uppercase font-bold tracking-wider px-2 py-0.5 bg-accent-primary/10 border border-accent-primary">
                   {teamData.team.track || "GENERAL TRACK"}
                 </span>
@@ -903,12 +1124,13 @@ export default function ScannerClientView() {
                   <CheckCircle2 size={11} /> Live Synchronized
                 </span>
               </div>
-              <h2 className="font-heading text-2xl text-text-primary uppercase m-0 mt-2">
+              <h2 className="font-heading text-xl sm:text-2xl text-text-primary uppercase m-0 mt-2 truncate">
                 {teamData.team.name}
               </h2>
-              <p className="text-xs text-text-secondary m-0 mt-0.5">
-                Leader: <span className="text-text-primary font-bold">{teamData.team.leader_name}</span> | UUID:{" "}
-                <span className="font-mono text-text-primary">{teamData.team.id}</span>
+              <p className="text-xs text-text-secondary m-0 mt-1 break-words">
+                Leader: <span className="text-text-primary font-bold">{teamData.team.leader_name}</span>
+                <span className="hidden sm:inline"> | UUID: </span>
+                <span className="block sm:inline font-mono text-[11px] text-text-primary break-all">{teamData.team.id}</span>
               </p>
             </div>
 
@@ -916,8 +1138,9 @@ export default function ScannerClientView() {
               onClick={() => {
                 setTeamData(null);
                 setScanFeedback(null);
+                handleClearBadgeLock();
               }}
-              className="px-4 py-2 border border-border-color hover:border-accent-primary rounded text-text-secondary hover:text-text-primary font-tech uppercase text-xs transition-all flex items-center gap-2 self-start lg:self-center"
+              className="w-full sm:w-auto px-4 py-2.5 border border-border-color hover:border-accent-primary rounded-lg text-text-secondary hover:text-text-primary font-tech uppercase text-xs transition-all flex items-center justify-center gap-2 shrink-0"
             >
               <RefreshCw size={13} />
               <span>Clear / Ready Next</span>
@@ -925,7 +1148,7 @@ export default function ScannerClientView() {
           </div>
 
           {/* Team Distribution Progress: Lunch & Snacks */}
-          <div className="border border-border-color rounded-lg bg-surface-color/50 p-4">
+          <div className="border border-border-color rounded-xl bg-surface-color/50 p-4">
             <div className="flex items-center justify-between mb-3">
               <h3 className="font-heading text-sm text-text-primary uppercase m-0 tracking-wider flex items-center gap-2">
                 <Users size={14} className="text-accent-primary" />
@@ -936,9 +1159,9 @@ export default function ScannerClientView() {
               </span>
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {/* Lunch Progress */}
-              <div className="border border-border-color rounded p-3 flex flex-col">
+              <div className="border border-border-color rounded-lg p-3 flex flex-col bg-surface-color/30">
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-2">
                     <Utensils className="w-4 h-4 text-status-warning" />
@@ -956,20 +1179,21 @@ export default function ScannerClientView() {
                 </div>
                 <button
                   onClick={() => handleTeamDistributionScan("lunch")}
-                  disabled={loading || isCoolingDown || lunchCount >= 3}
-                  className={`mt-2 w-full py-1.5 text-[10px] font-bold uppercase rounded transition-all flex items-center justify-center gap-1.5 ${lunchCount >= 3
-                    ? "bg-status-error/20 border border-status-error/40 text-status-error disabled:opacity-100 cursor-not-allowed"
-                    : "bg-surface-color-light border border-accent-secondary text-accent-secondary hover:bg-accent-secondary/10 disabled:opacity-50"
-                    }`}
+                  disabled={loading || lunchCount >= 3}
+                  className={`mt-2.5 w-full min-h-[36px] py-1.5 text-xs font-bold uppercase rounded-lg transition-all flex items-center justify-center gap-1.5 ${
+                    lunchCount >= 3
+                      ? "bg-status-error/20 border border-status-error/40 text-status-error disabled:opacity-100 cursor-not-allowed"
+                      : "bg-surface-color-light border border-accent-secondary text-accent-secondary hover:bg-accent-secondary/10 disabled:opacity-50"
+                  }`}
                 >
                   {lunchCount >= 3 ? (
                     <>
-                      <X size={11} className="mr-1" />
+                      <X size={12} className="mr-1" />
                       <span>Lunch Complete (3/3)</span>
                     </>
                   ) : (
                     <>
-                      <Utensils size={11} className="mr-1" />
+                      <Utensils size={12} className="mr-1" />
                       <span>Scan Lunch</span>
                     </>
                   )}
@@ -977,7 +1201,7 @@ export default function ScannerClientView() {
               </div>
 
               {/* Snacks Progress */}
-              <div className="border border-border-color rounded p-3 flex flex-col">
+              <div className="border border-border-color rounded-lg p-3 flex flex-col bg-surface-color/30">
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-2">
                     <Coffee className="w-4 h-4 text-accent-secondary" />
@@ -995,20 +1219,21 @@ export default function ScannerClientView() {
                 </div>
                 <button
                   onClick={() => handleTeamDistributionScan("snacks")}
-                  disabled={loading || isCoolingDown || snacksCount >= 3}
-                  className={`mt-2 w-full py-1.5 text-[10px] font-bold uppercase rounded transition-all flex items-center justify-center gap-1.5 ${snacksCount >= 3
-                    ? "bg-status-error/20 border border-status-error/40 text-status-error disabled:opacity-100 cursor-not-allowed"
-                    : "bg-surface-color-light border border-accent-secondary text-accent-secondary hover:bg-accent-secondary/10 disabled:opacity-50"
-                    }`}
+                  disabled={loading || snacksCount >= 3}
+                  className={`mt-2.5 w-full min-h-[36px] py-1.5 text-xs font-bold uppercase rounded-lg transition-all flex items-center justify-center gap-1.5 ${
+                    snacksCount >= 3
+                      ? "bg-status-error/20 border border-status-error/40 text-status-error disabled:opacity-100 cursor-not-allowed"
+                      : "bg-surface-color-light border border-accent-secondary text-accent-secondary hover:bg-accent-secondary/10 disabled:opacity-50"
+                  }`}
                 >
                   {snacksCount >= 3 ? (
                     <>
-                      <X size={11} className="mr-1" />
+                      <X size={12} className="mr-1" />
                       <span>Snacks Complete (3/3)</span>
                     </>
                   ) : (
                     <>
-                      <Coffee size={11} className="mr-1" />
+                      <Coffee size={12} className="mr-1" />
                       <span>Scan Snacks</span>
                     </>
                   )}
@@ -1017,21 +1242,160 @@ export default function ScannerClientView() {
             </div>
 
             {(lunchCount >= 3 || snacksCount >= 3) && (
-              <div className="mt-3 p-2.5 bg-surface-color border border-border-color rounded text-[10px] font-mono text-text-secondary flex items-center gap-2">
-                <AlertCircle size={12} className="text-text-secondary" />
+              <div className="mt-3 p-2.5 bg-surface-color border border-border-color rounded-lg text-[10px] font-mono text-text-secondary flex items-center gap-2">
+                <AlertCircle size={12} className="text-text-secondary shrink-0" />
                 <span>
                   {lunchCount >= 3 && snacksCount >= 3
                     ? "All distributions complete for this team."
                     : lunchCount >= 3
-                      ? "Lunch limit reached (3/3). Snacks still available."
-                      : "Snacks limit reached (3/3). Lunch still available."}
+                    ? "Lunch limit reached (3/3). Snacks still available."
+                    : "Snacks limit reached (3/3). Lunch still available."}
                 </span>
               </div>
             )}
           </div>
 
-          {/* Members Table */}
-          <div className="overflow-x-auto">
+          {/* Team-Wide 1-Tap Bulk Action Banner */}
+          <div className="p-3.5 sm:p-4 bg-accent-primary/10 border border-accent-primary/30 rounded-xl flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 font-tech">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-lg bg-accent-primary/20 border border-accent-primary flex items-center justify-center shrink-0">
+                <Sparkles className="text-accent-primary" size={16} />
+              </div>
+              <div>
+                <p className="text-xs font-heading uppercase text-text-primary m-0">
+                  Team-Wide Quick Action
+                </p>
+                <p className="text-[11px] text-text-secondary m-0">
+                  {unclaimedMembersCount > 0
+                    ? `${unclaimedMembersCount} of ${teamData.members.length} member(s) pending for ${scanPurpose}`
+                    : `All ${teamData.members.length} members already recorded for ${scanPurpose}`}
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={handleBulkTeamAction}
+              disabled={loading || unclaimedMembersCount === 0}
+              className={`min-h-[40px] px-4 py-2 text-xs font-bold font-tech uppercase rounded-lg transition-all flex items-center justify-center gap-2 cursor-pointer shrink-0 ${
+                unclaimedMembersCount === 0
+                  ? "bg-status-success/15 border border-status-success/40 text-status-success disabled:opacity-100 cursor-not-allowed"
+                  : "bg-accent-primary hover:bg-accent-primary/80 text-black shadow-[0_0_15px_rgba(0,240,255,0.3)] disabled:opacity-50"
+              }`}
+            >
+              {unclaimedMembersCount === 0 ? (
+                <>
+                  <CheckCircle2 size={14} />
+                  <span>All Recorded ({teamData.members.length}/{teamData.members.length})</span>
+                </>
+              ) : (
+                <>
+                  <Sparkles size={14} />
+                  <span>
+                    1-Tap: {scanPurpose === "registration" ? "Check In All" : `Claim ${scanPurpose} for All`} ({unclaimedMembersCount})
+                  </span>
+                </>
+              )}
+            </button>
+          </div>
+
+          {/* Mobile Participant Cards (md:hidden) */}
+          <div className="block md:hidden space-y-3">
+            <h3 className="font-heading text-sm text-text-primary uppercase m-0 flex items-center gap-2">
+              <Users size={14} className="text-accent-secondary" />
+              Participants ({teamData.members.length})
+            </h3>
+
+            {teamData.members.length === 0 ? (
+              <div className="p-4 text-center text-text-secondary italic border border-border-color rounded-lg">
+                No registered members mapped in roster.
+              </div>
+            ) : (
+              teamData.members.map((m: TeamScanMember) => {
+                const participantId = m.user_id || m.id;
+                const regLog = getLogForAction(participantId, "registration");
+                const goodiesLog = getLogForAction(participantId, "goodies");
+                const lunchLog = getLogForAction(participantId, "lunch");
+                const snacksLog = getLogForAction(participantId, "snacks");
+                const certLog = getLogForAction(participantId, "certificates");
+                const currentLog = getLogForAction(participantId, scanPurpose);
+
+                return (
+                  <div
+                    key={m.id}
+                    className="p-3.5 bg-surface-color/60 border border-border-color rounded-xl space-y-3"
+                  >
+                    {/* Top Row: Name, Role & 1-Tap Action Button */}
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <p className="font-heading text-sm text-text-primary uppercase m-0 leading-tight">
+                            {m.name || "Member"}
+                          </p>
+                          <span
+                            className={`px-1.5 py-0.5 border text-[9px] uppercase font-bold rounded ${
+                              m.role === "leader"
+                                ? "bg-accent-secondary/15 text-accent-secondary border-accent-secondary"
+                                : "bg-surface-color text-text-secondary border-border-color"
+                            }`}
+                          >
+                            {m.role || "Member"}
+                          </span>
+                        </div>
+                        <p className="font-mono text-[10px] text-text-secondary m-0 mt-0.5 truncate">
+                          {m.email || m.id.slice(0, 8)}
+                        </p>
+                      </div>
+
+                      {/* 1-Tap Action Button */}
+                      <div className="shrink-0">
+                        {currentLog ? (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[10px] font-bold uppercase border bg-status-success/15 text-status-success border-status-success/40 font-mono">
+                            <CheckCircle2 size={11} /> Recorded
+                          </span>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => handleDetectedCode(teamData.team.id, participantId)}
+                            disabled={loading}
+                            className="min-h-[34px] px-3 py-1.5 bg-accent-primary hover:bg-accent-primary/80 text-black text-xs font-bold uppercase rounded-lg font-tech transition-all disabled:opacity-50 cursor-pointer shadow-[0_0_12px_rgba(0,240,255,0.25)]"
+                          >
+                            {scanPurpose === "registration" ? "Check In" : `Claim ${scanPurpose}`}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Micro Badge Strip for All 5 Perks */}
+                    <div className="grid grid-cols-3 xs:grid-cols-5 gap-1.5 pt-2 border-t border-border-color/30 text-center">
+                      <div className={`p-1 rounded border text-[9px] font-bold uppercase ${regLog ? "bg-status-success/15 text-status-success border-status-success/40" : "bg-surface-color text-text-secondary/60 border-border-color/40"}`}>
+                        <span>Check-In</span>
+                        {regLog && <CheckCircle2 size={9} className="inline ml-0.5" />}
+                      </div>
+                      <div className={`p-1 rounded border text-[9px] font-bold uppercase ${goodiesLog ? "bg-status-success/15 text-status-success border-status-success/40" : "bg-surface-color text-text-secondary/60 border-border-color/40"}`}>
+                        <span>Goodies</span>
+                        {goodiesLog && <CheckCircle2 size={9} className="inline ml-0.5" />}
+                      </div>
+                      <div className={`p-1 rounded border text-[9px] font-bold uppercase ${lunchLog ? "bg-status-success/15 text-status-success border-status-success/40" : "bg-surface-color text-text-secondary/60 border-border-color/40"}`}>
+                        <span>Lunch</span>
+                        {lunchLog && <CheckCircle2 size={9} className="inline ml-0.5" />}
+                      </div>
+                      <div className={`p-1 rounded border text-[9px] font-bold uppercase ${snacksLog ? "bg-status-success/15 text-status-success border-status-success/40" : "bg-surface-color text-text-secondary/60 border-border-color/40"}`}>
+                        <span>Snacks</span>
+                        {snacksLog && <CheckCircle2 size={9} className="inline ml-0.5" />}
+                      </div>
+                      <div className={`p-1 rounded border text-[9px] font-bold uppercase ${certLog ? "bg-status-success/15 text-status-success border-status-success/40" : "bg-surface-color text-text-secondary/60 border-border-color/40"}`}>
+                        <span>Cert</span>
+                        {certLog && <CheckCircle2 size={9} className="inline ml-0.5" />}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+
+          {/* Desktop Members Table (hidden md:block) */}
+          <div className="hidden md:block overflow-x-auto">
             <table className="w-full text-left border-collapse text-xs">
               <thead className="border-b border-border-color bg-surface-color-light/40 text-text-secondary uppercase tracking-wider">
                 <tr>
@@ -1141,7 +1505,7 @@ export default function ScannerClientView() {
                             <button
                               type="button"
                               onClick={() => handleDetectedCode(teamData.team.id, participantId)}
-                              disabled={loading || isCoolingDown}
+                              disabled={loading}
                               className="px-3 py-1 bg-accent-primary hover:bg-accent-primary/80 text-black text-[10px] font-bold uppercase rounded font-tech transition-all disabled:opacity-50 cursor-pointer"
                             >
                               {scanPurpose === "registration" ? "Check In" : `Claim ${scanPurpose}`}
@@ -1161,5 +1525,6 @@ export default function ScannerClientView() {
       {/* 5. RECENTLY SCANNED TEAMS AUDIT FEED */}
       <RecentlyScannedTeams limit={3} />
     </div>
+    </PullToRefresh>
   );
 }

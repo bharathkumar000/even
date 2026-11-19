@@ -1,5 +1,7 @@
+import { redirect } from "next/navigation";
 import { requireAuthenticatedTeamUser } from "@/lib/auth/team";
 import { getActiveSubmissionForm, getSubmissionDraft, getTeamFinalSubmission } from "@/app/actions/team-submissions";
+import { isDeliverablesUnlocked } from "@/lib/event-schedule";
 import TeamDynamicSubmissionClientView from "./dynamic-submission-client";
 
 export const dynamic = "force-dynamic";
@@ -11,6 +13,10 @@ interface ErrorState {
 }
 
 export default async function TeamSubmissionPage() {
+  if (!isDeliverablesUnlocked()) {
+    redirect("/team");
+  }
+
   let userId = "";
   let teamId: string | null = null;
   let role = "";

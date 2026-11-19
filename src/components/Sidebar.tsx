@@ -12,7 +12,7 @@ export default function Sidebar() {
   const navItems = [
     { href: '/admin', icon: LayoutDashboard, label: 'Dashboard' },
     { href: '/admin/evaluations', icon: Gavel, label: 'Judges Portal' },
-    { href: '/team/submission', icon: Users, label: 'Participants Portal' },
+    { href: '/team', icon: Users, label: 'Participants Portal' },
     { href: '/event-flow', icon: Calendar, label: 'Event Flow' },
     { href: '/event-details', icon: Settings, label: 'Event Details' },
     { href: '/admin/settings', icon: Settings, label: 'Settings' },

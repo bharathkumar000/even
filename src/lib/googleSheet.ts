@@ -56,7 +56,7 @@ function parseCsv(csv: string): Record<string, string>[] {
 /** Fetch the raw CSV data from the Google Sheet. */
 async function fetchCsv(): Promise<string> {
   const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=csv`;
-  const res = await fetch(url);
+  const res = await fetch(url, { signal: AbortSignal.timeout(4000) });
   if (!res.ok) {
     console.error("Failed to fetch Google Sheet CSV", res.status);
     throw new Error(`Unable to fetch sheet CSV (status ${res.status})`);

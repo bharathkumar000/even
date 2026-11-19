@@ -56,6 +56,44 @@ export async function resolveUsernameToEmail(username: string): Promise<string |
       return profileData.email as string;
     }
 
+    // Step 3: Check team_registrations by login_username, team_name, or team_code
+    try {
+      const { data: regMatch } = await supabaseAdmin
+        .from("team_registrations")
+        .select("leader_email, login_email")
+        .or(`login_username.ilike.${normalizedUsername},team_name.ilike.${normalizedUsername},team_code.ilike.${normalizedUsername}`)
+        .limit(1)
+        .maybeSingle();
+
+      if (regMatch?.leader_email || regMatch?.login_email) {
+        return (regMatch.leader_email || regMatch.login_email) as string;
+      }
+    } catch {
+      // Continue to next fallback
+    }
+
+    // Step 4: Check teams table by name or code to resolve to team leader's email
+    try {
+      const { data: teamMatch } = await supabaseAdmin
+        .from("teams")
+        .select("id")
+        .or(`name.ilike.${normalizedUsername},code.ilike.${normalizedUsername}`)
+        .limit(1)
+        .maybeSingle();
+
+      if (teamMatch?.id) {
+        const { data: leaderMember } = await supabaseAdmin
+          .from("team_members")
+          .select("email")
+          .eq("team_id", teamMatch.id)
+          .eq("role", "leader")
+          .maybeSingle();
+        if (leaderMember?.email) return leaderMember.email;
+      }
+    } catch {
+      // Ignore fallback error
+    }
+
     return null;
   } catch {
     return null;
