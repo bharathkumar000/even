@@ -5,6 +5,18 @@ import DepartmentProblemStatements from "./department-problem-statements";
 
 export const dynamic = "force-dynamic";
 
+type Department = "cse-aiml" | "ece-eee" | "me-cv";
+
+const DEPARTMENTS: Array<{
+  id: Department;
+  label: string;
+  subtitle: string;
+}> = [
+  { id: "cse-aiml", label: "CSE / AIML", subtitle: "Computer Science & AI/ML" },
+  { id: "ece-eee", label: "ECE / EEE", subtitle: "Electronics & Electrical" },
+  { id: "me-cv", label: "ME / CV", subtitle: "Mechanical & Civil" },
+];
+
 export default async function TeamProblemStatementsPage() {
   const { user, teamId } = await requireAuthenticatedTeamUser();
 
@@ -40,6 +52,11 @@ export default async function TeamProblemStatementsPage() {
         </h1>
         <p className="font-tech text-text-secondary text-xs mt-2">
           Browse the officially published problem statements for the Ideathon.
+          {userDepartment && (
+            <span className="ml-2 px-2 py-0.5 bg-accent-secondary/10 border border-accent-secondary/40 text-accent-secondary text-[10px] font-bold uppercase rounded">
+              Your Dept: {DEPARTMENTS.find((d) => d.id === userDepartment)?.label}
+            </span>
+          )}
         </p>
       </div>
 
