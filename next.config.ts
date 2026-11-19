@@ -32,6 +32,9 @@ const nextConfig: NextConfig = {
   transpilePackages: ["lucide-react"],
   experimental: {
     optimizePackageImports: ["lucide-react"],
+    serverActions: {
+      bodySizeLimit: "10mb",
+    },
   },
   // Removed global Cache‑Control header to avoid stale chunk caching.
 };

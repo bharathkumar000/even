@@ -189,16 +189,79 @@ export default function RegisterClientView({
     );
   }, []);
 
-  const handleFileChange = (file: File | null) => {
+  const compressImageClient = async (file: File, maxDimension = 1400, quality = 0.8): Promise<File> => {
+    if (!file.type.startsWith("image/")) return file;
+
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = new window.Image();
+        img.onload = () => {
+          let width = img.width;
+          let height = img.height;
+
+          if (width > maxDimension || height > maxDimension) {
+            if (width > height) {
+              height = Math.round((height * maxDimension) / width);
+              width = maxDimension;
+            } else {
+              width = Math.round((width * maxDimension) / height);
+              height = maxDimension;
+            }
+          }
+
+          const canvas = document.createElement("canvas");
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext("2d");
+          if (!ctx) {
+            resolve(file);
+            return;
+          }
+
+          ctx.drawImage(img, 0, 0, width, height);
+          canvas.toBlob(
+            (blob) => {
+              if (!blob) {
+                resolve(file);
+                return;
+              }
+              const cleanName = file.name.replace(/\.[^/.]+$/, "") + ".jpg";
+              const compressedFile = new File([blob], cleanName, {
+                type: "image/jpeg",
+                lastModified: Date.now(),
+              });
+              resolve(compressedFile);
+            },
+            "image/jpeg",
+            quality
+          );
+        };
+        img.onerror = () => resolve(file);
+        img.src = e.target?.result as string;
+      };
+      reader.onerror = () => resolve(file);
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const handleFileChange = async (file: File | null) => {
     if (!file) return;
-    if (file.size > 10 * 1024 * 1024) {
-      setErrorMsg("Payment proof file exceeds 10MB limit.");
+    if (file.size > 20 * 1024 * 1024) {
+      setErrorMsg("Payment proof file exceeds 20MB limit.");
       return;
     }
-    setPaymentFile(file);
     const objectUrl = URL.createObjectURL(file);
     setPreviewUrl(objectUrl);
     setErrorMsg(null);
+
+    // Compress in background to keep upload super fast and safely within payload limits
+    try {
+      const optimized = await compressImageClient(file);
+      setPaymentFile(optimized);
+    } catch {
+      setPaymentFile(file);
+    }
   };
 
   const copyUpiId = () => {
@@ -370,8 +433,15 @@ export default function RegisterClientView({
       formData.append("membersJson", JSON.stringify(otherMembers));
       formData.append("paymentUtr", paymentUtr.trim());
       formData.append("paymentPhone", driver1.phone.trim());
-      if (paymentFile) {
-        formData.append("paymentProof", paymentFile);
+
+      let fileToUpload = paymentFile;
+      if (fileToUpload && fileToUpload.size > 600 * 1024) {
+        try {
+          fileToUpload = await compressImageClient(fileToUpload);
+        } catch {}
+      }
+      if (fileToUpload) {
+        formData.append("paymentProof", fileToUpload);
       }
 
       const res = await submitTeamRegistration(formData);
@@ -393,7 +463,12 @@ export default function RegisterClientView({
       }
     } catch (err: unknown) {
       console.error("Submission failed:", err);
-      setErrorMsg("Unexpected system error while locking grid position. Please retry.");
+      const rawMsg = err instanceof Error ? err.message : String(err);
+      setErrorMsg(
+        rawMsg && !rawMsg.includes("fetch") && !rawMsg.includes("Failed to fetch")
+          ? `Submission notice: ${rawMsg}`
+          : "Unexpected system error while locking grid position. Please retry."
+      );
     } finally {
       setSubmitting(false);
     }
