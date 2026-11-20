@@ -158,6 +158,15 @@ export default function RegisterClientView({
     setDriver4((prev) => ({ ...prev, sem: newSem }));
   };
 
+  // Sync Captain's college to other squad members if they were matching or empty
+  const handleCaptainCollegeChange = (newCollege: string) => {
+    const oldCollege = driver1.college;
+    setDriver1((prev) => ({ ...prev, college: newCollege }));
+    setDriver2((prev) => (prev.college === oldCollege || !prev.college ? { ...prev, college: newCollege } : prev));
+    setDriver3((prev) => (prev.college === oldCollege || !prev.college ? { ...prev, college: newCollege } : prev));
+    setDriver4((prev) => (prev.college === oldCollege || !prev.college ? { ...prev, college: newCollege } : prev));
+  };
+
   // Payment
   const [paymentUtr, setPaymentUtr] = useState("");
   const [paymentFile, setPaymentFile] = useState<File | null>(null);
@@ -868,9 +877,14 @@ export default function RegisterClientView({
                     <span className="text-neutral-400 text-[10px]">All 4 members must be currently enrolled in 3rd Semester (2nd Year).</span>
                   </div>
                 </div>
-                <p className="text-yellow-400 font-bold text-[10px] sm:text-[11px] m-0 pt-2 border-t border-red-900/40">
-                  ⚠ IMPORTANT: Mixed semester teams and senior-junior combinations are strictly prohibited. Selecting the Team Captain&apos;s semester automatically sets and locks the semester for all 4 team members.
-                </p>
+                <div className="pt-2 border-t border-red-900/40 space-y-1">
+                  <p className="text-emerald-400 font-bold text-[10px] sm:text-[11px] m-0">
+                    🎓 OPEN TO ALL COLLEGES: Students from any engineering college / university can participate!
+                  </p>
+                  <p className="text-yellow-400 font-bold text-[10px] sm:text-[11px] m-0">
+                    ⚠ TEAM RULE: Mixed semester teams and senior-junior combinations are strictly prohibited. Selecting the Team Captain&apos;s semester automatically sets and locks the semester for all 4 team members.
+                  </p>
+                </div>
               </div>
 
               {/* SECTION 2: DRIVER 1 (CAPTAIN) */}
@@ -989,18 +1003,16 @@ export default function RegisterClientView({
                   </div>
 
                   <div className="sm:col-span-2 space-y-1.5">
-                    <label className="flex items-center justify-between text-red-500 uppercase text-[11px] font-bold">
-                      <span>COLLEGE / INSTITUTION <span className="text-red-500">*</span></span>
-                      <span className="inline-flex items-center gap-1 text-[10px] text-neutral-400 font-normal">
-                        <Lock size={10} className="text-red-500" /> VVCE EXCLUSIVE
-                      </span>
+                    <label className="block text-red-500 uppercase text-[11px] font-bold">
+                      COLLEGE / INSTITUTION <span className="text-red-500">*</span>
                     </label>
                     <input
                       type="text"
                       required
-                      readOnly
-                      value="Vidya Vardhaka College Of Engineering"
-                      className="w-full bg-[#050505] border border-neutral-800/80 text-neutral-300 font-bold p-3 rounded outline-none text-xs cursor-not-allowed select-none"
+                      placeholder="e.g. Vidya Vardhaka College Of Engineering"
+                      value={driver1.college}
+                      onChange={(e) => handleCaptainCollegeChange(e.target.value)}
+                      className="w-full bg-[#0a0a0a] border border-neutral-800 focus:border-red-500 text-white p-3 rounded outline-none text-xs placeholder:text-neutral-600"
                     />
                   </div>
                 </div>
@@ -1104,18 +1116,16 @@ export default function RegisterClientView({
                   </div>
 
                   <div className="sm:col-span-2 space-y-1.5">
-                    <label className="flex items-center justify-between text-red-500 uppercase text-[11px] font-bold">
-                      <span>COLLEGE_2 <span className="text-red-500">*</span></span>
-                      <span className="inline-flex items-center gap-1 text-[10px] text-neutral-400 font-normal">
-                        <Lock size={10} className="text-red-500" /> VVCE EXCLUSIVE
-                      </span>
+                    <label className="block text-red-500 uppercase text-[11px] font-bold">
+                      COLLEGE_2 <span className="text-red-500">*</span>
                     </label>
                     <input
                       type="text"
                       required
-                      readOnly
-                      value="Vidya Vardhaka College Of Engineering"
-                      className="w-full bg-[#050505] border border-neutral-800/80 text-neutral-300 font-bold p-3 rounded outline-none text-xs cursor-not-allowed select-none"
+                      placeholder="e.g. Vidya Vardhaka College Of Engineering"
+                      value={driver2.college}
+                      onChange={(e) => setDriver2({ ...driver2, college: e.target.value })}
+                      className="w-full bg-[#0a0a0a] border border-neutral-800 focus:border-red-500 text-white p-3 rounded outline-none text-xs placeholder:text-neutral-600"
                     />
                   </div>
                 </div>
@@ -1219,18 +1229,16 @@ export default function RegisterClientView({
                   </div>
 
                   <div className="sm:col-span-2 space-y-1.5">
-                    <label className="flex items-center justify-between text-red-500 uppercase text-[11px] font-bold">
-                      <span>COLLEGE_3 <span className="text-red-500">*</span></span>
-                      <span className="inline-flex items-center gap-1 text-[10px] text-neutral-400 font-normal">
-                        <Lock size={10} className="text-red-500" /> VVCE EXCLUSIVE
-                      </span>
+                    <label className="block text-red-500 uppercase text-[11px] font-bold">
+                      COLLEGE_3 <span className="text-red-500">*</span>
                     </label>
                     <input
                       type="text"
                       required
-                      readOnly
-                      value="Vidya Vardhaka College Of Engineering"
-                      className="w-full bg-[#050505] border border-neutral-800/80 text-neutral-300 font-bold p-3 rounded outline-none text-xs cursor-not-allowed select-none"
+                      placeholder="e.g. Vidya Vardhaka College Of Engineering"
+                      value={driver3.college}
+                      onChange={(e) => setDriver3({ ...driver3, college: e.target.value })}
+                      className="w-full bg-[#0a0a0a] border border-neutral-800 focus:border-red-500 text-white p-3 rounded outline-none text-xs placeholder:text-neutral-600"
                     />
                   </div>
                 </div>
@@ -1334,18 +1342,16 @@ export default function RegisterClientView({
                   </div>
 
                   <div className="sm:col-span-2 space-y-1.5">
-                    <label className="flex items-center justify-between text-red-500 uppercase text-[11px] font-bold">
-                      <span>COLLEGE_4 <span className="text-red-500">*</span></span>
-                      <span className="inline-flex items-center gap-1 text-[10px] text-neutral-400 font-normal">
-                        <Lock size={10} className="text-red-500" /> VVCE EXCLUSIVE
-                      </span>
+                    <label className="block text-red-500 uppercase text-[11px] font-bold">
+                      COLLEGE_4 <span className="text-red-500">*</span>
                     </label>
                     <input
                       type="text"
                       required
-                      readOnly
-                      value="Vidya Vardhaka College Of Engineering"
-                      className="w-full bg-[#050505] border border-neutral-800/80 text-neutral-300 font-bold p-3 rounded outline-none text-xs cursor-not-allowed select-none"
+                      placeholder="e.g. Vidya Vardhaka College Of Engineering"
+                      value={driver4.college}
+                      onChange={(e) => setDriver4({ ...driver4, college: e.target.value })}
+                      className="w-full bg-[#0a0a0a] border border-neutral-800 focus:border-red-500 text-white p-3 rounded outline-none text-xs placeholder:text-neutral-600"
                     />
                   </div>
                 </div>

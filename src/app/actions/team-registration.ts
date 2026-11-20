@@ -218,11 +218,11 @@ export async function submitTeamRegistration(
   try {
     const teamName = String(formData.get("teamName") || "").trim();
 
-    // Leader info (Vidya Vardhaka College Of Engineering exclusive)
+    // Leader info (Open to students from any college)
     const leaderName = String(formData.get("leaderName") || "").trim();
     const leaderEmail = String(formData.get("leaderEmail") || "").trim().toLowerCase();
     const leaderPhone = String(formData.get("leaderPhone") || "").trim();
-    const leaderCollege = "Vidya Vardhaka College Of Engineering";
+    const leaderCollege = String(formData.get("leaderCollege") || "").trim() || "Vidya Vardhaka College Of Engineering";
     const leaderUsn = String(formData.get("leaderUsn") || "").trim().toUpperCase();
     const leaderBranch = String(formData.get("leaderBranch") || "").trim();
     const leaderSem = String(formData.get("leaderSem") || "").trim();
@@ -234,8 +234,8 @@ export async function submitTeamRegistration(
     const paymentPhone = String(formData.get("paymentPhone") || "").trim() || leaderPhone;
     const paymentFile = formData.get("paymentProof") as File | null;
 
-    if (!teamName || !track || !leaderName || !leaderEmail || !leaderPhone || !leaderUsn) {
-      return { success: false, message: "Please fill in all required team and leader fields, including Leader USN." };
+    if (!teamName || !track || !leaderName || !leaderEmail || !leaderPhone || !leaderUsn || !leaderCollege) {
+      return { success: false, message: "Please fill in all required team and leader fields, including Leader College and USN." };
     }
 
     // Parse the other 3 members from form data
@@ -244,7 +244,10 @@ export async function submitTeamRegistration(
     try {
       members = JSON.parse(membersRaw);
       if (Array.isArray(members)) {
-        members = members.map((m) => ({ ...m, college: "Vidya Vardhaka College Of Engineering" }));
+        members = members.map((m) => ({
+          ...m,
+          college: String(m.college || "").trim() || leaderCollege || "Vidya Vardhaka College Of Engineering",
+        }));
       }
     } catch {
       members = [];
@@ -258,13 +261,13 @@ export async function submitTeamRegistration(
       };
     }
 
-    // Validate that all members have required fields including USN
+    // Validate that all members have required fields including USN and College
     for (let i = 0; i < members.length; i++) {
       const member = members[i];
-      if (!member.name?.trim() || !member.email?.trim() || !member.usn?.trim()) {
+      if (!member.name?.trim() || !member.email?.trim() || !member.usn?.trim() || !member.college?.trim()) {
         return {
           success: false,
-          message: `Please fill in all required fields including USN for Member ${i + 2}.`,
+          message: `Please fill in all required fields including College and USN for Member ${i + 2}.`,
         };
       }
     }
