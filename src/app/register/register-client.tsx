@@ -303,7 +303,7 @@ export default function RegisterClientView({
 
     // Validate Driver 2
     if (!driver2.name.trim() || !driver2.email.trim() || !driver2.phone.trim() || !driver2.college.trim() || !driver2.usn.trim()) {
-      setErrorMsg("// DRIVER 2 (AERODYNAMICS): Please complete all required member details including USN.");
+      setErrorMsg("// DRIVER 2 (AERODYNAMICS): Please complete all required member details including College and USN.");
       return false;
     }
     if (!driver2.email.includes("@")) {
@@ -313,7 +313,7 @@ export default function RegisterClientView({
 
     // Validate Driver 3
     if (!driver3.name.trim() || !driver3.email.trim() || !driver3.phone.trim() || !driver3.college.trim() || !driver3.usn.trim()) {
-      setErrorMsg("// DRIVER 3 (POWERTRAIN): Please complete all required member details including USN.");
+      setErrorMsg("// DRIVER 3 (POWERTRAIN): Please complete all required member details including College and USN.");
       return false;
     }
     if (!driver3.email.includes("@")) {
@@ -323,7 +323,7 @@ export default function RegisterClientView({
 
     // Validate Driver 4
     if (!driver4.name.trim() || !driver4.email.trim() || !driver4.phone.trim() || !driver4.college.trim() || !driver4.usn.trim()) {
-      setErrorMsg("// DRIVER 4 (TELEMETRY): Please complete all required member details including USN.");
+      setErrorMsg("// DRIVER 4 (TELEMETRY): Please complete all required member details including College and USN.");
       return false;
     }
     if (!driver4.email.includes("@")) {

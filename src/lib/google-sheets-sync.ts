@@ -1007,7 +1007,7 @@ function doPost(e) {
         } else if (h === "leader phone" || h === "phone" || h === "team lead phone") {
           val = itemData.leaderPhone || itemData.paymentPhone || "";
         } else if (h === "leader college" || h === "college") {
-          val = itemData.leaderCollege || "Vidya Vardhaka College Of Engineering";
+          val = itemData.leaderCollege || "";
         } else if (h === "leader usn") {
           val = itemData.leaderUsn || "N/A";
         } else if (h === "leader branch") {
@@ -1021,7 +1021,7 @@ function doPost(e) {
         } else if (h === "driver 2 phone" || h === "member 2 phone") {
           val = itemData.driver2Phone || "";
         } else if (h === "driver 2 college") {
-          val = itemData.driver2College || "Vidya Vardhaka College Of Engineering";
+          val = itemData.driver2College || itemData.leaderCollege || "";
         } else if (h === "driver 2 usn") {
           val = itemData.driver2Usn || "N/A";
         } else if (h === "driver 2 branch") {
@@ -1035,7 +1035,7 @@ function doPost(e) {
         } else if (h === "driver 3 phone") {
           val = itemData.driver3Phone || "";
         } else if (h === "driver 3 college") {
-          val = itemData.driver3College || "Vidya Vardhaka College Of Engineering";
+          val = itemData.driver3College || itemData.leaderCollege || "";
         } else if (h === "driver 3 usn") {
           val = itemData.driver3Usn || "N/A";
         } else if (h === "driver 3 branch") {
@@ -1049,7 +1049,7 @@ function doPost(e) {
         } else if (h === "driver 4 phone") {
           val = itemData.driver4Phone || "";
         } else if (h === "driver 4 college") {
-          val = itemData.driver4College || "Vidya Vardhaka College Of Engineering";
+          val = itemData.driver4College || itemData.leaderCollege || "";
         } else if (h === "driver 4 usn") {
           val = itemData.driver4Usn || "N/A";
         } else if (h === "driver 4 branch") {
@@ -1329,7 +1329,7 @@ function fixCredentialsAlignmentInternal(ss) {
       var leaderName = getVal(aRow, ["Leader Name", "Team Lead"]);
       var leaderEmail = getVal(aRow, ["Leader Email", "Login Email ID", "Email"]);
       var leaderPhone = getVal(aRow, ["Leader Phone", "Phone"]);
-      var leaderCollege = getVal(aRow, ["Leader College", "College"]) || "Vidya Vardhaka College Of Engineering";
+      var leaderCollege = getVal(aRow, ["Leader College", "College"]) || "";
       var d2Name = getVal(aRow, ["Driver 2 Name", "Member 2 Name"]);
       var d2Phone = getVal(aRow, ["Driver 2 Phone", "Member 2 Phone"]);
       var password = getVal(aRow, ["Login Password", "Password"]);
