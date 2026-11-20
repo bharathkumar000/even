@@ -40,7 +40,7 @@ const DEFAULT_DRIVER: DriverState = {
   usn: "",
   branch: "Computer Science & Engg (CSE)",
   sem: "1st Semester",
-  college: "Vidya Vardhaka College Of Engineering",
+  college: "",
 };
 
 const BRANCHES = [
@@ -115,7 +115,7 @@ export default function RegisterClientView({
     ...DEFAULT_DRIVER,
     sem: defaultAvailableSem,
     branch: "Computer Science & Engg (CSE)",
-    college: "Vidya Vardhaka College Of Engineering",
+    college: "",
   });
 
   // Drivers 2, 3, 4
@@ -123,21 +123,21 @@ export default function RegisterClientView({
     ...DEFAULT_DRIVER,
     sem: defaultAvailableSem,
     branch: "Computer Science & Engg (CSE)",
-    college: "Vidya Vardhaka College Of Engineering",
+    college: "",
   });
 
   const [driver3, setDriver3] = useState<DriverState>({
     ...DEFAULT_DRIVER,
     sem: defaultAvailableSem,
     branch: "Computer Science & Engg (CSE)",
-    college: "Vidya Vardhaka College Of Engineering",
+    college: "",
   });
 
   const [driver4, setDriver4] = useState<DriverState>({
     ...DEFAULT_DRIVER,
     sem: defaultAvailableSem,
     branch: "Computer Science & Engg (CSE)",
-    college: "Vidya Vardhaka College Of Engineering",
+    college: "",
   });
 
   const isDriver1FirstSem = (driver1.sem || "").toLowerCase().includes("1st") || driver1.sem === "1";
@@ -1009,7 +1009,7 @@ export default function RegisterClientView({
                     <input
                       type="text"
                       required
-                      placeholder="e.g. Vidya Vardhaka College Of Engineering"
+                      placeholder="ENTER COLLEGE / INSTITUTION NAME"
                       value={driver1.college}
                       onChange={(e) => handleCaptainCollegeChange(e.target.value)}
                       className="w-full bg-[#0a0a0a] border border-neutral-800 focus:border-red-500 text-white p-3 rounded outline-none text-xs placeholder:text-neutral-600"
@@ -1122,7 +1122,7 @@ export default function RegisterClientView({
                     <input
                       type="text"
                       required
-                      placeholder="e.g. Vidya Vardhaka College Of Engineering"
+                      placeholder="ENTER COLLEGE / INSTITUTION NAME"
                       value={driver2.college}
                       onChange={(e) => setDriver2({ ...driver2, college: e.target.value })}
                       className="w-full bg-[#0a0a0a] border border-neutral-800 focus:border-red-500 text-white p-3 rounded outline-none text-xs placeholder:text-neutral-600"
@@ -1235,7 +1235,7 @@ export default function RegisterClientView({
                     <input
                       type="text"
                       required
-                      placeholder="e.g. Vidya Vardhaka College Of Engineering"
+                      placeholder="ENTER COLLEGE / INSTITUTION NAME"
                       value={driver3.college}
                       onChange={(e) => setDriver3({ ...driver3, college: e.target.value })}
                       className="w-full bg-[#0a0a0a] border border-neutral-800 focus:border-red-500 text-white p-3 rounded outline-none text-xs placeholder:text-neutral-600"
@@ -1348,7 +1348,7 @@ export default function RegisterClientView({
                     <input
                       type="text"
                       required
-                      placeholder="e.g. Vidya Vardhaka College Of Engineering"
+                      placeholder="ENTER COLLEGE / INSTITUTION NAME"
                       value={driver4.college}
                       onChange={(e) => setDriver4({ ...driver4, college: e.target.value })}
                       className="w-full bg-[#0a0a0a] border border-neutral-800 focus:border-red-500 text-white p-3 rounded outline-none text-xs placeholder:text-neutral-600"

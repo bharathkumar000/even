@@ -222,7 +222,7 @@ export async function submitTeamRegistration(
     const leaderName = String(formData.get("leaderName") || "").trim();
     const leaderEmail = String(formData.get("leaderEmail") || "").trim().toLowerCase();
     const leaderPhone = String(formData.get("leaderPhone") || "").trim();
-    const leaderCollege = String(formData.get("leaderCollege") || "").trim() || "Vidya Vardhaka College Of Engineering";
+    const leaderCollege = String(formData.get("leaderCollege") || "").trim();
     const leaderUsn = String(formData.get("leaderUsn") || "").trim().toUpperCase();
     const leaderBranch = String(formData.get("leaderBranch") || "").trim();
     const leaderSem = String(formData.get("leaderSem") || "").trim();
@@ -246,7 +246,7 @@ export async function submitTeamRegistration(
       if (Array.isArray(members)) {
         members = members.map((m) => ({
           ...m,
-          college: String(m.college || "").trim() || leaderCollege || "Vidya Vardhaka College Of Engineering",
+          college: String(m.college || "").trim() || leaderCollege,
         }));
       }
     } catch {
