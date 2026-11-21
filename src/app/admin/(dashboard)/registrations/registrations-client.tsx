@@ -52,7 +52,7 @@ export default function RegistrationsClientView({
   initialRegistrations,
 }: RegistrationsClientViewProps) {
   const [registrations, setRegistrations] = useState(initialRegistrations);
-  const [filter, setFilter] = useState<"all" | "pending" | "approved" | "rejected">("pending");
+  const [filter, setFilter] = useState<"all" | "pending" | "approved" | "rejected" | "waitlist">("pending");
   const [searchTerm, setSearchTerm] = useState("");
   const [loadingId, setLoadingId] = useState<string | null>(null);
   const [activeProofUrl, setActiveProofUrl] = useState<{ url: string; team: string; utr: string } | null>(null);
@@ -423,7 +423,7 @@ ${OFFICIAL_WHATSAPP_GROUP}
       {/* Filter Tabs, Search Bar & Google Sheets Actions */}
       <div className="flex flex-col lg:flex-row gap-3 items-stretch lg:items-center justify-between">
         <div className="flex items-center gap-1.5 p-1 bg-surface-color border border-border-color rounded-xl w-full lg:w-auto overflow-x-auto">
-          {(["all", "pending", "approved", "rejected"] as const).map((tab) => (
+          {(["all", "pending", "approved", "waitlist", "rejected"] as const).map((tab) => (
             <button
               key={tab}
               onClick={() => setFilter(tab)}
@@ -518,6 +518,7 @@ ${OFFICIAL_WHATSAPP_GROUP}
             const isPending = item.status === "pending";
             const isApproved = item.status === "approved";
             const isRejected = item.status === "rejected";
+            const isWaitlist = item.status === "waitlist";
             const creds = item.generated_credentials as GeneratedCredentials | undefined;
             const membersList = Array.isArray(item.members) ? item.members : [];
 
@@ -529,6 +530,8 @@ ${OFFICIAL_WHATSAPP_GROUP}
                     ? "border-amber-500/30 hover:border-amber-500/50 shadow-[0_0_20px_rgba(245,158,11,0.05)]"
                     : isApproved
                     ? "border-green-500/30 hover:border-green-500/50"
+                    : isWaitlist
+                    ? "border-yellow-500/40 hover:border-yellow-500/60 shadow-[0_0_20px_rgba(234,179,8,0.08)] bg-yellow-950/10"
                     : "border-rose-500/20 opacity-80"
                 }`}
               >
@@ -543,10 +546,12 @@ ${OFFICIAL_WHATSAPP_GROUP}
                       </span>
                       <span
                         className={`px-2.5 py-0.5 rounded font-tech text-[10px] font-bold uppercase ${
-                          isPending
-                            ? "bg-amber-500/15 border border-amber-500/40 text-amber-400"
-                            : isApproved
+                          isApproved
                             ? "bg-green-500/15 border border-green-500/40 text-green-400"
+                            : isPending
+                            ? "bg-amber-500/15 border border-amber-500/40 text-amber-400"
+                            : isWaitlist
+                            ? "bg-yellow-500/20 border border-yellow-500/50 text-yellow-300"
                             : "bg-rose-500/15 border border-rose-500/40 text-rose-400"
                         }`}
                       >

@@ -20,7 +20,11 @@ import {
   Flag,
   Zap,
 } from "lucide-react";
-import { submitTeamRegistration, TeamMemberInput } from "@/app/actions/team-registration";
+import {
+  submitTeamRegistration,
+  getSemesterRegistrationCounts,
+  TeamMemberInput,
+} from "@/app/actions/team-registration";
 import RelayathonFooter from "@/components/RelayathonFooter";
 
 interface DriverState {
@@ -105,6 +109,35 @@ export default function RegisterClientView({
   const isThirdSemLocked = semCounts.thirdSemCount >= thirdSemMaxTotal;
   const isAllLocked = isFirstSemLocked && isThirdSemLocked;
   const defaultAvailableSem = isFirstSemLocked && !isThirdSemLocked ? "3rd Semester" : "1st Semester";
+
+  // Real-time live polling every 10 seconds so waitlist and confirmed counts always reflect immediately
+  useEffect(() => {
+    let isMounted = true;
+    const fetchLiveCounts = async () => {
+      try {
+        const fresh = await getSemesterRegistrationCounts();
+        if (isMounted && fresh) {
+          setSemCounts({
+            firstSemCount: fresh.firstSemCount,
+            thirdSemCount: fresh.thirdSemCount,
+            maxLimit: fresh.maxLimit,
+            firstSemWaitlistLimit: fresh.firstSemWaitlistLimit,
+            thirdSemWaitlistLimit: fresh.thirdSemWaitlistLimit,
+            waitlistLimit: fresh.waitlistLimit,
+          });
+        }
+      } catch (err) {
+        // silent fallback
+      }
+    };
+
+    fetchLiveCounts();
+    const interval = setInterval(fetchLiveCounts, 10000);
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
+  }, []);
 
   // Squad / Team Identity
   const [teamName, setTeamName] = useState("");
@@ -543,8 +576,16 @@ export default function RegisterClientView({
                   : "Your 4-driver constructor crew has been locked into the official Relaython 2026 grid."}
               </p>
               {successData.isWaitlist && (
-                <div className="p-3 bg-yellow-500/10 border border-yellow-500/30 rounded-xl text-yellow-300 font-mono text-xs max-w-xl mx-auto leading-relaxed mt-2">
-                  ⚠️ <strong>Please Note:</strong> Registering on the waiting list does not guarantee a slot for participation. If any confirmed slot becomes available, our Race Stewards will reach out to the Team Lead for payment and participation confirmation.
+                <div className="p-4 bg-yellow-500/10 border border-yellow-500/30 rounded-xl text-yellow-200 font-mono text-xs max-w-xl mx-auto leading-relaxed mt-2 text-left space-y-2">
+                  <p className="m-0 text-yellow-400 font-bold">
+                    ⚠️ <strong>Please Note:</strong> Registering on the waiting list does not guarantee a slot for participation.
+                  </p>
+                  <p className="m-0 text-yellow-100/90 leading-relaxed">
+                    ✨ <strong>2nd Year Track Slot Rollover:</strong> If the 2nd Year (3rd Sem) track slots are not completed before registration closes, all remaining unfilled slots will be converted and offered to 1st Year waiting list teams in sequential order!
+                  </p>
+                  <p className="m-0 text-[11px] text-neutral-400">
+                    If a slot becomes available, our coordinators will immediately reach out to the Team Lead via WhatsApp / Email for payment and confirmation.
+                  </p>
                 </div>
               )}
             </div>
@@ -877,13 +918,16 @@ export default function RegisterClientView({
                     <span className="text-neutral-400 text-[10px]">All 4 members must be currently enrolled in 3rd Semester (2nd Year).</span>
                   </div>
                 </div>
-                <div className="pt-2 border-t border-red-900/40 space-y-1">
+                <div className="pt-2 border-t border-red-900/40 space-y-1.5">
                   <p className="text-emerald-400 font-bold text-[10px] sm:text-[11px] m-0">
                     🎓 OPEN TO ALL COLLEGES: Students from any engineering college / university can participate!
                   </p>
                   <p className="text-yellow-400 font-bold text-[10px] sm:text-[11px] m-0">
                     ⚠ TEAM RULE: Mixed semester teams and senior-junior combinations are strictly prohibited. Selecting the Team Captain&apos;s semester automatically sets and locks the semester for all 4 team members.
                   </p>
+                  <div className="p-2.5 bg-yellow-500/10 border border-yellow-500/30 rounded text-yellow-300 text-[10px] sm:text-[11px] leading-relaxed">
+                    📢 <strong>1ST YEAR WAITLIST OPPORTUNITY:</strong> 1st Year confirmed slots (40) are full and waiting list is open! If the 2nd Year (3rd Sem) track slots are not fully filled by registration close, the remaining unfilled slots will be granted to 1st Year waiting list teams in order of registration.
+                  </div>
                 </div>
               </div>
 
@@ -1376,8 +1420,19 @@ export default function RegisterClientView({
                     </div>
                   </div>
                   <p className="text-xs sm:text-sm text-neutral-200 leading-relaxed m-0">
-                    <strong className="text-yellow-400">Please note that registering on the waiting list does not guarantee a slot for participation.</strong> 40 team slots are full, but you can register your team where you will be placed on the waiting list. If any of the confirmed slots team is unable to participate, waiting list teams will be contacted for the payment procedure and participation.
+                    <strong className="text-yellow-400">Please note that registering on the waiting list does not guarantee a slot for participation.</strong> Confirmed slots are full, but you can register your team where you will be placed on the waiting list.
                   </p>
+                  <div className="p-3.5 sm:p-4 bg-yellow-500/10 border border-yellow-500/40 rounded-lg text-yellow-200 text-xs leading-relaxed space-y-1.5 shadow-inner">
+                    <div className="flex items-center gap-2 text-yellow-400 font-bold uppercase tracking-wider text-xs">
+                      <span>✨ SPECIAL OPPORTUNITY: 2ND YEAR SLOT ROLLOVER</span>
+                    </div>
+                    <p className="m-0 leading-relaxed text-yellow-100/90">
+                      If the <strong>2nd Year (3rd Semester)</strong> track slots are not completed before registration closes, all remaining unfilled slots will be converted and given to <strong>1st Year waiting list teams</strong> in order of registration!
+                    </p>
+                    <p className="m-0 text-[11px] text-yellow-300/80">
+                      If a slot opens, our coordinators will immediately reach out to the Team Captain via WhatsApp and Email to complete payment and slot confirmation.
+                    </p>
+                  </div>
                 </div>
               ) : isSelectedSemLocked ? null : (
               <div className="space-y-5 pt-6 border-t-2 border-red-600/60 bg-[#080808]/90 p-4 sm:p-6 rounded-xl border border-red-900/40">
@@ -1619,7 +1674,7 @@ export default function RegisterClientView({
                 <div className="mt-8 p-5 sm:p-6 bg-[#080808] border border-red-900/50 rounded-xl space-y-3 font-mono text-center shadow-lg">
                   <p className="text-xs sm:text-sm text-yellow-400 font-bold tracking-wide m-0">
                     {isSelectedSemWaitlist
-                      ? "Waiting list teams will be contacted for the payment procedure if any confirmed slot team is unable to participate."
+                      ? "Waiting list teams will be contacted for payment if confirmed teams drop out, or if 2nd Year slots remain unfilled."
                       : "Once the Transaction is verified, the login credentials will be shared to the Team Lead's email."}
                   </p>
 

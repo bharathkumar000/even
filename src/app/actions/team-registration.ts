@@ -174,6 +174,7 @@ export async function getSemesterRegistrationCounts(): Promise<{
         code.includes("ADMIN") ||
         code.includes("DEV") ||
         status === "test" ||
+        status === "rejected" ||
         name.startsWith("test") ||
         email === "rishithsgowda13@gmail.com"
       ) {
@@ -380,31 +381,39 @@ export async function submitTeamRegistration(
       // This enables getSemesterRegistrationCounts to track waitlist slots filled and lock when reaching the limit
       let insertedWaitlistId = "";
       try {
-        const { data: waitlistInsert } = await supabaseAdmin
+        const waitlistPayload = {
+          team_name: teamName,
+          track: track,
+          leader_name: leaderName,
+          leader_email: leaderEmail,
+          leader_phone: leaderPhone,
+          leader_college: leaderCollege,
+          leader_usn: leaderUsn,
+          leader_branch: leaderBranch,
+          leader_sem: leaderSem,
+          members: members,
+          payment_utr: `WAITLIST-#${waitlistNum}`,
+          payment_phone: paymentPhone,
+          payment_proof_url: "WAITLIST (Payment pending slot availability)",
+          status: "waitlist",
+          generated_credentials: {
+            teamCode: `WAITLIST-#${waitlistNum}`,
+            username: teamName.toLowerCase().replace(/[^a-z0-9]/g, ""),
+            email: leaderEmail,
+          },
+        };
+
+        const { data: waitlistInsert, error: waitlistErr } = await supabaseAdmin
           .from("team_registrations")
-          .insert({
-            team_name: teamName,
-            track: track,
-            leader_name: leaderName,
-            leader_email: leaderEmail,
-            leader_phone: leaderPhone,
-            leader_college: leaderCollege,
-            leader_usn: leaderUsn,
-            leader_branch: leaderBranch,
-            leader_sem: leaderSem,
-            members: members,
-            payment_utr: `WAITLIST-#${waitlistNum}`,
-            payment_phone: paymentPhone,
-            payment_proof_url: "WAITLIST (Payment pending slot availability)",
-            status: "waitlist",
-            login_username: teamName.toLowerCase().replace(/[^a-z0-9]/g, ""),
-            login_email: leaderEmail,
-            login_password: "",
-            team_code: `WAITLIST-#${waitlistNum}`,
-          })
+          .insert(waitlistPayload)
           .select("id")
           .maybeSingle();
-        insertedWaitlistId = waitlistInsert?.id || "";
+
+        if (waitlistErr) {
+          console.error("Waitlist DB insertion error:", waitlistErr);
+        } else {
+          insertedWaitlistId = waitlistInsert?.id || "";
+        }
       } catch (dbErr) {
         console.error("Waitlist DB insertion error:", dbErr);
       }
@@ -715,7 +724,7 @@ export async function submitTeamRegistration(
 /**
  * Admin Action: Fetch all registration submissions with optional status filter.
  */
-export async function getRegistrations(statusFilter?: "all" | "pending" | "approved" | "rejected") {
+export async function getRegistrations(statusFilter?: "all" | "pending" | "approved" | "rejected" | "waitlist") {
   await requireAdminUser();
 
   try {
@@ -1523,7 +1532,7 @@ export async function syncAllApprovedRegistrationsAction(): Promise<{
  * Admin Action: Export registrations as CSV for direct import into Google Sheets.
  */
 export async function exportRegistrationsCsvAction(
-  filterStatus?: "all" | "approved" | "pending" | "rejected"
+  filterStatus?: "all" | "approved" | "pending" | "rejected" | "waitlist"
 ): Promise<{ success: boolean; csv?: string; message?: string }> {
   await requireAdminUser();
 
