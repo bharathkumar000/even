@@ -1559,7 +1559,14 @@ export async function exportRegistrationsCsvAction(
         teamName: r.team_name,
         track: (r.leader_sem && r.leader_sem.includes("3")) || (r.track && r.track.includes("3")) ? "3rd Sem" : "1st Sem",
         teamCode: r.generated_credentials?.teamCode || "",
-        status: r.status === "approved" ? "Approved" : "Rejected",
+        status:
+          r.status === "approved"
+            ? "Approved"
+            : r.status === "waitlist"
+            ? "Waitlist"
+            : r.status === "pending"
+            ? "Pending"
+            : "Rejected",
         decisionAt: formatToIST(r.approved_at || r.updated_at || r.created_at),
         rejectionReason: r.rejection_reason || "",
 

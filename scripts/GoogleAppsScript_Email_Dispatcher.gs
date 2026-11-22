@@ -1137,12 +1137,14 @@ function deduplicateAllSheetsInternal(ss) {
       }
 
       var key = "";
-      if (tName) {
-        key = "name:" + tName.toLowerCase().replace(/[^a-z0-9]/g, "");
-      } else if (tCode) {
+      if (tCode && tCode.toUpperCase().indexOf("IVC-RY-") !== -1) {
         key = "code:" + tCode.toUpperCase().trim();
       } else if (tEmail) {
         key = "email:" + tEmail.toLowerCase().trim();
+      } else if (tCode) {
+        key = "code:" + tCode.toUpperCase().trim();
+      } else if (tName) {
+        key = "name:" + tName.toLowerCase().replace(/[^a-z0-9]/g, "");
       }
 
       var score = 0;

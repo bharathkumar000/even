@@ -139,6 +139,7 @@ export default function RegistrationsClientView({
 
   const countPending = registrations.filter((r) => r.status === "pending").length;
   const countApproved = registrations.filter((r) => r.status === "approved").length;
+  const countWaitlist = registrations.filter((r) => r.status === "waitlist").length;
   const countRejected = registrations.filter((r) => r.status === "rejected").length;
 
   const handleApprove = async (id: string) => {
@@ -342,7 +343,7 @@ ${OFFICIAL_WHATSAPP_GROUP}
   return (
     <div className="space-y-6">
       {/* Metric Counters */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3.5">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3.5">
         <div
           onClick={() => setFilter("all")}
           className={`p-4 rounded-xl border cursor-pointer transition-all ${
@@ -382,6 +383,23 @@ ${OFFICIAL_WHATSAPP_GROUP}
         >
           <span className="font-tech text-xs uppercase text-green-400">Approved & Active</span>
           <p className="font-heading text-2xl text-green-400 mt-1 m-0">{countApproved}</p>
+        </div>
+
+        <div
+          onClick={() => setFilter("waitlist")}
+          className={`p-4 rounded-xl border cursor-pointer transition-all ${
+            filter === "waitlist"
+              ? "bg-yellow-500/15 border-yellow-500/50 ring-1 ring-yellow-500/30"
+              : "bg-surface-color border-border-color hover:border-yellow-500/30"
+          }`}
+        >
+          <div className="flex items-center justify-between">
+            <span className="font-tech text-xs uppercase text-yellow-400 font-bold">Waiting List</span>
+            {countWaitlist > 0 && (
+              <span className="w-2.5 h-2.5 rounded-full bg-yellow-400 animate-pulse" />
+            )}
+          </div>
+          <p className="font-heading text-2xl text-yellow-400 mt-1 m-0">{countWaitlist}</p>
         </div>
 
         <div
