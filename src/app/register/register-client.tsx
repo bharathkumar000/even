@@ -14,6 +14,7 @@ import {
   ShieldCheck,
   Users,
   Lock,
+  Clock,
   ShieldAlert,
   MessageCircle,
   ExternalLink,
@@ -64,51 +65,79 @@ const SEMESTERS = [
   "3rd Semester",
 ];
 
+const REGISTRATION_DEADLINE_ISO = "2026-11-23T12:00:00+05:30";
+const REGISTRATION_DEADLINE_MS = new Date(REGISTRATION_DEADLINE_ISO).getTime();
+
 export default function RegisterClientView({
   initialCounts = {
     firstSemCount: 0,
     thirdSemCount: 0,
-    maxLimit: 40,
-    waitlistLimit: 10,
-    firstSemWaitlistLimit: 20,
-    thirdSemWaitlistLimit: 10,
+    maxLimit: 999999,
   },
 }: {
   initialCounts?: {
     firstSemCount: number;
     thirdSemCount: number;
-    maxLimit: number;
+    maxLimit?: number;
     waitlistLimit?: number;
     firstSemWaitlistLimit?: number;
     thirdSemWaitlistLimit?: number;
+    isClosed?: boolean;
+    deadlineIso?: string;
   };
 }) {
   const [submitting, setSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successData, setSuccessData] = useState<{ teamName: string; refId: string; isWaitlist?: boolean } | null>(null);
 
-  // Live Semester Counts & Locking State (1st Sem: 40 Confirmed + 20 Waitlist = 60; 3rd Sem: 40 Confirmed + 10 Waitlist = 50)
+  // Live Countdown to Registration Closing (Monday, 23rd Nov 2026 @ 12:00 PM Noon IST)
+  const [timeLeft, setTimeLeft] = useState<{
+    hours: number;
+    minutes: number;
+    seconds: number;
+    isExpired: boolean;
+  }>(() => {
+    const diff = REGISTRATION_DEADLINE_MS - Date.now();
+    if (diff <= 0) return { hours: 0, minutes: 0, seconds: 0, isExpired: true };
+    const hours = Math.floor(diff / (1000 * 60 * 60));
+    const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+    const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+    return { hours, minutes, seconds, isExpired: false };
+  });
+
+  useEffect(() => {
+    const updateCountdown = () => {
+      const diff = REGISTRATION_DEADLINE_MS - Date.now();
+      if (diff <= 0) {
+        setTimeLeft({ hours: 0, minutes: 0, seconds: 0, isExpired: true });
+      } else {
+        const hours = Math.floor(diff / (1000 * 60 * 60));
+        const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+        const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+        setTimeLeft({ hours, minutes, seconds, isExpired: false });
+      }
+    };
+    updateCountdown();
+    const interval = setInterval(updateCountdown, 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Live Track Registration Counts (NO CAP - Separate 1st and 2nd Year Tracks)
   const [semCounts, setSemCounts] = useState({
     firstSemCount: initialCounts.firstSemCount || 0,
     thirdSemCount: initialCounts.thirdSemCount || 0,
-    maxLimit: initialCounts.maxLimit || 40,
-    firstSemWaitlistLimit: initialCounts.firstSemWaitlistLimit || 20,
-    thirdSemWaitlistLimit: initialCounts.thirdSemWaitlistLimit || 10,
-    waitlistLimit: initialCounts.waitlistLimit || 10,
+    maxLimit: initialCounts.maxLimit || 999999,
   });
-  const maxLimit = semCounts.maxLimit;
-  const firstSemWaitlistLimit = semCounts.firstSemWaitlistLimit;
-  const thirdSemWaitlistLimit = semCounts.thirdSemWaitlistLimit;
 
-  const firstSemMaxTotal = maxLimit + firstSemWaitlistLimit;
-  const thirdSemMaxTotal = maxLimit + thirdSemWaitlistLimit;
-
-  const isFirstSemWaitlist = semCounts.firstSemCount >= maxLimit && semCounts.firstSemCount < firstSemMaxTotal;
-  const isFirstSemLocked = semCounts.firstSemCount >= firstSemMaxTotal;
-  const isThirdSemWaitlist = semCounts.thirdSemCount >= maxLimit && semCounts.thirdSemCount < thirdSemMaxTotal;
-  const isThirdSemLocked = semCounts.thirdSemCount >= thirdSemMaxTotal;
-  const isAllLocked = isFirstSemLocked && isThirdSemLocked;
-  const defaultAvailableSem = isFirstSemLocked && !isThirdSemLocked ? "3rd Semester" : "1st Semester";
+  const isRegistrationClosed = timeLeft.isExpired;
+  const isFirstSemLocked = isRegistrationClosed;
+  const isThirdSemLocked = isRegistrationClosed;
+  const isAllLocked = isRegistrationClosed;
+  const isFirstSemWaitlist = false;
+  const isThirdSemWaitlist = false;
+  const isSelectedSemWaitlist = false;
+  const isSelectedSemLocked = isRegistrationClosed;
+  const defaultAvailableSem = "1st Semester";
 
   // Real-time live polling every 10 seconds so waitlist and confirmed counts always reflect immediately
   useEffect(() => {
@@ -121,9 +150,6 @@ export default function RegisterClientView({
             firstSemCount: fresh.firstSemCount,
             thirdSemCount: fresh.thirdSemCount,
             maxLimit: fresh.maxLimit,
-            firstSemWaitlistLimit: fresh.firstSemWaitlistLimit,
-            thirdSemWaitlistLimit: fresh.thirdSemWaitlistLimit,
-            waitlistLimit: fresh.waitlistLimit,
           });
         }
       } catch (err) {
@@ -174,14 +200,6 @@ export default function RegisterClientView({
   });
 
   const isDriver1FirstSem = (driver1.sem || "").toLowerCase().includes("1st") || driver1.sem === "1";
-  const selectedSemWaitlistLimit = isDriver1FirstSem ? firstSemWaitlistLimit : thirdSemWaitlistLimit;
-  const isSelectedSemWaitlist =
-    (driver1.sem.includes("1st") && isFirstSemWaitlist) ||
-    (driver1.sem.includes("3rd") && isThirdSemWaitlist);
-  const isSelectedSemLocked =
-    isAllLocked ||
-    (driver1.sem.includes("1st") && isFirstSemLocked) ||
-    (driver1.sem.includes("3rd") && isThirdSemLocked);
 
   // Sync all squad members to the Captain's chosen semester
   const handleCaptainSemChange = (newSem: string) => {
@@ -402,19 +420,9 @@ export default function RegisterClientView({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    // Check Semester Slot Lock before validating (1st Sem: 40 confirmed + 20 waitlist = 60 max; 3rd Sem: 40 confirmed + 10 waitlist = 50 max)
-    if (isAllLocked) {
-      setErrorMsg(`REGISTRATION LOCKED: All confirmed slots and waiting list slots for both 1st Semester (${firstSemWaitlistLimit} waitlist) and 3rd Semester (${thirdSemWaitlistLimit} waitlist) are full.`);
-      window.scrollTo({ top: 300, behavior: "smooth" });
-      return;
-    }
-    if (driver1.sem.includes("1st") && isFirstSemLocked) {
-      setErrorMsg(`1st Semester registration is LOCKED (40 confirmed + ${firstSemWaitlistLimit} waiting list teams filled). Please select 3rd Semester if eligible.`);
-      window.scrollTo({ top: 300, behavior: "smooth" });
-      return;
-    }
-    if (driver1.sem.includes("3rd") && isThirdSemLocked) {
-      setErrorMsg(`3rd Semester registration is LOCKED (40 confirmed + ${thirdSemWaitlistLimit} waiting list teams filled). Please select 1st Semester if eligible.`);
+    // Check if registration deadline has passed
+    if (isRegistrationClosed) {
+      setErrorMsg("REGISTRATION IS OFFICIALLY CLOSED: Official team registrations closed on Monday, 23rd November at 12:00 PM (Noon) IST. No further submissions are being accepted.");
       window.scrollTo({ top: 300, behavior: "smooth" });
       return;
     }
@@ -710,16 +718,87 @@ export default function RegisterClientView({
               </p>
             </div>
 
-            {/* SEMESTER REGISTRATION QUOTA CARDS (2 COLUMNS IN A SINGLE ROW) */}
+            {/* COUNTDOWN DEADLINE BANNER */}
+            <div
+              className={`mb-6 p-4 sm:p-5 rounded-2xl border font-mono shadow-2xl transition-all ${
+                isRegistrationClosed
+                  ? "bg-red-950/40 border-red-600 text-red-300"
+                  : "bg-gradient-to-r from-red-950/60 via-black to-red-950/60 border-red-600/80 shadow-[0_0_35px_rgba(255,0,0,0.3)]"
+              }`}
+            >
+              <div className="flex flex-col md:flex-row items-center justify-between gap-4">
+                <div className="flex items-center gap-3.5 text-center md:text-left">
+                  <div
+                    className={`p-3 rounded-xl border ${
+                      isRegistrationClosed
+                        ? "bg-red-900/30 border-red-700 text-red-400"
+                        : "bg-red-600/20 border-red-500 text-red-500 shadow-[0_0_15px_rgba(255,0,0,0.5)]"
+                    }`}
+                  >
+                    <Clock size={28} className={!isRegistrationClosed ? "animate-pulse" : ""} />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2 justify-center md:justify-start">
+                      <span
+                        className={`w-2.5 h-2.5 rounded-full ${
+                          isRegistrationClosed ? "bg-red-500" : "bg-green-400 animate-ping"
+                        }`}
+                      />
+                      <span className="text-xs sm:text-sm font-black uppercase tracking-widest text-white">
+                        {isRegistrationClosed ? "REGISTRATION HAS CLOSED" : "REGISTRATION DEADLINE COUNTDOWN"}
+                      </span>
+                    </div>
+                    <p className="text-[11px] sm:text-xs text-neutral-300 m-0 mt-0.5">
+                      CLOSES: <strong className="text-yellow-400">MONDAY, 23RD NOVEMBER @ 12:00 PM (NOON) IST</strong> · NO TEAM CAP
+                    </p>
+                  </div>
+                </div>
+
+                {!isRegistrationClosed ? (
+                  <div className="flex items-center gap-2 sm:gap-3 text-center">
+                    <div className="bg-black/80 border border-red-800/80 px-3 py-2 rounded-lg min-w-[64px] sm:min-w-[72px]">
+                      <span className="text-xl sm:text-2xl font-black text-white block">
+                        {String(timeLeft.hours).padStart(2, "0")}
+                      </span>
+                      <span className="text-[9px] sm:text-[10px] text-neutral-400 uppercase tracking-wider block">
+                        HOURS
+                      </span>
+                    </div>
+                    <span className="text-red-500 font-bold text-xl sm:text-2xl animate-pulse">:</span>
+                    <div className="bg-black/80 border border-red-800/80 px-3 py-2 rounded-lg min-w-[64px] sm:min-w-[72px]">
+                      <span className="text-xl sm:text-2xl font-black text-white block">
+                        {String(timeLeft.minutes).padStart(2, "0")}
+                      </span>
+                      <span className="text-[9px] sm:text-[10px] text-neutral-400 uppercase tracking-wider block">
+                        MINS
+                      </span>
+                    </div>
+                    <span className="text-red-500 font-bold text-xl sm:text-2xl animate-pulse">:</span>
+                    <div className="bg-black/80 border border-red-800/80 px-3 py-2 rounded-lg min-w-[64px] sm:min-w-[72px]">
+                      <span className="text-xl sm:text-2xl font-black text-red-400 block">
+                        {String(timeLeft.seconds).padStart(2, "0")}
+                      </span>
+                      <span className="text-[9px] sm:text-[10px] text-neutral-400 uppercase tracking-wider block">
+                        SECS
+                      </span>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="px-4 py-2 bg-red-600/20 border border-red-500 rounded-lg text-red-400 font-bold text-xs uppercase tracking-wider flex items-center gap-2">
+                    <Lock size={14} /> REGISTRATIONS LOCKED
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* COMPETITION TRACK STATUS CARDS (SEPARATED AS 1ST AND 2ND YEARS - NO CAP) */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8 font-mono">
-              {/* Card 1: 1st Semester Teams */}
+              {/* Card 1: 1st Year Track (1st Semester) */}
               <div
                 className={`bg-[#080808] border rounded-xl p-5 space-y-3 shadow-lg transition-all ${
                   isFirstSemLocked
                     ? "border-red-600/70 bg-red-950/10"
-                    : isFirstSemWaitlist
-                      ? "border-yellow-500/60 bg-yellow-950/10"
-                      : "border-red-900/40"
+                    : "border-red-900/50 hover:border-red-600/60"
                 }`}
               >
                 <div className="flex items-center justify-between gap-2">
@@ -728,66 +807,49 @@ export default function RegisterClientView({
                       className={`w-2.5 h-2.5 rounded-full ${
                         isFirstSemLocked
                           ? "bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.8)]"
-                          : isFirstSemWaitlist
-                            ? "bg-yellow-400 animate-pulse shadow-[0_0_8px_rgba(250,204,21,0.8)]"
-                            : "bg-green-500 animate-pulse shadow-[0_0_8px_rgba(34,197,94,0.8)]"
+                          : "bg-green-500 animate-pulse shadow-[0_0_8px_rgba(34,197,94,0.8)]"
                       }`}
                     />
                     <span className="text-xs sm:text-sm font-black italic tracking-wider text-white uppercase">
-                      1ST SEMESTER TEAMS
+                      1ST YEAR TRACK (1ST SEMESTER)
                     </span>
                   </div>
                   {isFirstSemLocked ? (
                     <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded bg-red-600/20 border border-red-500/50 text-red-400 text-[10px] font-bold uppercase tracking-wider">
-                      <Lock size={11} /> LOCKED
-                    </span>
-                  ) : isFirstSemWaitlist ? (
-                    <span className="px-2.5 py-0.5 rounded bg-yellow-500/15 border border-yellow-500/40 text-yellow-300 text-[10px] font-bold uppercase tracking-wider">
-                      WAITLIST
+                      <Lock size={11} /> CLOSED
                     </span>
                   ) : (
                     <span className="px-2.5 py-0.5 rounded bg-green-500/10 border border-green-500/30 text-green-400 text-[10px] font-bold uppercase tracking-wider">
-                      OPEN
+                      OPEN (NO CAP)
                     </span>
                   )}
                 </div>
 
                 <div className="flex items-baseline justify-between">
                   <div className="text-2xl sm:text-3xl font-black text-white">
-                    {Math.min(semCounts.firstSemCount, maxLimit)}{" "}
-                    <span className="text-sm font-bold text-neutral-500">/ {maxLimit} TEAMS</span>
+                    {semCounts.firstSemCount}{" "}
+                    <span className="text-sm font-bold text-neutral-400">TEAMS REGISTERED</span>
                   </div>
-                  <span className="text-[11px] text-neutral-400 font-bold">
-                    {isFirstSemLocked
-                      ? `WAITLIST FULL (${firstSemWaitlistLimit}/${firstSemWaitlistLimit})`
-                      : isFirstSemWaitlist
-                        ? `WAITLIST: ${semCounts.firstSemCount - maxLimit}/${firstSemWaitlistLimit}`
-                        : `${Math.max(0, maxLimit - semCounts.firstSemCount)} SLOTS LEFT`}
+                  <span className="text-[11px] text-emerald-400 font-bold uppercase tracking-wider">
+                    {isFirstSemLocked ? "DEADLINE REACHED" : "UNLIMITED SLOTS"}
                   </span>
                 </div>
 
-                <div className="w-full bg-[#121212] rounded-full h-2 overflow-hidden border border-white/5">
-                  <div
-                    className={`h-full rounded-full transition-all duration-500 ${
-                      isFirstSemLocked
-                        ? "bg-red-600 shadow-[0_0_10px_rgba(239,68,68,0.8)]"
-                        : isFirstSemWaitlist
-                          ? "bg-yellow-500 shadow-[0_0_10px_rgba(234,179,8,0.8)]"
-                          : "bg-gradient-to-r from-red-600 to-orange-500 shadow-[0_0_10px_rgba(255,0,0,0.8)]"
-                    }`}
-                    style={{ width: `${Math.min((semCounts.firstSemCount / maxLimit) * 100, 100)}%` }}
-                  />
+                <div className="w-full bg-[#121212] rounded-full h-1.5 overflow-hidden border border-white/5">
+                  <div className="h-full rounded-full bg-gradient-to-r from-red-600 via-orange-500 to-amber-400 w-full animate-pulse" />
                 </div>
+
+                <p className="text-[11px] text-neutral-400 m-0">
+                  Exclusively for 1st Year (1st Semester) squads · Open to all engineering colleges
+                </p>
               </div>
 
-              {/* Card 2: 3rd Semester Teams */}
+              {/* Card 2: 2nd Year Track (3rd Semester) */}
               <div
                 className={`bg-[#080808] border rounded-xl p-5 space-y-3 shadow-lg transition-all ${
                   isThirdSemLocked
                     ? "border-red-600/70 bg-red-950/10"
-                    : isThirdSemWaitlist
-                      ? "border-yellow-500/60 bg-yellow-950/10"
-                      : "border-red-900/40"
+                    : "border-red-900/50 hover:border-red-600/60"
                 }`}
               >
                 <div className="flex items-center justify-between gap-2">
@@ -796,56 +858,41 @@ export default function RegisterClientView({
                       className={`w-2.5 h-2.5 rounded-full ${
                         isThirdSemLocked
                           ? "bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.8)]"
-                          : isThirdSemWaitlist
-                            ? "bg-yellow-400 animate-pulse shadow-[0_0_8px_rgba(250,204,21,0.8)]"
-                            : "bg-green-500 animate-pulse shadow-[0_0_8px_rgba(34,197,94,0.8)]"
+                          : "bg-green-500 animate-pulse shadow-[0_0_8px_rgba(34,197,94,0.8)]"
                       }`}
                     />
                     <span className="text-xs sm:text-sm font-black italic tracking-wider text-white uppercase">
-                      3RD SEMESTER TEAMS
+                      2ND YEAR TRACK (3RD SEMESTER)
                     </span>
                   </div>
                   {isThirdSemLocked ? (
                     <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded bg-red-600/20 border border-red-500/50 text-red-400 text-[10px] font-bold uppercase tracking-wider">
-                      <Lock size={11} /> LOCKED
-                    </span>
-                  ) : isThirdSemWaitlist ? (
-                    <span className="px-2.5 py-0.5 rounded bg-yellow-500/15 border border-yellow-500/40 text-yellow-300 text-[10px] font-bold uppercase tracking-wider">
-                      WAITLIST
+                      <Lock size={11} /> CLOSED
                     </span>
                   ) : (
                     <span className="px-2.5 py-0.5 rounded bg-green-500/10 border border-green-500/30 text-green-400 text-[10px] font-bold uppercase tracking-wider">
-                      OPEN
+                      OPEN (NO CAP)
                     </span>
                   )}
                 </div>
 
                 <div className="flex items-baseline justify-between">
                   <div className="text-2xl sm:text-3xl font-black text-white">
-                    {Math.min(semCounts.thirdSemCount, maxLimit)}{" "}
-                    <span className="text-sm font-bold text-neutral-500">/ {maxLimit} TEAMS</span>
+                    {semCounts.thirdSemCount}{" "}
+                    <span className="text-sm font-bold text-neutral-400">TEAMS REGISTERED</span>
                   </div>
-                  <span className="text-[11px] text-neutral-400 font-bold">
-                    {isThirdSemLocked
-                      ? `WAITLIST FULL (${thirdSemWaitlistLimit}/${thirdSemWaitlistLimit})`
-                      : isThirdSemWaitlist
-                        ? `WAITLIST: ${semCounts.thirdSemCount - maxLimit}/${thirdSemWaitlistLimit}`
-                        : `${Math.max(0, maxLimit - semCounts.thirdSemCount)} SLOTS LEFT`}
+                  <span className="text-[11px] text-emerald-400 font-bold uppercase tracking-wider">
+                    {isThirdSemLocked ? "DEADLINE REACHED" : "UNLIMITED SLOTS"}
                   </span>
                 </div>
 
-                <div className="w-full bg-[#121212] rounded-full h-2 overflow-hidden border border-white/5">
-                  <div
-                    className={`h-full rounded-full transition-all duration-500 ${
-                      isThirdSemLocked
-                        ? "bg-red-600 shadow-[0_0_10px_rgba(239,68,68,0.8)]"
-                        : isThirdSemWaitlist
-                          ? "bg-yellow-500 shadow-[0_0_10px_rgba(234,179,8,0.8)]"
-                          : "bg-gradient-to-r from-red-600 to-orange-500 shadow-[0_0_10px_rgba(255,0,0,0.8)]"
-                    }`}
-                    style={{ width: `${Math.min((semCounts.thirdSemCount / maxLimit) * 100, 100)}%` }}
-                  />
+                <div className="w-full bg-[#121212] rounded-full h-1.5 overflow-hidden border border-white/5">
+                  <div className="h-full rounded-full bg-gradient-to-r from-red-600 via-orange-500 to-amber-400 w-full animate-pulse" />
                 </div>
+
+                <p className="text-[11px] text-neutral-400 m-0">
+                  Exclusively for 2nd Year (3rd Semester) squads · Open to all engineering colleges
+                </p>
               </div>
             </div>
 
@@ -903,19 +950,33 @@ export default function RegisterClientView({
               <div className="p-4 sm:p-5 bg-red-950/20 border border-red-600/40 rounded-xl space-y-2 font-mono text-xs">
                 <div className="flex items-center gap-2 text-red-400 font-bold uppercase tracking-wider text-xs">
                   <ShieldAlert size={16} className="text-red-500 shrink-0" />
-                  <span>SEMESTER ELIGIBILITY &amp; TEAM COMPOSITION POLICY</span>
+                  <span>COMPETITION TRACKS &amp; SEMESTER ELIGIBILITY POLICY</span>
                 </div>
                 <p className="text-neutral-300 leading-relaxed text-[11px] sm:text-xs m-0">
-                  To ensure fair competition across all participating squads, each team must consist strictly of members from the same semester:
+                  Teams are separated into two distinct competition categories based on academic year. To ensure fair competition, each 4-member squad must consist strictly of members from the same semester:
                 </p>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
-                  <div className="p-2.5 bg-black/60 border border-neutral-800 rounded">
-                    <span className="text-white font-bold block uppercase text-[11px]">1ST YEAR TEAMS (40 SLOTS)</span>
-                    <span className="text-neutral-400 text-[10px]">All 4 members must be currently enrolled in 1st Semester.</span>
+                  <div className="p-3 bg-black/60 border border-neutral-800 rounded-lg">
+                    <div className="flex items-center justify-between">
+                      <span className="text-white font-bold block uppercase text-[11px]">1ST YEAR TRACK</span>
+                      <span className="text-[10px] text-green-400 font-bold px-1.5 py-0.5 rounded bg-green-950/40 border border-green-500/30">
+                        NO TEAM CAP
+                      </span>
+                    </div>
+                    <span className="text-neutral-400 text-[10px] mt-1 block">
+                      All 4 members must be currently enrolled in 1st Semester.
+                    </span>
                   </div>
-                  <div className="p-2.5 bg-black/60 border border-neutral-800 rounded">
-                    <span className="text-white font-bold block uppercase text-[11px]">2ND YEAR TEAMS (40 SLOTS)</span>
-                    <span className="text-neutral-400 text-[10px]">All 4 members must be currently enrolled in 3rd Semester (2nd Year).</span>
+                  <div className="p-3 bg-black/60 border border-neutral-800 rounded-lg">
+                    <div className="flex items-center justify-between">
+                      <span className="text-white font-bold block uppercase text-[11px]">2ND YEAR TRACK</span>
+                      <span className="text-[10px] text-green-400 font-bold px-1.5 py-0.5 rounded bg-green-950/40 border border-green-500/30">
+                        NO TEAM CAP
+                      </span>
+                    </div>
+                    <span className="text-neutral-400 text-[10px] mt-1 block">
+                      All 4 members must be currently enrolled in 3rd Semester (2nd Year).
+                    </span>
                   </div>
                 </div>
                 <div className="pt-2 border-t border-red-900/40 space-y-1.5">
@@ -925,9 +986,9 @@ export default function RegisterClientView({
                   <p className="text-yellow-400 font-bold text-[10px] sm:text-[11px] m-0">
                     ⚠ TEAM RULE: Mixed semester teams and senior-junior combinations are strictly prohibited. Selecting the Team Captain&apos;s semester automatically sets and locks the semester for all 4 team members.
                   </p>
-                  <div className="p-2.5 bg-yellow-500/10 border border-yellow-500/30 rounded text-yellow-300 text-[10px] sm:text-[11px] leading-relaxed">
-                    📢 <strong>1ST YEAR WAITLIST OPPORTUNITY:</strong> 1st Year confirmed slots (40) are full and waiting list is open! If the 2nd Year (3rd Sem) track slots are not fully filled by registration close, the remaining unfilled slots will be granted to 1st Year waiting list teams in order of registration.
-                  </div>
+                  <p className="text-cyan-400 font-bold text-[10px] sm:text-[11px] m-0">
+                    ⏰ REGISTRATION DEADLINE: Registrations officially close on <strong>Monday, 23rd November at 12:00 PM (Noon) IST</strong>. No new teams will be accepted after this deadline.
+                  </p>
                 </div>
               </div>
 
@@ -1022,24 +1083,15 @@ export default function RegisterClientView({
                       className="w-full bg-[#0a0a0a] border border-neutral-800 focus:border-red-500 text-white p-3 rounded outline-none text-xs"
                     >
                       {SEMESTERS.map((s) => {
-                        const isSemWaitlist =
-                          (s.includes("1st") && isFirstSemWaitlist) ||
-                          (s.includes("3rd") && isThirdSemWaitlist);
-                        const isSemLocked =
-                          (s.includes("1st") && isFirstSemLocked) ||
-                          (s.includes("3rd") && isThirdSemLocked);
+                        const trackName = s.includes("1st") ? "1st Year Track" : "2nd Year Track";
                         return (
                           <option
                             key={s}
                             value={s}
-                            disabled={isSemLocked}
+                            disabled={isRegistrationClosed}
                             className="bg-black text-white disabled:text-neutral-600"
                           >
-                            {isSemLocked
-                              ? `${s} (LOCKED - FULL)`
-                              : isSemWaitlist
-                                ? `${s} (WAITLIST OPEN)`
-                                : s}
+                            {isRegistrationClosed ? `${s} (${trackName} - CLOSED)` : `${s} (${trackName})`}
                           </option>
                         );
                       })}
@@ -1401,41 +1453,21 @@ export default function RegisterClientView({
                 </div>
               </div>
 
-              {/* SECTION 6: GRAND PRIX ENTRY FEE & PAYMENT VERIFICATION (OR WAITING LIST NOTICE) */}
-              {isSelectedSemWaitlist ? (
-                <div className="space-y-4 pt-6 border-t-2 border-yellow-500/60 bg-yellow-950/15 p-6 sm:p-8 rounded-xl border border-yellow-500/40 font-mono">
-                  <div className="flex items-start gap-3 border-b border-yellow-500/20 pb-3">
-                    <AlertCircle className="text-yellow-400 mt-0.5 shrink-0" size={22} />
-                    <div>
-                      <h3 className="font-heading text-lg sm:text-xl text-yellow-400 uppercase m-0 tracking-wide">
-                        WAITING LIST REGISTRATION ({driver1.sem.toUpperCase()})
-                      </h3>
-                      <p className="text-xs text-yellow-200/80 m-0 mt-1">
-                        Waitlist Slot:{" "}
-                        <strong className="text-white">
-                          #{(isDriver1FirstSem ? semCounts.firstSemCount : semCounts.thirdSemCount) - maxLimit + 1} of {selectedSemWaitlistLimit}
-                        </strong>{" "}
-                        — Payment is NOT required right now
-                      </p>
-                    </div>
-                  </div>
-                  <p className="text-xs sm:text-sm text-neutral-200 leading-relaxed m-0">
-                    <strong className="text-yellow-400">Please note that registering on the waiting list does not guarantee a slot for participation.</strong> Confirmed slots are full, but you can register your team where you will be placed on the waiting list.
-                  </p>
-                  <div className="p-3.5 sm:p-4 bg-yellow-500/10 border border-yellow-500/40 rounded-lg text-yellow-200 text-xs leading-relaxed space-y-1.5 shadow-inner">
-                    <div className="flex items-center gap-2 text-yellow-400 font-bold uppercase tracking-wider text-xs">
-                      <span>✨ SPECIAL OPPORTUNITY: 2ND YEAR SLOT ROLLOVER</span>
-                    </div>
-                    <p className="m-0 leading-relaxed text-yellow-100/90">
-                      If the <strong>2nd Year (3rd Semester)</strong> track slots are not completed before registration closes, all remaining unfilled slots will be converted and given to <strong>1st Year waiting list teams</strong> in order of registration!
-                    </p>
-                    <p className="m-0 text-[11px] text-yellow-300/80">
-                      If a slot opens, our coordinators will immediately reach out to the Team Captain via WhatsApp and Email to complete payment and slot confirmation.
+              {/* SECTION 6: GRAND PRIX ENTRY FEE & PAYMENT VERIFICATION */}
+              {isRegistrationClosed ? (
+                <div className="space-y-4 pt-6 border-t-2 border-red-600/60 bg-red-950/20 p-6 sm:p-8 rounded-xl border border-red-900/40 font-mono text-center">
+                  <div className="flex flex-col items-center justify-center gap-3">
+                    <Lock size={32} className="text-red-500" />
+                    <h3 className="font-heading text-lg sm:text-xl text-white uppercase m-0 tracking-wide">
+                      REGISTRATION IS OFFICIALLY CLOSED
+                    </h3>
+                    <p className="text-xs sm:text-sm text-neutral-300 max-w-lg m-0">
+                      The official registration window closed on <strong>Monday, 23rd November at 12:00 PM (Noon) IST</strong>. New entries and payments are no longer accepted.
                     </p>
                   </div>
                 </div>
-              ) : isSelectedSemLocked ? null : (
-              <div className="space-y-5 pt-6 border-t-2 border-red-600/60 bg-[#080808]/90 p-4 sm:p-6 rounded-xl border border-red-900/40">
+              ) : (
+                <div className="space-y-5 pt-6 border-t-2 border-red-600/60 bg-[#080808]/90 p-4 sm:p-6 rounded-xl border border-red-900/40">
                 <div className="flex items-start gap-3 border-b border-red-950/60 pb-3">
                   <CreditCard className="text-red-500 mt-1 shrink-0" size={20} />
                   <div>
@@ -1622,7 +1654,7 @@ export default function RegisterClientView({
 
               {/* SECTION 7: BOTTOM GRAND PRIX ENTRY SUMMARY & SUBMIT */}
               <div className="pt-6 border-t border-red-950/60 text-center space-y-4">
-                {!isSelectedSemWaitlist && !isSelectedSemLocked && (
+                {!isRegistrationClosed && (
                   <div className="space-y-1">
                     <p className="font-mono text-xs uppercase tracking-[3px] text-neutral-400 m-0">
                       GRAND PRIX ENTRY FEE
@@ -1635,36 +1667,25 @@ export default function RegisterClientView({
 
                 <button
                   type="submit"
-                  disabled={submitting || isSelectedSemLocked}
-                  className={`w-full py-4 sm:py-5 disabled:bg-neutral-800 disabled:text-neutral-500 disabled:shadow-none disabled:cursor-not-allowed text-white font-black italic uppercase tracking-widest text-base sm:text-lg rounded transition-all cursor-pointer flex items-center justify-center gap-3 ${
-                    isSelectedSemWaitlist
-                      ? "bg-yellow-600 hover:bg-yellow-500 text-black shadow-[0_0_30px_rgba(234,179,8,0.4)]"
-                      : "bg-red-600 hover:bg-red-500 shadow-[0_0_30px_rgba(255,0,0,0.5)]"
-                  }`}
+                  disabled={submitting || isRegistrationClosed}
+                  className="w-full py-4 sm:py-5 disabled:bg-neutral-800 disabled:text-neutral-500 disabled:shadow-none disabled:cursor-not-allowed text-white font-black italic uppercase tracking-widest text-base sm:text-lg rounded transition-all cursor-pointer flex items-center justify-center gap-3 bg-red-600 hover:bg-red-500 shadow-[0_0_30px_rgba(255,0,0,0.5)]"
                 >
                   {submitting ? (
                     <>
                       <span className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                      <span>{isSelectedSemWaitlist ? "JOINING WAITING LIST..." : "LOCKING IN GRID POSITION..."}</span>
+                      <span>LOCKING IN GRID POSITION...</span>
                     </>
-                  ) : isAllLocked ? (
+                  ) : isRegistrationClosed ? (
                     <>
                       <Lock size={20} />
-                      <span>REGISTRATION LOCKED — ALL SLOTS FULL</span>
+                      <span>REGISTRATION CLOSED — DEADLINE PASSED</span>
                     </>
-                  ) : isSelectedSemLocked ? (
-                    <>
-                      <Lock size={20} />
-                      <span>{driver1.sem.toUpperCase()} SLOTS FULL (LOCKED)</span>
-                    </>
-                  ) : isSelectedSemWaitlist ? (
-                    <span>JOIN WAITING LIST &gt;&gt;</span>
                   ) : (
                     <span>LOCK IN GRID POSITION &gt;&gt;</span>
                   )}
                 </button>
 
-                {!isSelectedSemLocked && (
+                {!isRegistrationClosed && (
                   <p className="text-center font-mono text-[11px] sm:text-xs text-neutral-400 m-0 pt-1">
                     <span className="text-red-500 font-bold">⚠ PLEASE NOTE:</span> Registration fee is <strong className="text-red-400 uppercase tracking-wider font-bold">strictly non-refundable</strong> once paid under any circumstances.
                   </p>
@@ -1673,9 +1694,7 @@ export default function RegisterClientView({
                 {/* TRANSACTION VERIFICATION & CONTACT QUERIES NOTICE */}
                 <div className="mt-8 p-5 sm:p-6 bg-[#080808] border border-red-900/50 rounded-xl space-y-3 font-mono text-center shadow-lg">
                   <p className="text-xs sm:text-sm text-yellow-400 font-bold tracking-wide m-0">
-                    {isSelectedSemWaitlist
-                      ? "Waiting list teams will be contacted for payment if confirmed teams drop out, or if 2nd Year slots remain unfilled."
-                      : "Once the Transaction is verified, the login credentials will be shared to the Team Lead's email."}
+                    Once the Transaction is verified, the login credentials will be shared to the Team Lead&apos;s email.
                   </p>
 
                   <div className="pt-3 border-t border-neutral-800/80">

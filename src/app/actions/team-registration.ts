@@ -91,10 +91,16 @@ async function requireAdminUser() {
   return { user, profile };
 }
 
-const MAX_CONFIRMED_PER_SEM = 40;
-const FIRST_SEM_WAITLIST_LIMIT = 20;
-const THIRD_SEM_WAITLIST_LIMIT = 10;
-const MAX_WAITLIST_PER_SEM = 10; // backwards-compatible default
+const REGISTRATION_DEADLINE_ISO = "2026-11-23T12:00:00+05:30";
+
+function isRegistrationClosed(): boolean {
+  return Date.now() >= new Date(REGISTRATION_DEADLINE_ISO).getTime();
+}
+
+const MAX_CONFIRMED_PER_SEM = 999999;
+const FIRST_SEM_WAITLIST_LIMIT = 0;
+const THIRD_SEM_WAITLIST_LIMIT = 0;
+const MAX_WAITLIST_PER_SEM = 0; // backwards-compatible default
 
 /**
  * Public Server Action: Fetch total submitted teams count per semester
@@ -107,6 +113,8 @@ export async function getSemesterRegistrationCounts(): Promise<{
   waitlistLimit: number;
   firstSemWaitlistLimit: number;
   thirdSemWaitlistLimit: number;
+  isClosed: boolean;
+  deadlineIso: string;
 }> {
   try {
     const { data, error } = await supabaseAdmin
@@ -159,6 +167,8 @@ export async function getSemesterRegistrationCounts(): Promise<{
         waitlistLimit: THIRD_SEM_WAITLIST_LIMIT,
         firstSemWaitlistLimit: FIRST_SEM_WAITLIST_LIMIT,
         thirdSemWaitlistLimit: THIRD_SEM_WAITLIST_LIMIT,
+        isClosed: isRegistrationClosed(),
+        deadlineIso: REGISTRATION_DEADLINE_ISO,
       };
     }
 
@@ -196,6 +206,8 @@ export async function getSemesterRegistrationCounts(): Promise<{
       waitlistLimit: THIRD_SEM_WAITLIST_LIMIT,
       firstSemWaitlistLimit: FIRST_SEM_WAITLIST_LIMIT,
       thirdSemWaitlistLimit: THIRD_SEM_WAITLIST_LIMIT,
+      isClosed: isRegistrationClosed(),
+      deadlineIso: REGISTRATION_DEADLINE_ISO,
     };
   } catch (err) {
     console.error("getSemesterRegistrationCounts error:", err);
@@ -206,6 +218,8 @@ export async function getSemesterRegistrationCounts(): Promise<{
       waitlistLimit: THIRD_SEM_WAITLIST_LIMIT,
       firstSemWaitlistLimit: FIRST_SEM_WAITLIST_LIMIT,
       thirdSemWaitlistLimit: THIRD_SEM_WAITLIST_LIMIT,
+      isClosed: isRegistrationClosed(),
+      deadlineIso: REGISTRATION_DEADLINE_ISO,
     };
   }
 }
@@ -286,147 +300,16 @@ export async function submitTeamRegistration(
       }
     }
 
-    // Check semester counts: 40 confirmed + waitlist (20 for 1st sem, 10 for 3rd sem)
-    const { firstSemCount, thirdSemCount, maxLimit, firstSemWaitlistLimit, thirdSemWaitlistLimit } = await getSemesterRegistrationCounts();
-    const semLower = leaderSem.toLowerCase();
-    const isFirstSem = semLower.includes("1st") || semLower === "1";
-    const isThirdSem = semLower.includes("3rd") || semLower === "3" || semLower.includes("2nd") || semLower === "2";
-    const currentSemCount = isFirstSem ? firstSemCount : isThirdSem ? thirdSemCount : 0;
-    const currentWaitlistLimit = isFirstSem ? firstSemWaitlistLimit : thirdSemWaitlistLimit;
-    const maxTotalPerSem = maxLimit + currentWaitlistLimit;
-
-    if (currentSemCount >= maxTotalPerSem) {
+    // Strict Registration Closing Deadline Check: Monday, 23rd November 2026 at 12:00 PM (Noon) IST
+    // There is NO CAP on the total number of teams registering before this deadline.
+    if (isRegistrationClosed()) {
       return {
         success: false,
-        message: `${leaderSem} registration is COMPLETELY LOCKED. All ${maxLimit} confirmed slots and ${currentWaitlistLimit} waiting list slots are full.`,
+        message: "REGISTRATION IS OFFICIALLY CLOSED: Team registration closed on Monday, 23rd November 2026 at 12:00 PM (Noon) IST. No further submissions are being accepted.",
       };
     }
 
-    const isWaitlist = currentSemCount >= maxLimit;
-
-    // =========================================================================
-    // WAITING LIST TEAMS: DO NOT SAVE IN SUPABASE!
-    // Stream directly to Google Sheets in the 3rd sheet named "Waiting list"
-    // =========================================================================
-    if (isWaitlist) {
-      const waitlistNum = currentSemCount - maxLimit + 1;
-      const d2 = members[0] || {};
-      const d3 = members[1] || {};
-      const d4 = members[2] || {};
-
-      const waitlistSheetRecord: ComprehensiveTeamRecord = {
-        sheetName: "Waiting list",
-        teamName: teamName,
-        track: track,
-        teamCode: `WAITLIST-#${waitlistNum}`,
-        status: "Waitlist",
-        decisionAt: formatToIST(new Date()),
-        decisionBy: "Waiting List Submission",
-
-        // Driver 1 (Leader)
-        leaderName: leaderName,
-        leaderEmail: leaderEmail,
-        leaderPhone: leaderPhone,
-        leaderCollege: leaderCollege,
-        leaderUsn: leaderUsn,
-        leaderBranch: leaderBranch,
-        leaderSem: leaderSem,
-
-        // Driver 2
-        driver2Name: d2.name || "",
-        driver2Email: d2.email || "",
-        driver2Phone: d2.phone || "",
-        driver2College: d2.college || "",
-        driver2Usn: d2.usn || "",
-        driver2Branch: d2.branch || "",
-        driver2Sem: d2.sem || "",
-
-        // Driver 3
-        driver3Name: d3.name || "",
-        driver3Email: d3.email || "",
-        driver3Phone: d3.phone || "",
-        driver3College: d3.college || "",
-        driver3Usn: d3.usn || "",
-        driver3Branch: d3.branch || "",
-        driver3Sem: d3.sem || "",
-
-        // Driver 4
-        driver4Name: d4.name || "",
-        driver4Email: d4.email || "",
-        driver4Phone: d4.phone || "",
-        driver4College: d4.college || "",
-        driver4Usn: d4.usn || "",
-        driver4Branch: d4.branch || "",
-        driver4Sem: d4.sem || "",
-
-        // Payment (Waitlist: no payment required)
-        transactionId: `WAITLIST-#${waitlistNum} (Payment NOT required right now)`,
-        paymentPhone: paymentPhone,
-        paymentProofUrl: "WAITLIST (Payment pending slot availability)",
-
-        // Credentials
-        loginPassword: "",
-        portalUrl: "",
-        whatsappGroup: "",
-        emailDispatchStatus: "WAITLIST",
-      };
-
-      try {
-        await syncRegistrationToGoogleSheets(waitlistSheetRecord);
-      } catch (err) {
-        console.error("Waitlist Google Sheets sync error:", err);
-      }
-
-      // Persist waitlist registration into team_registrations table with status 'waitlist'
-      // This enables getSemesterRegistrationCounts to track waitlist slots filled and lock when reaching the limit
-      let insertedWaitlistId = "";
-      try {
-        const waitlistPayload = {
-          team_name: teamName,
-          track: track,
-          leader_name: leaderName,
-          leader_email: leaderEmail,
-          leader_phone: leaderPhone,
-          leader_college: leaderCollege,
-          leader_usn: leaderUsn,
-          leader_branch: leaderBranch,
-          leader_sem: leaderSem,
-          members: members,
-          payment_utr: `WAITLIST-#${waitlistNum}`,
-          payment_phone: paymentPhone,
-          payment_proof_url: "WAITLIST (Payment pending slot availability)",
-          status: "waitlist",
-          generated_credentials: {
-            teamCode: `WAITLIST-#${waitlistNum}`,
-            username: teamName.toLowerCase().replace(/[^a-z0-9]/g, ""),
-            email: leaderEmail,
-          },
-        };
-
-        const { data: waitlistInsert, error: waitlistErr } = await supabaseAdmin
-          .from("team_registrations")
-          .insert(waitlistPayload)
-          .select("id")
-          .maybeSingle();
-
-        if (waitlistErr) {
-          console.error("Waitlist DB insertion error:", waitlistErr);
-        } else {
-          insertedWaitlistId = waitlistInsert?.id || "";
-        }
-      } catch (dbErr) {
-        console.error("Waitlist DB insertion error:", dbErr);
-      }
-
-      return {
-        success: true,
-        isWaitlist: true,
-        registrationId: insertedWaitlistId,
-        message: "Your team has been successfully registered on the Waiting List! Details have been saved to Google Sheets (Waiting list). If any confirmed team is unable to participate, we will contact you.",
-      };
-    }
-
-    // Require payment proof & UTR for confirmed slots (< 40)
+    // Require payment proof & UTR (Entry fee ₹400 for all teams registering before the deadline)
     if (!paymentUtr || paymentUtr.length < 6) {
       return { success: false, message: "Valid 12-digit UPI Reference / UTR Number is required." };
     }
@@ -639,7 +522,7 @@ export async function submitTeamRegistration(
       teamName: teamName,
       track: track,
       teamCode: provisionalTeamCode,
-      status: isWaitlist ? "Waitlist" : "Pending",
+      status: "Pending",
       decisionAt: formatToIST(new Date()),
 
       // Driver 1 (Leader)
@@ -708,10 +591,8 @@ export async function submitTeamRegistration(
 
     return {
       success: true,
-      isWaitlist,
-      message: isWaitlist
-        ? "Team added to the Waiting List! If a confirmed slot becomes available, we will contact you for payment."
-        : "Registration submitted successfully! Your payment is under verification by IVC admins.",
+      isWaitlist: false,
+      message: "Registration submitted successfully! Your payment is under verification by IVC admins.",
       registrationId: insertedRegId,
     };
   } catch (err: unknown) {
