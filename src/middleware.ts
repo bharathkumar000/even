@@ -58,8 +58,8 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL("/ops/scanner", request.url));
   }
 
-  // Refresh auth session only when session cookies exist, with a strict 3-second timeout
-  if (hasAuthCookie) {
+  // Refresh auth session only when accessing protected portals with session cookies
+  if (isProtectedPortal && hasAuthCookie) {
     try {
       const supabase = createServerClient(supabaseUrl, supabaseAnonKey, {
         cookies: {

@@ -127,7 +127,7 @@ export default function RegisterClientView({
     thirdSemCount: initialCounts.thirdSemCount || 0,
   });
 
-  const isRegistrationClosed = timeLeft.isExpired;
+  const isRegistrationClosed = timeLeft.isExpired || Boolean(initialCounts?.isClosed);
   const isFirstSemLocked = isRegistrationClosed;
   const isThirdSemLocked = isRegistrationClosed;
   const isAllLocked = isRegistrationClosed;
@@ -148,6 +148,9 @@ export default function RegisterClientView({
             firstSemCount: fresh.firstSemCount,
             thirdSemCount: fresh.thirdSemCount,
           });
+          if (fresh.isClosed) {
+            setTimeLeft((prev) => ({ ...prev, isExpired: true }));
+          }
         }
       } catch (err) {
         // silent fallback
@@ -742,11 +745,17 @@ export default function RegisterClientView({
                         }`}
                       />
                       <span className="text-xs sm:text-sm font-black uppercase tracking-widest text-white">
-                        {isRegistrationClosed ? "REGISTRATION HAS CLOSED" : "REGISTRATION DEADLINE COUNTDOWN"}
+                        {isRegistrationClosed ? "REGISTRATIONS ARE CLOSED" : "REGISTRATION DEADLINE COUNTDOWN"}
                       </span>
                     </div>
                     <p className="text-[11px] sm:text-xs text-neutral-300 m-0 mt-0.5">
-                      CLOSES: <strong className="text-yellow-400">MONDAY, 23RD NOVEMBER @ 12:00 PM (NOON) IST</strong> · NO TEAM CAP
+                      {isRegistrationClosed ? (
+                        <span className="text-red-400 font-bold">
+                          Official team registrations closed on Monday, 23rd November at 12:00 PM (Noon) IST
+                        </span>
+                      ) : (
+                        <>CLOSES: <strong className="text-yellow-400">MONDAY, 23RD NOVEMBER @ 12:00 PM (NOON) IST</strong> · NO TEAM CAP</>
+                      )}
                     </p>
                   </div>
                 </div>
@@ -900,8 +909,41 @@ export default function RegisterClientView({
               </div>
             )}
 
-            {/* MAIN RED BORDERED FORM */}
-            <form onSubmit={handleSubmit} className="border-2 border-red-600/80 bg-[#060606] rounded-xl p-3.5 sm:p-8 md:p-10 shadow-[0_0_40px_rgba(255,0,0,0.15)] space-y-7 sm:space-y-10">
+            {isRegistrationClosed ? (
+              <div className="border-2 border-red-600/70 bg-[#080808] p-8 sm:p-14 rounded-2xl text-center space-y-6 shadow-[0_0_50px_rgba(255,0,0,0.3)] my-8 relative overflow-hidden font-mono">
+                <div className="inline-flex p-4 rounded-2xl bg-red-950/60 border border-red-600/80 text-red-500 shadow-[0_0_20px_rgba(255,0,0,0.4)]">
+                  <Lock size={44} />
+                </div>
+                <div className="space-y-2">
+                  <h2 className="text-2xl sm:text-4xl font-black italic tracking-wider text-white uppercase m-0">
+                    REGISTRATIONS ARE CLOSED
+                  </h2>
+                  <p className="text-sm sm:text-base text-neutral-300 max-w-xl mx-auto m-0 leading-relaxed">
+                    Official team registrations for the Eventra Grand Prix closed on <strong className="text-yellow-400">Monday, 23rd November at 12:00 PM (Noon) IST</strong>.
+                  </p>
+                  <p className="text-xs text-neutral-400 max-w-lg mx-auto m-0 pt-1 leading-relaxed">
+                    No further submissions, UPI payments, or squad registrations are being accepted. If your team has already submitted registration and payment, your credentials will be dispatched to the Team Leader&apos;s email upon admin verification.
+                  </p>
+                </div>
+
+                <div className="pt-6 border-t border-neutral-800/80 max-w-xl mx-auto">
+                  <p className="text-[11px] uppercase tracking-widest text-neutral-400 font-bold mb-2">
+                    For any queries contact student coordinators:
+                  </p>
+                  <div className="flex flex-wrap justify-center items-center gap-x-6 gap-y-2 text-xs">
+                    <a href="tel:+919945867010" className="text-neutral-300 hover:text-red-400 transition-colors">
+                      <span className="text-white font-bold">Preksha Dixit</span> - +91 99458 67010
+                    </a>
+                    <span className="text-neutral-700 hidden sm:inline">•</span>
+                    <a href="tel:+916361455193" className="text-neutral-300 hover:text-red-400 transition-colors">
+                      <span className="text-white font-bold">Parinitha K</span> - +91 63614 55193
+                    </a>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              /* MAIN RED BORDERED FORM */
+              <form onSubmit={handleSubmit} className="border-2 border-red-600/80 bg-[#060606] rounded-xl p-3.5 sm:p-8 md:p-10 shadow-[0_0_40px_rgba(255,0,0,0.15)] space-y-7 sm:space-y-10">
               {/* SECTION 1: CREW IDENTIFIER & CAPACITY */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6 font-mono text-xs">
                 {/* Team Capacity Dropdown */}
@@ -1701,6 +1743,7 @@ export default function RegisterClientView({
                 </div>
               </div>
             </form>
+            )}
           </>
         )}
       </main>
