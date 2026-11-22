@@ -376,19 +376,24 @@ export async function submitTeamRegistration(
       .from("teams")
       .select("code");
 
-    let maxNum = 0;
-    let nonTestCount = 0;
+    const isSecondYear = track.toLowerCase().includes("3") || track.toLowerCase().includes("2nd");
+    const baseStart = isSecondYear ? 201 : 101;
+    let maxNum = baseStart - 1;
+
     for (const r of allRegs) {
       const name = String((r as any)?.team_name || "").toLowerCase().trim();
       const code = (r as any)?.team_code || (r.generated_credentials as any)?.teamCode || "";
       if (name === "code" || code.includes("TEST") || code.includes("ADMIN") || code.includes("DEV")) {
         continue;
       }
-      nonTestCount++;
       const m = code.match(/IVC-(?:RY|VV)-(\d+)/i);
       if (m) {
         const n = parseInt(m[1], 10);
-        if (n > maxNum) maxNum = n;
+        if (isSecondYear && n >= 201 && n < 300) {
+          if (n > maxNum) maxNum = n;
+        } else if (!isSecondYear && n >= 101 && n < 200) {
+          if (n > maxNum) maxNum = n;
+        }
       }
     }
     for (const t of existingTeams || []) {
@@ -400,12 +405,15 @@ export async function submitTeamRegistration(
       const m = code.match(/IVC-(?:RY|VV)-(\d+)/i);
       if (m) {
         const n = parseInt(m[1], 10);
-        if (n > maxNum) maxNum = n;
+        if (isSecondYear && n >= 201 && n < 300) {
+          if (n > maxNum) maxNum = n;
+        } else if (!isSecondYear && n >= 101 && n < 200) {
+          if (n > maxNum) maxNum = n;
+        }
       }
     }
 
-    const nextNum = Math.max(maxNum + 1, nonTestCount + 1);
-    const provisionalTeamCode = `IVC-RY-${String(nextNum).padStart(3, "0")}`;
+    const provisionalTeamCode = `IVC-RY-${String(maxNum + 1).padStart(3, "0")}`;
 
     // 3. Insert into team_registrations table with pending status and empty password
     let registrationPayload: any = {
@@ -681,7 +689,8 @@ export async function getRegistrations(statusFilter?: "all" | "pending" | "appro
         (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
       );
       const seenCodes = new Set<string>();
-      let nextSeq = 1;
+      let nextSeq1st = 101;
+      let nextSeq3rd = 201;
 
       for (const item of sorted) {
         let currentCode = item.team_code || item.generated_credentials?.teamCode || "";
@@ -689,14 +698,28 @@ export async function getRegistrations(statusFilter?: "all" | "pending" | "appro
           currentCode = currentCode.replace("IVC-VV-", "IVC-RY-");
         }
 
-        if (item.status === "waitlist" || currentCode.includes("WAITLIST")) continue;
+        if (item.status === "waitlist" || currentCode.includes("WAITLIST") || item.status === "test" || currentCode.includes("TEST")) continue;
 
-        if (!currentCode || seenCodes.has(currentCode)) {
-          while (seenCodes.has(`IVC-RY-${String(nextSeq).padStart(3, "0")}`)) {
-            nextSeq++;
+        const isSecondYear = (item.track || "").toLowerCase().includes("3") || (item.track || "").toLowerCase().includes("2nd");
+        const codeMatch = currentCode.match(/IVC-(?:RY|VV)-(\d+)/i);
+        const codeNum = codeMatch ? parseInt(codeMatch[1], 10) : 0;
+        const isWrongSeries = isSecondYear ? (codeNum < 201 || codeNum >= 300) : (codeNum < 101 || codeNum >= 200);
+
+        if (!currentCode || seenCodes.has(currentCode) || isWrongSeries) {
+          let fixedCode = "";
+          if (isSecondYear) {
+            while (seenCodes.has(`IVC-RY-${String(nextSeq3rd).padStart(3, "0")}`)) {
+              nextSeq3rd++;
+            }
+            fixedCode = `IVC-RY-${String(nextSeq3rd).padStart(3, "0")}`;
+            nextSeq3rd++;
+          } else {
+            while (seenCodes.has(`IVC-RY-${String(nextSeq1st).padStart(3, "0")}`)) {
+              nextSeq1st++;
+            }
+            fixedCode = `IVC-RY-${String(nextSeq1st).padStart(3, "0")}`;
+            nextSeq1st++;
           }
-          const fixedCode = `IVC-RY-${String(nextSeq).padStart(3, "0")}`;
-          nextSeq++;
           seenCodes.add(fixedCode);
 
           item.team_code = fixedCode;
@@ -710,6 +733,7 @@ export async function getRegistrations(statusFilter?: "all" | "pending" | "appro
             supabaseAdmin
               .from("team_registrations")
               .update({
+                team_code: fixedCode,
                 generated_credentials: {
                   ...(item.generated_credentials || {}),
                   teamCode: fixedCode,
@@ -719,11 +743,8 @@ export async function getRegistrations(statusFilter?: "all" | "pending" | "appro
           ).catch(() => {});
         } else {
           seenCodes.add(currentCode);
-          const m = currentCode.match(/IVC-RY-(\d+)/i);
-          if (m) {
-            const num = parseInt(m[1], 10);
-            if (num >= nextSeq) nextSeq = num + 1;
-          }
+          if (isSecondYear && codeNum >= nextSeq3rd) nextSeq3rd = codeNum + 1;
+          if (!isSecondYear && codeNum >= nextSeq1st) nextSeq1st = codeNum + 1;
         }
       }
     }
@@ -815,24 +836,35 @@ export async function approveRegistration(registrationId: string): Promise<{
       .ilike("name", teamName.trim())
       .maybeSingle();
 
+    const isSecondYear = track.toLowerCase().includes("3") || track.toLowerCase().includes("2nd");
+    const baseStart = isSecondYear ? 201 : 101;
+
     let teamCode = reg.generated_credentials?.teamCode || matchedTeam?.code || reg.team_code || "";
     if (teamCode.startsWith("IVC-VV-")) {
       teamCode = teamCode.replace("IVC-VV-", "IVC-RY-");
     }
 
-    if (!teamCode) {
+    const codeMatch = teamCode.match(/IVC-(?:RY|VV)-(\d+)/i);
+    const codeNum = codeMatch ? parseInt(codeMatch[1], 10) : 0;
+    const isCodeWrongSeries = isSecondYear ? (codeNum < 201 || codeNum >= 300) : (codeNum < 101 || codeNum >= 200);
+
+    if (!teamCode || isCodeWrongSeries) {
       const { data: allTeams } = await supabaseAdmin.from("teams").select("code, name");
-      let maxNum = 0;
+      let maxNum = baseStart - 1;
       for (const t of allTeams || []) {
         const name = String((t as any)?.name || "").toLowerCase().trim();
         const code = String(t.code || "").toUpperCase();
         if (name === "code" || code.includes("TEST") || code.includes("ADMIN") || code.includes("DEV")) {
           continue;
         }
-        const m = (t.code || "").match(/IVC-(?:RY|VV)-(\d+)/i);
+        const m = code.match(/IVC-(?:RY|VV)-(\d+)/i);
         if (m) {
           const n = parseInt(m[1], 10);
-          if (n > maxNum) maxNum = n;
+          if (isSecondYear && n >= 201 && n < 300) {
+            if (n > maxNum) maxNum = n;
+          } else if (!isSecondYear && n >= 101 && n < 200) {
+            if (n > maxNum) maxNum = n;
+          }
         }
       }
       teamCode = `IVC-RY-${String(maxNum + 1).padStart(3, "0")}`;
