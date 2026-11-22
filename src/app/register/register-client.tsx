@@ -72,7 +72,6 @@ export default function RegisterClientView({
   initialCounts = {
     firstSemCount: 0,
     thirdSemCount: 0,
-    maxLimit: 999999,
   },
 }: {
   initialCounts?: {
@@ -122,11 +121,10 @@ export default function RegisterClientView({
     return () => clearInterval(interval);
   }, []);
 
-  // Live Track Registration Counts (NO CAP - Separate 1st and 2nd Year Tracks)
+  // Live Track Registration Counts (Separate 1st and 2nd Year Tracks)
   const [semCounts, setSemCounts] = useState({
     firstSemCount: initialCounts.firstSemCount || 0,
     thirdSemCount: initialCounts.thirdSemCount || 0,
-    maxLimit: initialCounts.maxLimit || 999999,
   });
 
   const isRegistrationClosed = timeLeft.isExpired;
@@ -149,7 +147,6 @@ export default function RegisterClientView({
           setSemCounts({
             firstSemCount: fresh.firstSemCount,
             thirdSemCount: fresh.thirdSemCount,
-            maxLimit: fresh.maxLimit,
           });
         }
       } catch (err) {
@@ -791,7 +788,7 @@ export default function RegisterClientView({
               </div>
             </div>
 
-            {/* COMPETITION TRACK STATUS CARDS (SEPARATED AS 1ST AND 2ND YEARS - NO CAP) */}
+            {/* COMPETITION TRACK STATUS CARDS (SEPARATED AS 1ST AND 2ND YEARS) */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8 font-mono">
               {/* Card 1: 1st Year Track (1st Semester) */}
               <div
@@ -811,7 +808,7 @@ export default function RegisterClientView({
                       }`}
                     />
                     <span className="text-xs sm:text-sm font-black italic tracking-wider text-white uppercase">
-                      1ST YEAR TRACK (1ST SEMESTER)
+                      1ST SEMESTER TEAMS
                     </span>
                   </div>
                   {isFirstSemLocked ? (
@@ -820,27 +817,22 @@ export default function RegisterClientView({
                     </span>
                   ) : (
                     <span className="px-2.5 py-0.5 rounded bg-green-500/10 border border-green-500/30 text-green-400 text-[10px] font-bold uppercase tracking-wider">
-                      OPEN (NO CAP)
+                      OPEN
                     </span>
                   )}
                 </div>
 
-                <div className="flex items-baseline justify-between">
-                  <div className="text-2xl sm:text-3xl font-black text-white">
-                    {semCounts.firstSemCount}{" "}
-                    <span className="text-sm font-bold text-neutral-400">TEAMS REGISTERED</span>
-                  </div>
-                  <span className="text-[11px] text-emerald-400 font-bold uppercase tracking-wider">
-                    {isFirstSemLocked ? "DEADLINE REACHED" : "UNLIMITED SLOTS"}
+                <div className="flex items-baseline gap-2.5 pt-1">
+                  <span className="text-4xl sm:text-5xl font-black text-white italic tracking-wider">
+                    {semCounts.firstSemCount}
+                  </span>
+                  <span className="text-xs sm:text-sm font-bold text-neutral-400 uppercase tracking-widest">
+                    TEAMS REGISTERED
                   </span>
                 </div>
 
-                <div className="w-full bg-[#121212] rounded-full h-1.5 overflow-hidden border border-white/5">
-                  <div className="h-full rounded-full bg-gradient-to-r from-red-600 via-orange-500 to-amber-400 w-full animate-pulse" />
-                </div>
-
-                <p className="text-[11px] text-neutral-400 m-0">
-                  Exclusively for 1st Year (1st Semester) squads · Open to all engineering colleges
+                <p className="text-[11px] text-neutral-400 m-0 pt-0.5">
+                  1st Year Track (1st Semester) · Open to all engineering colleges
                 </p>
               </div>
 
@@ -862,7 +854,7 @@ export default function RegisterClientView({
                       }`}
                     />
                     <span className="text-xs sm:text-sm font-black italic tracking-wider text-white uppercase">
-                      2ND YEAR TRACK (3RD SEMESTER)
+                      3RD SEMESTER TEAMS
                     </span>
                   </div>
                   {isThirdSemLocked ? (
@@ -871,27 +863,22 @@ export default function RegisterClientView({
                     </span>
                   ) : (
                     <span className="px-2.5 py-0.5 rounded bg-green-500/10 border border-green-500/30 text-green-400 text-[10px] font-bold uppercase tracking-wider">
-                      OPEN (NO CAP)
+                      OPEN
                     </span>
                   )}
                 </div>
 
-                <div className="flex items-baseline justify-between">
-                  <div className="text-2xl sm:text-3xl font-black text-white">
-                    {semCounts.thirdSemCount}{" "}
-                    <span className="text-sm font-bold text-neutral-400">TEAMS REGISTERED</span>
-                  </div>
-                  <span className="text-[11px] text-emerald-400 font-bold uppercase tracking-wider">
-                    {isThirdSemLocked ? "DEADLINE REACHED" : "UNLIMITED SLOTS"}
+                <div className="flex items-baseline gap-2.5 pt-1">
+                  <span className="text-4xl sm:text-5xl font-black text-white italic tracking-wider">
+                    {semCounts.thirdSemCount}
+                  </span>
+                  <span className="text-xs sm:text-sm font-bold text-neutral-400 uppercase tracking-widest">
+                    TEAMS REGISTERED
                   </span>
                 </div>
 
-                <div className="w-full bg-[#121212] rounded-full h-1.5 overflow-hidden border border-white/5">
-                  <div className="h-full rounded-full bg-gradient-to-r from-red-600 via-orange-500 to-amber-400 w-full animate-pulse" />
-                </div>
-
-                <p className="text-[11px] text-neutral-400 m-0">
-                  Exclusively for 2nd Year (3rd Semester) squads · Open to all engineering colleges
+                <p className="text-[11px] text-neutral-400 m-0 pt-0.5">
+                  2nd Year Track (3rd Semester) · Open to all engineering colleges
                 </p>
               </div>
             </div>

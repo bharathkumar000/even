@@ -97,7 +97,7 @@ function isRegistrationClosed(): boolean {
   return Date.now() >= new Date(REGISTRATION_DEADLINE_ISO).getTime();
 }
 
-const MAX_CONFIRMED_PER_SEM = 999999;
+const MAX_CONFIRMED_PER_SEM = 0;
 const FIRST_SEM_WAITLIST_LIMIT = 0;
 const THIRD_SEM_WAITLIST_LIMIT = 0;
 const MAX_WAITLIST_PER_SEM = 0; // backwards-compatible default
