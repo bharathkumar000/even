@@ -1,0 +1,362 @@
+[
+  {
+    "id": "ee257be9-2823-494b-8912-9dc72d13149a",
+    "team_name": "Xavier boys",
+    "track": "1st Sem",
+    "leader_name": "Afnan vn",
+    "leader_email": "afnanvn566@gmail.com",
+    "leader_phone": "8971900832",
+    "leader_college": "Coorg institute of technology",
+    "leader_usn": "4CI25AD004",
+    "leader_branch": "AI & Machine Learning (AIML)",
+    "leader_sem": "1st Semester",
+    "members": [
+      {
+        "sem": "1st Semester",
+        "usn": "4CI25AD004",
+        "name": "Adrien Xavier",
+        "email": "ayan.vn27@gmail.com",
+        "phone": "948196971",
+        "branch": "AI & Machine Learning (AIML)",
+        "college": "Coorg institute of technology"
+      },
+      {
+        "sem": "1st Semester",
+        "usn": "4CI25AD028",
+        "name": "Mohammed Hafeem",
+        "email": "afnanvn566@gmail.com",
+        "phone": "8073318079",
+        "branch": "Computer Science & Engg (CSE)",
+        "college": "Coorg institute of technology"
+      },
+      {
+        "sem": "1st Semester",
+        "usn": "4CI25AD014",
+        "name": "Diganth",
+        "email": "afnanvn566@gmail.com",
+        "phone": "9170193",
+        "branch": "Computer Science & Engg (CSE)",
+        "college": "Coorg institute of technology"
+      }
+    ],
+    "payment_utr": "WAITLIST-#1",
+    "payment_phone": "8971900832",
+    "payment_proof_url": "WAITLIST (Payment pending slot availability)",
+    "status": "waitlist",
+    "rejection_reason": null,
+    "generated_credentials": {
+      "email": "afnanvn566@gmail.com",
+      "teamCode": "WAITLIST-#1",
+      "username": "xavierboys"
+    },
+    "team_id": null,
+    "approved_at": null,
+    "approved_by": null,
+    "created_at": "2026-11-21T17:05:17.504371+00:00",
+    "updated_at": "2026-11-21T17:05:17.504371+00:00",
+    "login_username": null,
+    "login_email": "afnanvn566@gmail.com",
+    "login_password": null,
+    "team_code": null
+  },
+  {
+    "id": "7709ffc4-6cdf-4e42-9605-d95619fa3f1f",
+    "team_name": "CIT_Zens",
+    "track": "1st Sem",
+    "leader_name": "Vedanth R",
+    "leader_email": "vedanth2008r@gmail.com",
+    "leader_phone": "9036065715",
+    "leader_college": "Coorg Institute Of Technology",
+    "leader_usn": "NA",
+    "leader_branch": "AI & Machine Learning (AIML)",
+    "leader_sem": "1st Semester",
+    "members": [
+      {
+        "sem": "1st Semester",
+        "usn": "NA",
+        "name": "Ashith B S",
+        "email": "ashithbs459@gmail.com",
+        "phone": "9187062414",
+        "branch": "Data Science / Computer Science & Business (CSBS)",
+        "college": "Coorg Institute Of Technology"
+      },
+      {
+        "sem": "1st Semester",
+        "usn": "NA",
+        "name": "Sona P",
+        "email": "sonagowda115@gmail.com",
+        "phone": "8792644805",
+        "branch": "AI & Machine Learning (AIML)",
+        "college": "Coorg Institute Of Technology"
+      },
+      {
+        "sem": "1st Semester",
+        "usn": "NA",
+        "name": "Ganavi B S",
+        "email": "ganavibs304@gmail.com",
+        "phone": "8147894417",
+        "branch": "Computer Science & Engg (CSE)",
+        "college": "Coorg Institute Of Technology"
+      }
+    ],
+    "payment_utr": "WAITLIST-#2",
+    "payment_phone": "9036065715",
+    "payment_proof_url": "WAITLIST (Payment pending slot availability)",
+    "status": "waitlist",
+    "rejection_reason": null,
+    "generated_credentials": {
+      "email": "vedanth2008r@gmail.com",
+      "teamCode": "WAITLIST-#2",
+      "username": "citzens"
+    },
+    "team_id": null,
+    "approved_at": null,
+    "approved_by": null,
+    "created_at": "2026-11-22T07:03:50.066663+00:00",
+    "updated_at": "2026-11-22T07:03:50.066663+00:00",
+    "login_username": null,
+    "login_email": "vedanth2008r@gmail.com",
+    "login_password": null,
+    "team_code": null
+  },
+  {
+    "id": "45f7d765-4b3e-4fa4-ae83-e11eb12afdb9",
+    "team_name": "Cyber vortex",
+    "track": "1st Sem",
+    "leader_name": "Febin Thomas",
+    "leader_email": "febinpthomas5@gmail.com",
+    "leader_phone": "8951629143",
+    "leader_college": "Coorg institution of technology in engineering",
+    "leader_usn": "NA",
+    "leader_branch": "Other Branch",
+    "leader_sem": "1st Semester",
+    "members": [
+      {
+        "sem": "1st Semester",
+        "usn": "NA",
+        "name": "Vivek M M",
+        "email": "vivekvivekmm7@gmail.com",
+        "phone": "8147742287",
+        "branch": "Other Branch",
+        "college": "Coorg institution of technology in engineering"
+      },
+      {
+        "sem": "1st Semester",
+        "usn": "NA",
+        "name": "Hamsa D M",
+        "email": "hamsamdev01@gmail.com",
+        "phone": "9180552128",
+        "branch": "Other Branch",
+        "college": "Coorg institution of technology in engineering"
+      },
+      {
+        "sem": "1st Semester",
+        "usn": "NA",
+        "name": "Ananya C M",
+        "email": "ananyaammu0710@gmail.com",
+        "phone": "9180399208",
+        "branch": "Other Branch",
+        "college": "Coorg institution of technology in engineering"
+      }
+    ],
+    "payment_utr": "WAITLIST-#3",
+    "payment_phone": "8951629143",
+    "payment_proof_url": "WAITLIST (Payment pending slot availability)",
+    "status": "waitlist",
+    "rejection_reason": null,
+    "generated_credentials": {
+      "email": "febinpthomas5@gmail.com",
+      "teamCode": "WAITLIST-#3",
+      "username": "cybervortex"
+    },
+    "team_id": null,
+    "approved_at": null,
+    "approved_by": null,
+    "created_at": "2026-11-22T07:54:32.616626+00:00",
+    "updated_at": "2026-11-22T07:54:32.616626+00:00",
+    "login_username": null,
+    "login_email": "febinpthomas5@gmail.com",
+    "login_password": null,
+    "team_code": null
+  },
+  {
+    "id": "05d39c7d-d740-4a12-890f-46957a31f00b",
+    "team_name": "Cyber titans",
+    "track": "1st Sem",
+    "leader_name": "Keerthana KK",
+    "leader_email": "keekee2817@gmail.com",
+    "leader_phone": "9663757568",
+    "leader_college": "Coorg institute of technology",
+    "leader_usn": "NA",
+    "leader_branch": "Computer Science & Engg (CSE)",
+    "leader_sem": "1st Semester",
+    "members": [
+      {
+        "sem": "1st Semester",
+        "usn": "NA",
+        "name": "KP Hemavathy",
+        "email": "harshithahemavathi8@gmail.com",
+        "phone": "8861863107",
+        "branch": "Computer Science & Engg (CSE)",
+        "college": "Coorg institute of technology"
+      },
+      {
+        "sem": "1st Semester",
+        "usn": "NA",
+        "name": "Kruthik VH",
+        "email": "kruthik5245@gmail.com",
+        "phone": "7349251824",
+        "branch": "Computer Science & Engg (CSE)",
+        "college": "Coorg institute of technology"
+      },
+      {
+        "sem": "1st Semester",
+        "usn": "NA",
+        "name": "Monish TS",
+        "email": "monishkuttapi05@gmail.com",
+        "phone": "9740347646",
+        "branch": "Computer Science & Engg (CSE)",
+        "college": "Coorg institute of technology"
+      }
+    ],
+    "payment_utr": "WAITLIST-#4",
+    "payment_phone": "9663757568",
+    "payment_proof_url": "WAITLIST (Payment pending slot availability)",
+    "status": "waitlist",
+    "rejection_reason": null,
+    "generated_credentials": {
+      "email": "keekee2817@gmail.com",
+      "teamCode": "WAITLIST-#4",
+      "username": "cybertitans"
+    },
+    "team_id": null,
+    "approved_at": null,
+    "approved_by": null,
+    "created_at": "2026-11-22T11:34:56.647201+00:00",
+    "updated_at": "2026-11-22T11:34:56.647201+00:00",
+    "login_username": null,
+    "login_email": "keekee2817@gmail.com",
+    "login_password": null,
+    "team_code": null
+  },
+  {
+    "id": "013bde27-1318-4626-9f8e-f6ee18625bec",
+    "team_name": "Venon Velocity",
+    "track": "1st Sem",
+    "leader_name": "Ganapathi P B",
+    "leader_email": "ganapathidiyan1@gmail.com",
+    "leader_phone": "7899643025",
+    "leader_college": "Coorg Institute of Technology",
+    "leader_usn": "-",
+    "leader_branch": "AI & Machine Learning (AIML)",
+    "leader_sem": "1st Semester",
+    "members": [
+      {
+        "sem": "1st Semester",
+        "usn": "-",
+        "name": "K S Bopanna",
+        "email": "thrishanbopanna333@gmail.com",
+        "phone": "9686962040",
+        "branch": "Data Science / Computer Science & Business (CSBS)",
+        "college": "Coorg Institute of Technology"
+      },
+      {
+        "sem": "1st Semester",
+        "usn": "-",
+        "name": "Amrit Nanaiah M N",
+        "email": "amritnanaiah1@gmail.com",
+        "phone": "6366127283",
+        "branch": "Data Science / Computer Science & Business (CSBS)",
+        "college": "Coorg Institute of Technology"
+      },
+      {
+        "sem": "1st Semester",
+        "usn": "-",
+        "name": "M P Jaashan Belliappa",
+        "email": "jaashan.belliappa@gmail.com",
+        "phone": "8073867037",
+        "branch": "AI & Machine Learning (AIML)",
+        "college": "Coorg Institute of Technology"
+      }
+    ],
+    "payment_utr": "WAITLIST-#5",
+    "payment_phone": "7899643025",
+    "payment_proof_url": "WAITLIST (Payment pending slot availability)",
+    "status": "waitlist",
+    "rejection_reason": null,
+    "generated_credentials": {
+      "email": "ganapathidiyan1@gmail.com",
+      "teamCode": "WAITLIST-#5",
+      "username": "venonvelocity"
+    },
+    "team_id": null,
+    "approved_at": null,
+    "approved_by": null,
+    "created_at": "2026-11-22T13:56:02.069193+00:00",
+    "updated_at": "2026-11-22T13:56:02.069193+00:00",
+    "login_username": null,
+    "login_email": "ganapathidiyan1@gmail.com",
+    "login_password": null,
+    "team_code": null
+  },
+  {
+    "id": "d867807e-55e2-478f-a138-b942d8159ec7",
+    "team_name": "Runova",
+    "track": "1st Sem",
+    "leader_name": "Mervin. V",
+    "leader_email": "mervinv567@gmail.com",
+    "leader_phone": "9483305122",
+    "leader_college": "Coorg Institute Of Technology, Ponnampet",
+    "leader_usn": "NOT YET GIVEN",
+    "leader_branch": "Data Science / Computer Science & Business (CSBS)",
+    "leader_sem": "1st Semester",
+    "members": [
+      {
+        "sem": "1st Semester",
+        "usn": "NOT YET GIVEN",
+        "name": "Hifza Khanam",
+        "email": "hifzaakhann7171@gmail.com",
+        "phone": "9036099743",
+        "branch": "Data Science / Computer Science & Business (CSBS)",
+        "college": "Coorg Institute Of Technology, Ponnampet"
+      },
+      {
+        "sem": "1st Semester",
+        "usn": "NOT YET GIVEN",
+        "name": "Ananya Vinod",
+        "email": "ananya3928@outlook.com",
+        "phone": "8867696186",
+        "branch": "Data Science / Computer Science & Business (CSBS)",
+        "college": "Coorg Institute Of Technology, Ponnampet"
+      },
+      {
+        "sem": "1st Semester",
+        "usn": "NOT YET GIVEN",
+        "name": "Yashash MM",
+        "email": "yashashyashash2008@gmail.com",
+        "phone": "8073313151",
+        "branch": "Electronics & Communication (ECE)",
+        "college": "Coorg Institute Of Technology, Ponnampet"
+      }
+    ],
+    "payment_utr": "WAITLIST-#6",
+    "payment_phone": "9483305122",
+    "payment_proof_url": "WAITLIST (Payment pending slot availability)",
+    "status": "waitlist",
+    "rejection_reason": null,
+    "generated_credentials": {
+      "email": "mervinv567@gmail.com",
+      "teamCode": "WAITLIST-#6",
+      "username": "runova"
+    },
+    "team_id": null,
+    "approved_at": null,
+    "approved_by": null,
+    "created_at": "2026-11-22T14:05:54.282816+00:00",
+    "updated_at": "2026-11-22T14:05:54.282816+00:00",
+    "login_username": null,
+    "login_email": "mervinv567@gmail.com",
+    "login_password": null,
+    "team_code": null
+  }
+]

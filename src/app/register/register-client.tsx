@@ -393,25 +393,23 @@ export default function RegisterClientView({
       return false;
     }
 
-    // Validate Payment (Only required for confirmed slots < 40; not required for Waiting List)
-    if (!isSelectedSemWaitlist) {
-      if (!paymentUtr.trim() || paymentUtr.trim().length < 6) {
-        setErrorMsg("GRAND PRIX ENTRY: Please enter a valid 12-digit UPI Reference / UTR Number.");
-        return false;
-      }
-      if (!paymentFile) {
-        setErrorMsg("GRAND PRIX ENTRY: Please upload your payment screenshot proof.");
-        return false;
-      }
-      const allowedTypes = ["image/png", "image/jpeg", "image/jpg"];
-      if (!allowedTypes.includes(paymentFile.type.toLowerCase())) {
-        setErrorMsg("PAYMENT PROOF: Only PNG, JPG, or JPEG images are permitted.");
-        return false;
-      }
-      if (paymentFile.size > 10 * 1024 * 1024) {
-        setErrorMsg("PAYMENT PROOF: Image file size must not exceed 10MB.");
-        return false;
-      }
+    // Validate Payment (Required for all registrations)
+    if (!paymentUtr.trim() || paymentUtr.trim().length < 6) {
+      setErrorMsg("GRAND PRIX ENTRY: Please enter a valid 12-digit UPI Reference / UTR Number.");
+      return false;
+    }
+    if (!paymentFile) {
+      setErrorMsg("GRAND PRIX ENTRY: Please upload your payment screenshot proof.");
+      return false;
+    }
+    const allowedTypes = ["image/png", "image/jpeg", "image/jpg"];
+    if (!allowedTypes.includes(paymentFile.type.toLowerCase())) {
+      setErrorMsg("PAYMENT PROOF: Only PNG, JPG, or JPEG images are permitted.");
+      return false;
+    }
+    if (paymentFile.size > 10 * 1024 * 1024) {
+      setErrorMsg("PAYMENT PROOF: Image file size must not exceed 10MB.");
+      return false;
     }
 
     return true;
@@ -564,38 +562,17 @@ export default function RegisterClientView({
             {/* Glowing F1 Status Badge */}
             <div className="inline-flex items-center gap-2 px-4 py-1.5 bg-red-600/15 border border-red-500/50 rounded-full text-red-400 font-mono text-[11px] sm:text-xs uppercase font-bold tracking-[3px] shadow-[0_0_20px_rgba(255,0,0,0.25)]">
               <span className="w-2 h-2 rounded-full bg-red-500 animate-ping" />
-              <span>
-                {successData.isWaitlist
-                  ? "🏎️ PIT LANE WAITING LIST // ENTRY LOGGED"
-                  : "🏁 PADDOCK ACCESS GRANTED // FORMULA 1 GRID POSITION LOCKED"}
-              </span>
+              <span>🏁 PADDOCK ACCESS GRANTED // FORMULA 1 GRID POSITION LOCKED</span>
             </div>
 
             {/* Main F1 Title */}
             <div className="space-y-2">
               <h1 className="text-3xl sm:text-5xl font-black italic uppercase text-white tracking-wide leading-tight drop-shadow-[0_0_30px_rgba(255,0,0,0.35)]">
-                {successData.isWaitlist
-                  ? `ON THE WAITING LIST, ${successData.teamName}`
-                  : `WELCOME TO THE GRID, ${successData.teamName}`}
+                WELCOME TO THE GRID, {successData.teamName}
               </h1>
               <p className="font-mono text-xs sm:text-sm text-neutral-400 max-w-xl mx-auto uppercase tracking-wider">
-                {successData.isWaitlist
-                  ? "Your squad details have been logged with Race Control into the Waiting List."
-                  : "Your 4-driver constructor crew has been locked into the official Relaython 2026 grid."}
+                Your 4-driver constructor crew has been locked into the official Relaython 2026 grid.
               </p>
-              {successData.isWaitlist && (
-                <div className="p-4 bg-yellow-500/10 border border-yellow-500/30 rounded-xl text-yellow-200 font-mono text-xs max-w-xl mx-auto leading-relaxed mt-2 text-left space-y-2">
-                  <p className="m-0 text-yellow-400 font-bold">
-                    ⚠️ <strong>Please Note:</strong> Registering on the waiting list does not guarantee a slot for participation.
-                  </p>
-                  <p className="m-0 text-yellow-100/90 leading-relaxed">
-                    ✨ <strong>2nd Year Track Slot Rollover:</strong> If the 2nd Year (3rd Sem) track slots are not completed before registration closes, all remaining unfilled slots will be converted and offered to 1st Year waiting list teams in sequential order!
-                  </p>
-                  <p className="m-0 text-[11px] text-neutral-400">
-                    If a slot becomes available, our coordinators will immediately reach out to the Team Lead via WhatsApp / Email for payment and confirmation.
-                  </p>
-                </div>
-              )}
             </div>
 
             {/* F1 Race Control Telemetry Box */}
@@ -610,71 +587,56 @@ export default function RegisterClientView({
               </div>
               <div className="flex justify-between items-center">
                 <span className="text-neutral-500 uppercase tracking-wider">TELEMETRY STATUS:</span>
-                <span className={`font-bold ${successData.isWaitlist ? "text-yellow-400" : "text-emerald-400"}`}>
-                  {successData.isWaitlist
-                    ? "Waiting List Slot Logged"
-                    : "Manual Telemetry & UTR Verification In Progress"}
+                <span className="font-bold text-emerald-400">
+                  Manual Telemetry & UTR Verification In Progress
                 </span>
               </div>
             </div>
 
-            {/* MANDATORY OFFICIAL WHATSAPP GROUP CARD (CONFIRMED SLOTS ONLY — NOT FOR WAITING LIST) */}
-            {!successData.isWaitlist ? (
-              <div className="p-6 sm:p-7 bg-gradient-to-b from-[#0a1f14] via-[#05130b] to-black border-2 border-emerald-500 rounded-2xl max-w-xl mx-auto text-center space-y-4 shadow-[0_0_40px_rgba(16,185,129,0.3)]">
-                <div className="inline-flex items-center gap-2 px-3 py-1 bg-emerald-500/20 border border-emerald-500/40 rounded-full text-emerald-400 font-mono text-xs uppercase font-bold tracking-widest">
-                  <MessageCircle className="w-4 h-4 text-emerald-400" />
-                  <span>Mandatory Step // All 4 Drivers</span>
-                </div>
+            {/* MANDATORY OFFICIAL WHATSAPP GROUP CARD */}
+            <div className="p-6 sm:p-7 bg-gradient-to-b from-[#0a1f14] via-[#05130b] to-black border-2 border-emerald-500 rounded-2xl max-w-xl mx-auto text-center space-y-4 shadow-[0_0_40px_rgba(16,185,129,0.3)]">
+              <div className="inline-flex items-center gap-2 px-3 py-1 bg-emerald-500/20 border border-emerald-500/40 rounded-full text-emerald-400 font-mono text-xs uppercase font-bold tracking-widest">
+                <MessageCircle className="w-4 h-4 text-emerald-400" />
+                <span>Mandatory Step // All 4 Drivers</span>
+              </div>
 
-                <h2 className="text-2xl sm:text-3xl font-black italic uppercase text-white tracking-wide">
-                  Join The Official WhatsApp Group
-                </h2>
+              <h2 className="text-2xl sm:text-3xl font-black italic uppercase text-white tracking-wide">
+                Join The Official WhatsApp Group
+              </h2>
 
-                <p className="font-mono text-xs sm:text-sm text-neutral-300 leading-relaxed max-w-lg mx-auto">
-                  All live race briefings, schedule updates, track announcements, and pit-stop instructions will be broadcasted exclusively in this group. All team members must join!
-                </p>
+              <p className="font-mono text-xs sm:text-sm text-neutral-300 leading-relaxed max-w-lg mx-auto">
+                All live race briefings, schedule updates, track announcements, and pit-stop instructions will be broadcasted exclusively in this group. All team members must join!
+              </p>
 
+              <a
+                href="https://chat.whatsapp.com/LNqyZOwG0R8D2IEST6KSld"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center justify-center gap-2.5 px-8 py-4 bg-emerald-500 hover:bg-emerald-400 text-black font-black uppercase italic tracking-wider text-sm sm:text-base rounded-xl transition-all shadow-[0_0_30px_rgba(16,185,129,0.5)] hover:scale-105 active:scale-95"
+              >
+                <MessageCircle className="w-5 h-5 fill-black" />
+                <span>JOIN OFFICIAL WHATSAPP GROUP &gt;&gt;</span>
+                <ExternalLink className="w-4 h-4" />
+              </a>
+
+              <div className="pt-2 text-[11px] font-mono text-neutral-400 break-all">
+                Direct Link:{" "}
                 <a
                   href="https://chat.whatsapp.com/LNqyZOwG0R8D2IEST6KSld"
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center justify-center gap-2.5 px-8 py-4 bg-emerald-500 hover:bg-emerald-400 text-black font-black uppercase italic tracking-wider text-sm sm:text-base rounded-xl transition-all shadow-[0_0_30px_rgba(16,185,129,0.5)] hover:scale-105 active:scale-95"
+                  className="text-emerald-400 underline hover:text-emerald-300"
                 >
-                  <MessageCircle className="w-5 h-5 fill-black" />
-                  <span>JOIN OFFICIAL WHATSAPP GROUP &gt;&gt;</span>
-                  <ExternalLink className="w-4 h-4" />
+                  https://chat.whatsapp.com/LNqyZOwG0R8D2IEST6KSld
                 </a>
-
-                <div className="pt-2 text-[11px] font-mono text-neutral-400 break-all">
-                  Direct Link:{" "}
-                  <a
-                    href="https://chat.whatsapp.com/LNqyZOwG0R8D2IEST6KSld"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-emerald-400 underline hover:text-emerald-300"
-                  >
-                    https://chat.whatsapp.com/LNqyZOwG0R8D2IEST6KSld
-                  </a>
-                </div>
               </div>
-            ) : (
-              <div className="p-4 sm:p-5 bg-yellow-500/10 border-2 border-yellow-500/40 rounded-2xl max-w-xl mx-auto text-center space-y-2 shadow-[0_0_25px_rgba(234,179,8,0.15)]">
-                <div className="inline-flex items-center gap-2 text-yellow-400 font-mono text-xs uppercase font-bold tracking-widest">
-                  <span>⚠️ Waiting List Status</span>
-                </div>
-                <p className="font-mono text-xs sm:text-sm text-neutral-300 leading-relaxed max-w-lg mx-auto">
-                  Official WhatsApp community onboarding and credentials are strictly reserved for confirmed teams. If a confirmed team slot opens, our Race Stewards will reach out directly to your Team Lead for payment and WhatsApp onboarding.
-                </p>
-              </div>
-            )}
+            </div>
 
             {/* Race Day Credentials & Helplines */}
             <div className="space-y-4 max-w-xl mx-auto font-mono">
-              {!successData.isWaitlist && (
-                <div className="p-3.5 bg-neutral-950 border border-neutral-800 rounded-xl text-neutral-300 text-xs leading-relaxed">
-                  💡 <strong>Next Steps:</strong> Once the UTR is verified by Race Control, your squad&apos;s official credentials will be dispatched to the Team Lead&apos;s email (<span className="text-white font-bold">{driver1.email}</span>).
-                </div>
-              )}
+              <div className="p-3.5 bg-neutral-950 border border-neutral-800 rounded-xl text-neutral-300 text-xs leading-relaxed">
+                💡 <strong>Next Steps:</strong> Once the UTR is verified by Race Control, your squad&apos;s official credentials will be dispatched to the Team Lead&apos;s email (<span className="text-white font-bold">{driver1.email}</span>).
+              </div>
 
               <div className="pt-3 border-t border-neutral-800 text-center space-y-1.5">
                 <span className="text-neutral-400 font-bold uppercase tracking-wider text-xs block">
