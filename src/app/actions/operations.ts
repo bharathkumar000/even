@@ -1534,9 +1534,9 @@ export async function processAutomatedScan(params: {
   };
 
   // =========================================================================
-  // CASE A: SPECIFIC PARTICIPANT TARGETED (Or solo team)
+  // CASE A: SPECIFIC PARTICIPANT TARGETED (Individual participant badge)
   // =========================================================================
-  if (resolvedParticipantId || members.length === 1) {
+  if (resolvedParticipantId) {
     const targetUserId = resolvedParticipantId || members[0].user_id;
     const targetMember = members.find(
       (m) => m.user_id === targetUserId || m.id === targetUserId
@@ -1807,14 +1807,9 @@ export async function processAutomatedScan(params: {
     };
   }
 
-  // For lunch and snacks, claim exactly ONE unclaimed member per scan so that
-  // the same team QR can be scanned up to 3 times per distribution type.
-  // For all other action types, claim all unclaimed members (existing behaviour).
-  const isSingleMemberDistribution =
-    params.actionType === "lunch" || params.actionType === "snacks";
-  const membersToClaim = isSingleMemberDistribution
-    ? unclaimedMembers.slice(0, 1)
-    : unclaimedMembers;
+  // Per Eventra rules: 1 scan = entire team (all squad members claimed together)
+  const isSingleMemberDistribution = false;
+  const membersToClaim = unclaimedMembers;
 
   // Record action for each member to claim
   const baseCorrelationId = crypto.randomUUID();

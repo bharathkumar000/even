@@ -32,56 +32,60 @@ export async function resolveUsernameToEmail(username: string): Promise<string |
   }
 
   const normalizedUsername = username.trim().toLowerCase();
+  if (normalizedUsername.includes("@")) {
+    return normalizedUsername;
+  }
+
+  const cleanAlphanumeric = normalizedUsername.replace(/[^a-z0-9]/g, "");
 
   try {
-    // Step 1: Try the existing RPC (checks auth.users.user_metadata->>'username').
-    const { data: rpcData, error: rpcError } = await supabaseAdmin.rpc(
-      "resolve_username_to_email",
-      { p_username: normalizedUsername }
-    );
-
-    if (!rpcError && rpcData) {
-      return (rpcData as string | null) || null;
-    }
-
-    // Step 2: Fallback — check profiles.username column directly.
-    // This covers usernames persisted in public.profiles (not just auth metadata).
-    const { data: profileData, error: profileError } = await supabaseAdmin
-      .from("profiles")
-      .select("email")
-      .eq("username", normalizedUsername)
-      .maybeSingle();
-
-    if (!profileError && profileData?.email) {
-      return profileData.email as string;
-    }
-
-    // Step 3: Check team_registrations by login_username, team_name, or team_code
+    // Step 1: Try RPC if defined
     try {
-      const { data: regMatch } = await supabaseAdmin
-        .from("team_registrations")
-        .select("leader_email, login_email")
-        .or(`login_username.ilike.${normalizedUsername},team_name.ilike.${normalizedUsername},team_code.ilike.${normalizedUsername}`)
+      const { data: rpcData, error: rpcError } = await supabaseAdmin.rpc(
+        "resolve_username_to_email",
+        { p_username: normalizedUsername }
+      );
+
+      if (!rpcError && rpcData) {
+        return (rpcData as string) || null;
+      }
+    } catch {
+      // Ignore RPC failure
+    }
+
+    // Step 2: Check profiles table by username or email directly
+    try {
+      const { data: profileData } = await supabaseAdmin
+        .from("profiles")
+        .select("email")
+        .or(`username.ilike.${normalizedUsername},email.ilike.${normalizedUsername}`)
         .limit(1)
         .maybeSingle();
 
-      if (regMatch?.leader_email || regMatch?.login_email) {
-        return (regMatch.leader_email || regMatch.login_email) as string;
+      if (profileData?.email) {
+        return profileData.email as string;
       }
     } catch {
       // Continue to next fallback
     }
 
-    // Step 4: Check teams table by name or code to resolve to team leader's email
+    // Step 3: Check teams table by code or name (exact or case-insensitive)
     try {
       const { data: teamMatch } = await supabaseAdmin
         .from("teams")
-        .select("id")
-        .or(`name.ilike.${normalizedUsername},code.ilike.${normalizedUsername}`)
+        .select("id, name, code, leader_email, dietary_preference")
+        .or(`code.ilike.${normalizedUsername},name.ilike.${normalizedUsername}`)
         .limit(1)
         .maybeSingle();
 
-      if (teamMatch?.id) {
+      if (teamMatch) {
+        if (teamMatch.leader_email) return teamMatch.leader_email;
+        if (teamMatch.dietary_preference) {
+          try {
+            const parsed = JSON.parse(teamMatch.dietary_preference);
+            if (parsed.leaderEmail) return parsed.leaderEmail;
+          } catch {}
+        }
         const { data: leaderMember } = await supabaseAdmin
           .from("team_members")
           .select("email")
@@ -91,7 +95,52 @@ export async function resolveUsernameToEmail(username: string): Promise<string |
         if (leaderMember?.email) return leaderMember.email;
       }
     } catch {
-      // Ignore fallback error
+      // Continue to next fallback
+    }
+
+    // Step 4: Check team_registrations table (by code, name, or credentials JSON)
+    try {
+      const { data: regMatch } = await supabaseAdmin
+        .from("team_registrations")
+        .select("leader_email, team_name, team_code, generated_credentials")
+        .or(`team_code.ilike.${normalizedUsername},team_name.ilike.${normalizedUsername}`)
+        .limit(1)
+        .maybeSingle();
+
+      if (regMatch?.leader_email) {
+        return regMatch.leader_email;
+      }
+    } catch {
+      // Continue to next fallback
+    }
+
+    // Step 5: Alphanumeric match against all approved teams if input had no spaces (e.g. "thequadsquad")
+    if (cleanAlphanumeric.length >= 3) {
+      try {
+        const { data: allTeams } = await supabaseAdmin
+          .from("teams")
+          .select("id, name, leader_email, dietary_preference");
+
+        for (const t of allTeams || []) {
+          const stripped = (t.name || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+          if (stripped === cleanAlphanumeric) {
+            if (t.leader_email) return t.leader_email;
+            if (t.dietary_preference) {
+              try {
+                const parsed = JSON.parse(t.dietary_preference);
+                if (parsed.leaderEmail) return parsed.leaderEmail;
+              } catch {}
+            }
+            const { data: leaderMember } = await supabaseAdmin
+              .from("team_members")
+              .select("email")
+              .eq("team_id", t.id)
+              .eq("role", "leader")
+              .maybeSingle();
+            if (leaderMember?.email) return leaderMember.email;
+          }
+        }
+      } catch {}
     }
 
     return null;

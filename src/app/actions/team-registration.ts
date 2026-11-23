@@ -89,10 +89,16 @@ async function requireAdminUser() {
   return { user, profile };
 }
 
-const MAX_CONFIRMED_PER_SEM = 40;
-const FIRST_SEM_WAITLIST_LIMIT = 20;
-const THIRD_SEM_WAITLIST_LIMIT = 10;
-const MAX_WAITLIST_PER_SEM = 10; // backwards-compatible default
+const REGISTRATION_DEADLINE_ISO = "2026-11-23T12:00:00+05:30";
+
+function isRegistrationClosed(): boolean {
+  return Date.now() >= new Date(REGISTRATION_DEADLINE_ISO).getTime();
+}
+
+const MAX_CONFIRMED_PER_SEM = 0;
+const FIRST_SEM_WAITLIST_LIMIT = 0;
+const THIRD_SEM_WAITLIST_LIMIT = 0;
+const MAX_WAITLIST_PER_SEM = 0; // backwards-compatible default
 
 /**
  * Public Server Action: Fetch total submitted teams count per semester
@@ -105,6 +111,8 @@ export async function getSemesterRegistrationCounts(): Promise<{
   waitlistLimit: number;
   firstSemWaitlistLimit: number;
   thirdSemWaitlistLimit: number;
+  isClosed: boolean;
+  deadlineIso: string;
 }> {
   try {
     const { data, error } = await supabaseAdmin
@@ -157,6 +165,8 @@ export async function getSemesterRegistrationCounts(): Promise<{
         waitlistLimit: THIRD_SEM_WAITLIST_LIMIT,
         firstSemWaitlistLimit: FIRST_SEM_WAITLIST_LIMIT,
         thirdSemWaitlistLimit: THIRD_SEM_WAITLIST_LIMIT,
+        isClosed: isRegistrationClosed(),
+        deadlineIso: REGISTRATION_DEADLINE_ISO,
       };
     }
 
@@ -172,6 +182,7 @@ export async function getSemesterRegistrationCounts(): Promise<{
         code.includes("ADMIN") ||
         code.includes("DEV") ||
         status === "test" ||
+        status === "rejected" ||
         name.startsWith("test") ||
         email === "rishithsgowda13@gmail.com"
       ) {
@@ -193,6 +204,8 @@ export async function getSemesterRegistrationCounts(): Promise<{
       waitlistLimit: THIRD_SEM_WAITLIST_LIMIT,
       firstSemWaitlistLimit: FIRST_SEM_WAITLIST_LIMIT,
       thirdSemWaitlistLimit: THIRD_SEM_WAITLIST_LIMIT,
+      isClosed: isRegistrationClosed(),
+      deadlineIso: REGISTRATION_DEADLINE_ISO,
     };
   } catch (err) {
     console.error("getSemesterRegistrationCounts error:", err);
@@ -203,6 +216,8 @@ export async function getSemesterRegistrationCounts(): Promise<{
       waitlistLimit: THIRD_SEM_WAITLIST_LIMIT,
       firstSemWaitlistLimit: FIRST_SEM_WAITLIST_LIMIT,
       thirdSemWaitlistLimit: THIRD_SEM_WAITLIST_LIMIT,
+      isClosed: isRegistrationClosed(),
+      deadlineIso: REGISTRATION_DEADLINE_ISO,
     };
   }
 }
@@ -216,11 +231,11 @@ export async function submitTeamRegistration(
   try {
     const teamName = String(formData.get("teamName") || "").trim();
 
-    // Leader info (Vidya Vardhaka College Of Engineering exclusive)
+    // Leader info (Open to students from any college)
     const leaderName = String(formData.get("leaderName") || "").trim();
     const leaderEmail = String(formData.get("leaderEmail") || "").trim().toLowerCase();
     const leaderPhone = String(formData.get("leaderPhone") || "").trim();
-    const leaderCollege = "Vidya Vardhaka College Of Engineering";
+    const leaderCollege = String(formData.get("leaderCollege") || "").trim();
     const leaderUsn = String(formData.get("leaderUsn") || "").trim().toUpperCase();
     const leaderBranch = String(formData.get("leaderBranch") || "").trim();
     const leaderSem = String(formData.get("leaderSem") || "").trim();
@@ -232,8 +247,8 @@ export async function submitTeamRegistration(
     const paymentPhone = String(formData.get("paymentPhone") || "").trim() || leaderPhone;
     const paymentFile = formData.get("paymentProof") as File | null;
 
-    if (!teamName || !track || !leaderName || !leaderEmail || !leaderPhone || !leaderUsn) {
-      return { success: false, message: "Please fill in all required team and leader fields, including Leader USN." };
+    if (!teamName || !track || !leaderName || !leaderEmail || !leaderPhone || !leaderUsn || !leaderCollege) {
+      return { success: false, message: "Please fill in all required team and leader fields, including Leader College and USN." };
     }
 
     // Parse the other 3 members from form data
@@ -242,7 +257,10 @@ export async function submitTeamRegistration(
     try {
       members = JSON.parse(membersRaw);
       if (Array.isArray(members)) {
-        members = members.map((m) => ({ ...m, college: "Vidya Vardhaka College Of Engineering" }));
+        members = members.map((m) => ({
+          ...m,
+          college: String(m.college || "").trim() || leaderCollege,
+        }));
       }
     } catch {
       members = [];
@@ -256,13 +274,13 @@ export async function submitTeamRegistration(
       };
     }
 
-    // Validate that all members have required fields including USN
+    // Validate that all members have required fields including USN and College
     for (let i = 0; i < members.length; i++) {
       const member = members[i];
-      if (!member.name?.trim() || !member.email?.trim() || !member.usn?.trim()) {
+      if (!member.name?.trim() || !member.email?.trim() || !member.usn?.trim() || !member.college?.trim()) {
         return {
           success: false,
-          message: `Please fill in all required fields including USN for Member ${i + 2}.`,
+          message: `Please fill in all required fields including College and USN for Member ${i + 2}.`,
         };
       }
     }
@@ -280,139 +298,16 @@ export async function submitTeamRegistration(
       }
     }
 
-    // Check semester counts: 40 confirmed + waitlist (20 for 1st sem, 10 for 3rd sem)
-    const { firstSemCount, thirdSemCount, maxLimit, firstSemWaitlistLimit, thirdSemWaitlistLimit } = await getSemesterRegistrationCounts();
-    const semLower = leaderSem.toLowerCase();
-    const isFirstSem = semLower.includes("1st") || semLower === "1";
-    const isThirdSem = semLower.includes("3rd") || semLower === "3" || semLower.includes("2nd") || semLower === "2";
-    const currentSemCount = isFirstSem ? firstSemCount : isThirdSem ? thirdSemCount : 0;
-    const currentWaitlistLimit = isFirstSem ? firstSemWaitlistLimit : thirdSemWaitlistLimit;
-    const maxTotalPerSem = maxLimit + currentWaitlistLimit;
-
-    if (currentSemCount >= maxTotalPerSem) {
+    // Strict Registration Closing Deadline Check: Monday, 23rd November 2026 at 12:00 PM (Noon) IST
+    // There is NO CAP on the total number of teams registering before this deadline.
+    if (isRegistrationClosed()) {
       return {
         success: false,
-        message: `${leaderSem} registration is COMPLETELY LOCKED. All ${maxLimit} confirmed slots and ${currentWaitlistLimit} waiting list slots are full.`,
+        message: "REGISTRATION IS OFFICIALLY CLOSED: Team registration closed on Monday, 23rd November 2026 at 12:00 PM (Noon) IST. No further submissions are being accepted.",
       };
     }
 
-    const isWaitlist = currentSemCount >= maxLimit;
-
-    // =========================================================================
-    // WAITING LIST TEAMS: DO NOT SAVE IN SUPABASE!
-    // Stream directly to Google Sheets in the 3rd sheet named "Waiting list"
-    // =========================================================================
-    if (isWaitlist) {
-      const waitlistNum = currentSemCount - maxLimit + 1;
-      const d2 = members[0] || {};
-      const d3 = members[1] || {};
-      const d4 = members[2] || {};
-
-      const waitlistSheetRecord: ComprehensiveTeamRecord = {
-        sheetName: "Waiting list",
-        teamName: teamName,
-        track: track,
-        teamCode: `WAITLIST-#${waitlistNum}`,
-        status: "Waitlist",
-        decisionAt: formatToIST(new Date()),
-        decisionBy: "Waiting List Submission",
-
-        // Driver 1 (Leader)
-        leaderName: leaderName,
-        leaderEmail: leaderEmail,
-        leaderPhone: leaderPhone,
-        leaderCollege: leaderCollege,
-        leaderUsn: leaderUsn,
-        leaderBranch: leaderBranch,
-        leaderSem: leaderSem,
-
-        // Driver 2
-        driver2Name: d2.name || "",
-        driver2Email: d2.email || "",
-        driver2Phone: d2.phone || "",
-        driver2College: d2.college || "",
-        driver2Usn: d2.usn || "",
-        driver2Branch: d2.branch || "",
-        driver2Sem: d2.sem || "",
-
-        // Driver 3
-        driver3Name: d3.name || "",
-        driver3Email: d3.email || "",
-        driver3Phone: d3.phone || "",
-        driver3College: d3.college || "",
-        driver3Usn: d3.usn || "",
-        driver3Branch: d3.branch || "",
-        driver3Sem: d3.sem || "",
-
-        // Driver 4
-        driver4Name: d4.name || "",
-        driver4Email: d4.email || "",
-        driver4Phone: d4.phone || "",
-        driver4College: d4.college || "",
-        driver4Usn: d4.usn || "",
-        driver4Branch: d4.branch || "",
-        driver4Sem: d4.sem || "",
-
-        // Payment (Waitlist: no payment required)
-        transactionId: `WAITLIST-#${waitlistNum} (Payment NOT required right now)`,
-        paymentPhone: paymentPhone,
-        paymentProofUrl: "WAITLIST (Payment pending slot availability)",
-
-        // Credentials
-        loginPassword: "",
-        portalUrl: "",
-        whatsappGroup: "",
-        emailDispatchStatus: "WAITLIST",
-      };
-
-      try {
-        await syncRegistrationToGoogleSheets(waitlistSheetRecord);
-      } catch (err) {
-        console.error("Waitlist Google Sheets sync error:", err);
-      }
-
-      // Persist waitlist registration into team_registrations table with status 'waitlist'
-      // This enables getSemesterRegistrationCounts to track waitlist slots filled and lock when reaching the limit
-      let insertedWaitlistId = "";
-      try {
-        const { data: waitlistInsert } = await supabaseAdmin
-          .from("team_registrations")
-          .insert({
-            team_name: teamName,
-            track: track,
-            leader_name: leaderName,
-            leader_email: leaderEmail,
-            leader_phone: leaderPhone,
-            leader_college: leaderCollege,
-            leader_usn: leaderUsn,
-            leader_branch: leaderBranch,
-            leader_sem: leaderSem,
-            members: members,
-            payment_utr: `WAITLIST-#${waitlistNum}`,
-            payment_phone: paymentPhone,
-            payment_proof_url: "WAITLIST (Payment pending slot availability)",
-            status: "waitlist",
-            login_username: teamName.toLowerCase().replace(/[^a-z0-9]/g, ""),
-            login_email: leaderEmail,
-            login_password: "",
-            team_code: `WAITLIST-#${waitlistNum}`,
-          })
-          .select("id")
-          .maybeSingle();
-        insertedWaitlistId = waitlistInsert?.id || "";
-      } catch (dbErr) {
-        console.error("Waitlist DB insertion error:", dbErr);
-      }
-
-      return {
-        success: true,
-        isWaitlist: true,
-        registrationId: insertedWaitlistId,
-        message: "Your team has been successfully registered on the Waiting List! Details have been saved to Google Sheets (Waiting list). If any confirmed team is unable to participate, we will contact you.",
-      };
-    }
-
-    // Require payment proof & UTR for confirmed slots (< 40)
+    // Require payment proof & UTR (Entry fee ₹400 for all teams registering before the deadline)
     if (!paymentUtr || paymentUtr.length < 6) {
       return { success: false, message: "Valid 12-digit UPI Reference / UTR Number is required." };
     }
@@ -479,19 +374,24 @@ export async function submitTeamRegistration(
       .from("teams")
       .select("code");
 
-    let maxNum = 0;
-    let nonTestCount = 0;
+    const isSecondYear = track.toLowerCase().includes("3") || track.toLowerCase().includes("2nd");
+    const baseStart = isSecondYear ? 201 : 101;
+    let maxNum = baseStart - 1;
+
     for (const r of allRegs) {
       const name = String((r as any)?.team_name || "").toLowerCase().trim();
       const code = (r as any)?.team_code || (r.generated_credentials as any)?.teamCode || "";
       if (name === "code" || code.includes("TEST") || code.includes("ADMIN") || code.includes("DEV")) {
         continue;
       }
-      nonTestCount++;
       const m = code.match(/IVC-(?:RY|VV)-(\d+)/i);
       if (m) {
         const n = parseInt(m[1], 10);
-        if (n > maxNum) maxNum = n;
+        if (isSecondYear && n >= 201 && n < 300) {
+          if (n > maxNum) maxNum = n;
+        } else if (!isSecondYear && n >= 101 && n < 200) {
+          if (n > maxNum) maxNum = n;
+        }
       }
     }
     for (const t of existingTeams || []) {
@@ -503,12 +403,15 @@ export async function submitTeamRegistration(
       const m = code.match(/IVC-(?:RY|VV)-(\d+)/i);
       if (m) {
         const n = parseInt(m[1], 10);
-        if (n > maxNum) maxNum = n;
+        if (isSecondYear && n >= 201 && n < 300) {
+          if (n > maxNum) maxNum = n;
+        } else if (!isSecondYear && n >= 101 && n < 200) {
+          if (n > maxNum) maxNum = n;
+        }
       }
     }
 
-    const nextNum = Math.max(maxNum + 1, nonTestCount + 1);
-    const provisionalTeamCode = `IVC-RY-${String(nextNum).padStart(3, "0")}`;
+    const provisionalTeamCode = `IVC-RY-${String(maxNum + 1).padStart(3, "0")}`;
 
     // 3. Insert into team_registrations table with pending status and empty password
     let registrationPayload: any = {
@@ -625,7 +528,7 @@ export async function submitTeamRegistration(
       teamName: teamName,
       track: track,
       teamCode: provisionalTeamCode,
-      status: isWaitlist ? "Waitlist" : "Pending",
+      status: "Pending",
       decisionAt: formatToIST(new Date()),
 
       // Driver 1 (Leader)
@@ -694,10 +597,8 @@ export async function submitTeamRegistration(
 
     return {
       success: true,
-      isWaitlist,
-      message: isWaitlist
-        ? "Team added to the Waiting List! If a confirmed slot becomes available, we will contact you for payment."
-        : "Registration submitted successfully! Your payment is under verification by IVC admins.",
+      isWaitlist: false,
+      message: "Registration submitted successfully! Your payment is under verification by IVC admins.",
       registrationId: insertedRegId,
     };
   } catch (err: unknown) {
@@ -710,7 +611,7 @@ export async function submitTeamRegistration(
 /**
  * Admin Action: Fetch all registration submissions with optional status filter.
  */
-export async function getRegistrations(statusFilter?: "all" | "pending" | "approved" | "rejected") {
+export async function getRegistrations(statusFilter?: "all" | "pending" | "approved" | "rejected" | "waitlist") {
   await requireAdminUser();
 
   try {
@@ -786,7 +687,8 @@ export async function getRegistrations(statusFilter?: "all" | "pending" | "appro
         (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
       );
       const seenCodes = new Set<string>();
-      let nextSeq = 1;
+      let nextSeq1st = 101;
+      let nextSeq3rd = 201;
 
       for (const item of sorted) {
         let currentCode = item.team_code || item.generated_credentials?.teamCode || "";
@@ -794,14 +696,28 @@ export async function getRegistrations(statusFilter?: "all" | "pending" | "appro
           currentCode = currentCode.replace("IVC-VV-", "IVC-RY-");
         }
 
-        if (item.status === "waitlist" || currentCode.includes("WAITLIST")) continue;
+        if (item.status === "waitlist" || currentCode.includes("WAITLIST") || item.status === "test" || currentCode.includes("TEST")) continue;
 
-        if (!currentCode || seenCodes.has(currentCode)) {
-          while (seenCodes.has(`IVC-RY-${String(nextSeq).padStart(3, "0")}`)) {
-            nextSeq++;
+        const isSecondYear = (item.track || "").toLowerCase().includes("3") || (item.track || "").toLowerCase().includes("2nd");
+        const codeMatch = currentCode.match(/IVC-(?:RY|VV)-(\d+)/i);
+        const codeNum = codeMatch ? parseInt(codeMatch[1], 10) : 0;
+        const isWrongSeries = isSecondYear ? (codeNum < 201 || codeNum >= 300) : (codeNum < 101 || codeNum >= 200);
+
+        if (!currentCode || seenCodes.has(currentCode) || isWrongSeries) {
+          let fixedCode = "";
+          if (isSecondYear) {
+            while (seenCodes.has(`IVC-RY-${String(nextSeq3rd).padStart(3, "0")}`)) {
+              nextSeq3rd++;
+            }
+            fixedCode = `IVC-RY-${String(nextSeq3rd).padStart(3, "0")}`;
+            nextSeq3rd++;
+          } else {
+            while (seenCodes.has(`IVC-RY-${String(nextSeq1st).padStart(3, "0")}`)) {
+              nextSeq1st++;
+            }
+            fixedCode = `IVC-RY-${String(nextSeq1st).padStart(3, "0")}`;
+            nextSeq1st++;
           }
-          const fixedCode = `IVC-RY-${String(nextSeq).padStart(3, "0")}`;
-          nextSeq++;
           seenCodes.add(fixedCode);
 
           item.team_code = fixedCode;
@@ -815,6 +731,7 @@ export async function getRegistrations(statusFilter?: "all" | "pending" | "appro
             supabaseAdmin
               .from("team_registrations")
               .update({
+                team_code: fixedCode,
                 generated_credentials: {
                   ...(item.generated_credentials || {}),
                   teamCode: fixedCode,
@@ -824,11 +741,8 @@ export async function getRegistrations(statusFilter?: "all" | "pending" | "appro
           ).catch(() => {});
         } else {
           seenCodes.add(currentCode);
-          const m = currentCode.match(/IVC-RY-(\d+)/i);
-          if (m) {
-            const num = parseInt(m[1], 10);
-            if (num >= nextSeq) nextSeq = num + 1;
-          }
+          if (isSecondYear && codeNum >= nextSeq3rd) nextSeq3rd = codeNum + 1;
+          if (!isSecondYear && codeNum >= nextSeq1st) nextSeq1st = codeNum + 1;
         }
       }
     }
@@ -920,24 +834,35 @@ export async function approveRegistration(registrationId: string): Promise<{
       .ilike("name", teamName.trim())
       .maybeSingle();
 
+    const isSecondYear = track.toLowerCase().includes("3") || track.toLowerCase().includes("2nd");
+    const baseStart = isSecondYear ? 201 : 101;
+
     let teamCode = reg.generated_credentials?.teamCode || matchedTeam?.code || reg.team_code || "";
     if (teamCode.startsWith("IVC-VV-")) {
       teamCode = teamCode.replace("IVC-VV-", "IVC-RY-");
     }
 
-    if (!teamCode) {
+    const codeMatch = teamCode.match(/IVC-(?:RY|VV)-(\d+)/i);
+    const codeNum = codeMatch ? parseInt(codeMatch[1], 10) : 0;
+    const isCodeWrongSeries = isSecondYear ? (codeNum < 201 || codeNum >= 300) : (codeNum < 101 || codeNum >= 200);
+
+    if (!teamCode || isCodeWrongSeries) {
       const { data: allTeams } = await supabaseAdmin.from("teams").select("code, name");
-      let maxNum = 0;
+      let maxNum = baseStart - 1;
       for (const t of allTeams || []) {
         const name = String((t as any)?.name || "").toLowerCase().trim();
         const code = String(t.code || "").toUpperCase();
         if (name === "code" || code.includes("TEST") || code.includes("ADMIN") || code.includes("DEV")) {
           continue;
         }
-        const m = (t.code || "").match(/IVC-(?:RY|VV)-(\d+)/i);
+        const m = code.match(/IVC-(?:RY|VV)-(\d+)/i);
         if (m) {
           const n = parseInt(m[1], 10);
-          if (n > maxNum) maxNum = n;
+          if (isSecondYear && n >= 201 && n < 300) {
+            if (n > maxNum) maxNum = n;
+          } else if (!isSecondYear && n >= 101 && n < 200) {
+            if (n > maxNum) maxNum = n;
+          }
         }
       }
       teamCode = `IVC-RY-${String(maxNum + 1).padStart(3, "0")}`;
@@ -1518,7 +1443,7 @@ export async function syncAllApprovedRegistrationsAction(): Promise<{
  * Admin Action: Export registrations as CSV for direct import into Google Sheets.
  */
 export async function exportRegistrationsCsvAction(
-  filterStatus?: "all" | "approved" | "pending" | "rejected"
+  filterStatus?: "all" | "approved" | "pending" | "rejected" | "waitlist"
 ): Promise<{ success: boolean; csv?: string; message?: string }> {
   await requireAdminUser();
 
@@ -1545,7 +1470,14 @@ export async function exportRegistrationsCsvAction(
         teamName: r.team_name,
         track: (r.leader_sem && r.leader_sem.includes("3")) || (r.track && r.track.includes("3")) ? "3rd Sem" : "1st Sem",
         teamCode: r.generated_credentials?.teamCode || "",
-        status: r.status === "approved" ? "Approved" : "Rejected",
+        status:
+          r.status === "approved"
+            ? "Approved"
+            : r.status === "waitlist"
+            ? "Waitlist"
+            : r.status === "pending"
+            ? "Pending"
+            : "Rejected",
         decisionAt: formatToIST(r.approved_at || r.updated_at || r.created_at),
         rejectionReason: r.rejection_reason || "",
 

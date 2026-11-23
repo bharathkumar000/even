@@ -14,13 +14,18 @@ import {
   ShieldCheck,
   Users,
   Lock,
+  Clock,
   ShieldAlert,
   MessageCircle,
   ExternalLink,
   Flag,
   Zap,
 } from "lucide-react";
-import { submitTeamRegistration, TeamMemberInput } from "@/app/actions/team-registration";
+import {
+  submitTeamRegistration,
+  getSemesterRegistrationCounts,
+  TeamMemberInput,
+} from "@/app/actions/team-registration";
 import RelayathonFooter from "@/components/RelayathonFooter";
 
 interface DriverState {
@@ -40,7 +45,7 @@ const DEFAULT_DRIVER: DriverState = {
   usn: "",
   branch: "Computer Science & Engg (CSE)",
   sem: "1st Semester",
-  college: "Vidya Vardhaka College Of Engineering",
+  college: "",
 };
 
 const BRANCHES = [
@@ -60,51 +65,105 @@ const SEMESTERS = [
   "3rd Semester",
 ];
 
+const REGISTRATION_DEADLINE_ISO = "2026-11-23T12:00:00+05:30";
+const REGISTRATION_DEADLINE_MS = new Date(REGISTRATION_DEADLINE_ISO).getTime();
+
 export default function RegisterClientView({
   initialCounts = {
     firstSemCount: 0,
     thirdSemCount: 0,
-    maxLimit: 40,
-    waitlistLimit: 10,
-    firstSemWaitlistLimit: 20,
-    thirdSemWaitlistLimit: 10,
   },
 }: {
   initialCounts?: {
     firstSemCount: number;
     thirdSemCount: number;
-    maxLimit: number;
+    maxLimit?: number;
     waitlistLimit?: number;
     firstSemWaitlistLimit?: number;
     thirdSemWaitlistLimit?: number;
+    isClosed?: boolean;
+    deadlineIso?: string;
   };
 }) {
   const [submitting, setSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successData, setSuccessData] = useState<{ teamName: string; refId: string; isWaitlist?: boolean } | null>(null);
 
-  // Live Semester Counts & Locking State (1st Sem: 40 Confirmed + 20 Waitlist = 60; 3rd Sem: 40 Confirmed + 10 Waitlist = 50)
+  // Live Countdown to Registration Closing (Monday, 23rd Nov 2026 @ 12:00 PM Noon IST)
+  const [timeLeft, setTimeLeft] = useState<{
+    hours: number;
+    minutes: number;
+    seconds: number;
+    isExpired: boolean;
+  }>(() => {
+    const diff = REGISTRATION_DEADLINE_MS - Date.now();
+    if (diff <= 0) return { hours: 0, minutes: 0, seconds: 0, isExpired: true };
+    const hours = Math.floor(diff / (1000 * 60 * 60));
+    const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+    const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+    return { hours, minutes, seconds, isExpired: false };
+  });
+
+  useEffect(() => {
+    const updateCountdown = () => {
+      const diff = REGISTRATION_DEADLINE_MS - Date.now();
+      if (diff <= 0) {
+        setTimeLeft({ hours: 0, minutes: 0, seconds: 0, isExpired: true });
+      } else {
+        const hours = Math.floor(diff / (1000 * 60 * 60));
+        const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+        const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+        setTimeLeft({ hours, minutes, seconds, isExpired: false });
+      }
+    };
+    updateCountdown();
+    const interval = setInterval(updateCountdown, 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Live Track Registration Counts (Separate 1st and 2nd Year Tracks)
   const [semCounts, setSemCounts] = useState({
     firstSemCount: initialCounts.firstSemCount || 0,
     thirdSemCount: initialCounts.thirdSemCount || 0,
-    maxLimit: initialCounts.maxLimit || 40,
-    firstSemWaitlistLimit: initialCounts.firstSemWaitlistLimit || 20,
-    thirdSemWaitlistLimit: initialCounts.thirdSemWaitlistLimit || 10,
-    waitlistLimit: initialCounts.waitlistLimit || 10,
   });
-  const maxLimit = semCounts.maxLimit;
-  const firstSemWaitlistLimit = semCounts.firstSemWaitlistLimit;
-  const thirdSemWaitlistLimit = semCounts.thirdSemWaitlistLimit;
 
-  const firstSemMaxTotal = maxLimit + firstSemWaitlistLimit;
-  const thirdSemMaxTotal = maxLimit + thirdSemWaitlistLimit;
+  const isRegistrationClosed = timeLeft.isExpired || Boolean(initialCounts?.isClosed);
+  const isFirstSemLocked = isRegistrationClosed;
+  const isThirdSemLocked = isRegistrationClosed;
+  const isAllLocked = isRegistrationClosed;
+  const isFirstSemWaitlist = false;
+  const isThirdSemWaitlist = false;
+  const isSelectedSemWaitlist = false;
+  const isSelectedSemLocked = isRegistrationClosed;
+  const defaultAvailableSem = "1st Semester";
 
-  const isFirstSemWaitlist = semCounts.firstSemCount >= maxLimit && semCounts.firstSemCount < firstSemMaxTotal;
-  const isFirstSemLocked = semCounts.firstSemCount >= firstSemMaxTotal;
-  const isThirdSemWaitlist = semCounts.thirdSemCount >= maxLimit && semCounts.thirdSemCount < thirdSemMaxTotal;
-  const isThirdSemLocked = semCounts.thirdSemCount >= thirdSemMaxTotal;
-  const isAllLocked = isFirstSemLocked && isThirdSemLocked;
-  const defaultAvailableSem = isFirstSemLocked && !isThirdSemLocked ? "3rd Semester" : "1st Semester";
+  // Real-time live polling every 10 seconds so waitlist and confirmed counts always reflect immediately
+  useEffect(() => {
+    let isMounted = true;
+    const fetchLiveCounts = async () => {
+      try {
+        const fresh = await getSemesterRegistrationCounts();
+        if (isMounted && fresh) {
+          setSemCounts({
+            firstSemCount: fresh.firstSemCount,
+            thirdSemCount: fresh.thirdSemCount,
+          });
+          if (fresh.isClosed) {
+            setTimeLeft((prev) => ({ ...prev, isExpired: true }));
+          }
+        }
+      } catch (err) {
+        // silent fallback
+      }
+    };
+
+    fetchLiveCounts();
+    const interval = setInterval(fetchLiveCounts, 10000);
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
+  }, []);
 
   // Squad / Team Identity
   const [teamName, setTeamName] = useState("");
@@ -115,7 +174,7 @@ export default function RegisterClientView({
     ...DEFAULT_DRIVER,
     sem: defaultAvailableSem,
     branch: "Computer Science & Engg (CSE)",
-    college: "Vidya Vardhaka College Of Engineering",
+    college: "",
   });
 
   // Drivers 2, 3, 4
@@ -123,32 +182,24 @@ export default function RegisterClientView({
     ...DEFAULT_DRIVER,
     sem: defaultAvailableSem,
     branch: "Computer Science & Engg (CSE)",
-    college: "Vidya Vardhaka College Of Engineering",
+    college: "",
   });
 
   const [driver3, setDriver3] = useState<DriverState>({
     ...DEFAULT_DRIVER,
     sem: defaultAvailableSem,
     branch: "Computer Science & Engg (CSE)",
-    college: "Vidya Vardhaka College Of Engineering",
+    college: "",
   });
 
   const [driver4, setDriver4] = useState<DriverState>({
     ...DEFAULT_DRIVER,
     sem: defaultAvailableSem,
     branch: "Computer Science & Engg (CSE)",
-    college: "Vidya Vardhaka College Of Engineering",
+    college: "",
   });
 
   const isDriver1FirstSem = (driver1.sem || "").toLowerCase().includes("1st") || driver1.sem === "1";
-  const selectedSemWaitlistLimit = isDriver1FirstSem ? firstSemWaitlistLimit : thirdSemWaitlistLimit;
-  const isSelectedSemWaitlist =
-    (driver1.sem.includes("1st") && isFirstSemWaitlist) ||
-    (driver1.sem.includes("3rd") && isThirdSemWaitlist);
-  const isSelectedSemLocked =
-    isAllLocked ||
-    (driver1.sem.includes("1st") && isFirstSemLocked) ||
-    (driver1.sem.includes("3rd") && isThirdSemLocked);
 
   // Sync all squad members to the Captain's chosen semester
   const handleCaptainSemChange = (newSem: string) => {
@@ -156,6 +207,15 @@ export default function RegisterClientView({
     setDriver2((prev) => ({ ...prev, sem: newSem }));
     setDriver3((prev) => ({ ...prev, sem: newSem }));
     setDriver4((prev) => ({ ...prev, sem: newSem }));
+  };
+
+  // Sync Captain's college to other squad members if they were matching or empty
+  const handleCaptainCollegeChange = (newCollege: string) => {
+    const oldCollege = driver1.college;
+    setDriver1((prev) => ({ ...prev, college: newCollege }));
+    setDriver2((prev) => (prev.college === oldCollege || !prev.college ? { ...prev, college: newCollege } : prev));
+    setDriver3((prev) => (prev.college === oldCollege || !prev.college ? { ...prev, college: newCollege } : prev));
+    setDriver4((prev) => (prev.college === oldCollege || !prev.college ? { ...prev, college: newCollege } : prev));
   };
 
   // Payment
@@ -294,7 +354,7 @@ export default function RegisterClientView({
 
     // Validate Driver 2
     if (!driver2.name.trim() || !driver2.email.trim() || !driver2.phone.trim() || !driver2.college.trim() || !driver2.usn.trim()) {
-      setErrorMsg("// DRIVER 2 (AERODYNAMICS): Please complete all required member details including USN.");
+      setErrorMsg("// DRIVER 2 (AERODYNAMICS): Please complete all required member details including College and USN.");
       return false;
     }
     if (!driver2.email.includes("@")) {
@@ -304,7 +364,7 @@ export default function RegisterClientView({
 
     // Validate Driver 3
     if (!driver3.name.trim() || !driver3.email.trim() || !driver3.phone.trim() || !driver3.college.trim() || !driver3.usn.trim()) {
-      setErrorMsg("// DRIVER 3 (POWERTRAIN): Please complete all required member details including USN.");
+      setErrorMsg("// DRIVER 3 (POWERTRAIN): Please complete all required member details including College and USN.");
       return false;
     }
     if (!driver3.email.includes("@")) {
@@ -314,7 +374,7 @@ export default function RegisterClientView({
 
     // Validate Driver 4
     if (!driver4.name.trim() || !driver4.email.trim() || !driver4.phone.trim() || !driver4.college.trim() || !driver4.usn.trim()) {
-      setErrorMsg("// DRIVER 4 (TELEMETRY): Please complete all required member details including USN.");
+      setErrorMsg("// DRIVER 4 (TELEMETRY): Please complete all required member details including College and USN.");
       return false;
     }
     if (!driver4.email.includes("@")) {
@@ -333,25 +393,23 @@ export default function RegisterClientView({
       return false;
     }
 
-    // Validate Payment (Only required for confirmed slots < 40; not required for Waiting List)
-    if (!isSelectedSemWaitlist) {
-      if (!paymentUtr.trim() || paymentUtr.trim().length < 6) {
-        setErrorMsg("GRAND PRIX ENTRY: Please enter a valid 12-digit UPI Reference / UTR Number.");
-        return false;
-      }
-      if (!paymentFile) {
-        setErrorMsg("GRAND PRIX ENTRY: Please upload your payment screenshot proof.");
-        return false;
-      }
-      const allowedTypes = ["image/png", "image/jpeg", "image/jpg"];
-      if (!allowedTypes.includes(paymentFile.type.toLowerCase())) {
-        setErrorMsg("PAYMENT PROOF: Only PNG, JPG, or JPEG images are permitted.");
-        return false;
-      }
-      if (paymentFile.size > 10 * 1024 * 1024) {
-        setErrorMsg("PAYMENT PROOF: Image file size must not exceed 10MB.");
-        return false;
-      }
+    // Validate Payment (Required for all registrations)
+    if (!paymentUtr.trim() || paymentUtr.trim().length < 6) {
+      setErrorMsg("GRAND PRIX ENTRY: Please enter a valid 12-digit UPI Reference / UTR Number.");
+      return false;
+    }
+    if (!paymentFile) {
+      setErrorMsg("GRAND PRIX ENTRY: Please upload your payment screenshot proof.");
+      return false;
+    }
+    const allowedTypes = ["image/png", "image/jpeg", "image/jpg"];
+    if (!allowedTypes.includes(paymentFile.type.toLowerCase())) {
+      setErrorMsg("PAYMENT PROOF: Only PNG, JPG, or JPEG images are permitted.");
+      return false;
+    }
+    if (paymentFile.size > 10 * 1024 * 1024) {
+      setErrorMsg("PAYMENT PROOF: Image file size must not exceed 10MB.");
+      return false;
     }
 
     return true;
@@ -360,19 +418,9 @@ export default function RegisterClientView({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    // Check Semester Slot Lock before validating (1st Sem: 40 confirmed + 20 waitlist = 60 max; 3rd Sem: 40 confirmed + 10 waitlist = 50 max)
-    if (isAllLocked) {
-      setErrorMsg(`REGISTRATION LOCKED: All confirmed slots and waiting list slots for both 1st Semester (${firstSemWaitlistLimit} waitlist) and 3rd Semester (${thirdSemWaitlistLimit} waitlist) are full.`);
-      window.scrollTo({ top: 300, behavior: "smooth" });
-      return;
-    }
-    if (driver1.sem.includes("1st") && isFirstSemLocked) {
-      setErrorMsg(`1st Semester registration is LOCKED (40 confirmed + ${firstSemWaitlistLimit} waiting list teams filled). Please select 3rd Semester if eligible.`);
-      window.scrollTo({ top: 300, behavior: "smooth" });
-      return;
-    }
-    if (driver1.sem.includes("3rd") && isThirdSemLocked) {
-      setErrorMsg(`3rd Semester registration is LOCKED (40 confirmed + ${thirdSemWaitlistLimit} waiting list teams filled). Please select 1st Semester if eligible.`);
+    // Check if registration deadline has passed
+    if (isRegistrationClosed) {
+      setErrorMsg("REGISTRATION IS OFFICIALLY CLOSED: Official team registrations closed on Monday, 23rd November at 12:00 PM (Noon) IST. No further submissions are being accepted.");
       window.scrollTo({ top: 300, behavior: "smooth" });
       return;
     }
@@ -514,30 +562,17 @@ export default function RegisterClientView({
             {/* Glowing F1 Status Badge */}
             <div className="inline-flex items-center gap-2 px-4 py-1.5 bg-red-600/15 border border-red-500/50 rounded-full text-red-400 font-mono text-[11px] sm:text-xs uppercase font-bold tracking-[3px] shadow-[0_0_20px_rgba(255,0,0,0.25)]">
               <span className="w-2 h-2 rounded-full bg-red-500 animate-ping" />
-              <span>
-                {successData.isWaitlist
-                  ? "🏎️ PIT LANE WAITING LIST // ENTRY LOGGED"
-                  : "🏁 PADDOCK ACCESS GRANTED // FORMULA 1 GRID POSITION LOCKED"}
-              </span>
+              <span>🏁 PADDOCK ACCESS GRANTED // FORMULA 1 GRID POSITION LOCKED</span>
             </div>
 
             {/* Main F1 Title */}
             <div className="space-y-2">
               <h1 className="text-3xl sm:text-5xl font-black italic uppercase text-white tracking-wide leading-tight drop-shadow-[0_0_30px_rgba(255,0,0,0.35)]">
-                {successData.isWaitlist
-                  ? `ON THE WAITING LIST, ${successData.teamName}`
-                  : `WELCOME TO THE GRID, ${successData.teamName}`}
+                WELCOME TO THE GRID, {successData.teamName}
               </h1>
               <p className="font-mono text-xs sm:text-sm text-neutral-400 max-w-xl mx-auto uppercase tracking-wider">
-                {successData.isWaitlist
-                  ? "Your squad details have been logged with Race Control into the Waiting List."
-                  : "Your 4-driver constructor crew has been locked into the official Relaython 2026 grid."}
+                Your 4-driver constructor crew has been locked into the official Relaython 2026 grid.
               </p>
-              {successData.isWaitlist && (
-                <div className="p-3 bg-yellow-500/10 border border-yellow-500/30 rounded-xl text-yellow-300 font-mono text-xs max-w-xl mx-auto leading-relaxed mt-2">
-                  ⚠️ <strong>Please Note:</strong> Registering on the waiting list does not guarantee a slot for participation. If any confirmed slot becomes available, our Race Stewards will reach out to the Team Lead for payment and participation confirmation.
-                </div>
-              )}
             </div>
 
             {/* F1 Race Control Telemetry Box */}
@@ -552,71 +587,56 @@ export default function RegisterClientView({
               </div>
               <div className="flex justify-between items-center">
                 <span className="text-neutral-500 uppercase tracking-wider">TELEMETRY STATUS:</span>
-                <span className={`font-bold ${successData.isWaitlist ? "text-yellow-400" : "text-emerald-400"}`}>
-                  {successData.isWaitlist
-                    ? "Waiting List Slot Logged"
-                    : "Manual Telemetry & UTR Verification In Progress"}
+                <span className="font-bold text-emerald-400">
+                  Manual Telemetry & UTR Verification In Progress
                 </span>
               </div>
             </div>
 
-            {/* MANDATORY OFFICIAL WHATSAPP GROUP CARD (CONFIRMED SLOTS ONLY — NOT FOR WAITING LIST) */}
-            {!successData.isWaitlist ? (
-              <div className="p-6 sm:p-7 bg-gradient-to-b from-[#0a1f14] via-[#05130b] to-black border-2 border-emerald-500 rounded-2xl max-w-xl mx-auto text-center space-y-4 shadow-[0_0_40px_rgba(16,185,129,0.3)]">
-                <div className="inline-flex items-center gap-2 px-3 py-1 bg-emerald-500/20 border border-emerald-500/40 rounded-full text-emerald-400 font-mono text-xs uppercase font-bold tracking-widest">
-                  <MessageCircle className="w-4 h-4 text-emerald-400" />
-                  <span>Mandatory Step // All 4 Drivers</span>
-                </div>
+            {/* MANDATORY OFFICIAL WHATSAPP GROUP CARD */}
+            <div className="p-6 sm:p-7 bg-gradient-to-b from-[#0a1f14] via-[#05130b] to-black border-2 border-emerald-500 rounded-2xl max-w-xl mx-auto text-center space-y-4 shadow-[0_0_40px_rgba(16,185,129,0.3)]">
+              <div className="inline-flex items-center gap-2 px-3 py-1 bg-emerald-500/20 border border-emerald-500/40 rounded-full text-emerald-400 font-mono text-xs uppercase font-bold tracking-widest">
+                <MessageCircle className="w-4 h-4 text-emerald-400" />
+                <span>Mandatory Step // All 4 Drivers</span>
+              </div>
 
-                <h2 className="text-2xl sm:text-3xl font-black italic uppercase text-white tracking-wide">
-                  Join The Official WhatsApp Group
-                </h2>
+              <h2 className="text-2xl sm:text-3xl font-black italic uppercase text-white tracking-wide">
+                Join The Official WhatsApp Group
+              </h2>
 
-                <p className="font-mono text-xs sm:text-sm text-neutral-300 leading-relaxed max-w-lg mx-auto">
-                  All live race briefings, schedule updates, track announcements, and pit-stop instructions will be broadcasted exclusively in this group. All team members must join!
-                </p>
+              <p className="font-mono text-xs sm:text-sm text-neutral-300 leading-relaxed max-w-lg mx-auto">
+                All live race briefings, schedule updates, track announcements, and pit-stop instructions will be broadcasted exclusively in this group. All team members must join!
+              </p>
 
+              <a
+                href="https://chat.whatsapp.com/LNqyZOwG0R8D2IEST6KSld"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center justify-center gap-2.5 px-8 py-4 bg-emerald-500 hover:bg-emerald-400 text-black font-black uppercase italic tracking-wider text-sm sm:text-base rounded-xl transition-all shadow-[0_0_30px_rgba(16,185,129,0.5)] hover:scale-105 active:scale-95"
+              >
+                <MessageCircle className="w-5 h-5 fill-black" />
+                <span>JOIN OFFICIAL WHATSAPP GROUP &gt;&gt;</span>
+                <ExternalLink className="w-4 h-4" />
+              </a>
+
+              <div className="pt-2 text-[11px] font-mono text-neutral-400 break-all">
+                Direct Link:{" "}
                 <a
                   href="https://chat.whatsapp.com/LNqyZOwG0R8D2IEST6KSld"
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center justify-center gap-2.5 px-8 py-4 bg-emerald-500 hover:bg-emerald-400 text-black font-black uppercase italic tracking-wider text-sm sm:text-base rounded-xl transition-all shadow-[0_0_30px_rgba(16,185,129,0.5)] hover:scale-105 active:scale-95"
+                  className="text-emerald-400 underline hover:text-emerald-300"
                 >
-                  <MessageCircle className="w-5 h-5 fill-black" />
-                  <span>JOIN OFFICIAL WHATSAPP GROUP &gt;&gt;</span>
-                  <ExternalLink className="w-4 h-4" />
+                  https://chat.whatsapp.com/LNqyZOwG0R8D2IEST6KSld
                 </a>
-
-                <div className="pt-2 text-[11px] font-mono text-neutral-400 break-all">
-                  Direct Link:{" "}
-                  <a
-                    href="https://chat.whatsapp.com/LNqyZOwG0R8D2IEST6KSld"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-emerald-400 underline hover:text-emerald-300"
-                  >
-                    https://chat.whatsapp.com/LNqyZOwG0R8D2IEST6KSld
-                  </a>
-                </div>
               </div>
-            ) : (
-              <div className="p-4 sm:p-5 bg-yellow-500/10 border-2 border-yellow-500/40 rounded-2xl max-w-xl mx-auto text-center space-y-2 shadow-[0_0_25px_rgba(234,179,8,0.15)]">
-                <div className="inline-flex items-center gap-2 text-yellow-400 font-mono text-xs uppercase font-bold tracking-widest">
-                  <span>⚠️ Waiting List Status</span>
-                </div>
-                <p className="font-mono text-xs sm:text-sm text-neutral-300 leading-relaxed max-w-lg mx-auto">
-                  Official WhatsApp community onboarding and credentials are strictly reserved for confirmed teams. If a confirmed team slot opens, our Race Stewards will reach out directly to your Team Lead for payment and WhatsApp onboarding.
-                </p>
-              </div>
-            )}
+            </div>
 
             {/* Race Day Credentials & Helplines */}
             <div className="space-y-4 max-w-xl mx-auto font-mono">
-              {!successData.isWaitlist && (
-                <div className="p-3.5 bg-neutral-950 border border-neutral-800 rounded-xl text-neutral-300 text-xs leading-relaxed">
-                  💡 <strong>Next Steps:</strong> Once the UTR is verified by Race Control, your squad&apos;s official credentials will be dispatched to the Team Lead&apos;s email (<span className="text-white font-bold">{driver1.email}</span>).
-                </div>
-              )}
+              <div className="p-3.5 bg-neutral-950 border border-neutral-800 rounded-xl text-neutral-300 text-xs leading-relaxed">
+                💡 <strong>Next Steps:</strong> Once the UTR is verified by Race Control, your squad&apos;s official credentials will be dispatched to the Team Lead&apos;s email (<span className="text-white font-bold">{driver1.email}</span>).
+              </div>
 
               <div className="pt-3 border-t border-neutral-800 text-center space-y-1.5">
                 <span className="text-neutral-400 font-bold uppercase tracking-wider text-xs block">
@@ -660,16 +680,93 @@ export default function RegisterClientView({
               </p>
             </div>
 
-            {/* SEMESTER REGISTRATION QUOTA CARDS (2 COLUMNS IN A SINGLE ROW) */}
+            {/* COUNTDOWN DEADLINE BANNER */}
+            <div
+              className={`mb-6 p-4 sm:p-5 rounded-2xl border font-mono shadow-2xl transition-all ${
+                isRegistrationClosed
+                  ? "bg-red-950/40 border-red-600 text-red-300"
+                  : "bg-gradient-to-r from-red-950/60 via-black to-red-950/60 border-red-600/80 shadow-[0_0_35px_rgba(255,0,0,0.3)]"
+              }`}
+            >
+              <div className="flex flex-col md:flex-row items-center justify-between gap-4">
+                <div className="flex items-center gap-3.5 text-center md:text-left">
+                  <div
+                    className={`p-3 rounded-xl border ${
+                      isRegistrationClosed
+                        ? "bg-red-900/30 border-red-700 text-red-400"
+                        : "bg-red-600/20 border-red-500 text-red-500 shadow-[0_0_15px_rgba(255,0,0,0.5)]"
+                    }`}
+                  >
+                    <Clock size={28} className={!isRegistrationClosed ? "animate-pulse" : ""} />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2 justify-center md:justify-start">
+                      <span
+                        className={`w-2.5 h-2.5 rounded-full ${
+                          isRegistrationClosed ? "bg-red-500" : "bg-green-400 animate-ping"
+                        }`}
+                      />
+                      <span className="text-xs sm:text-sm font-black uppercase tracking-widest text-white">
+                        {isRegistrationClosed ? "REGISTRATIONS ARE CLOSED" : "REGISTRATION DEADLINE COUNTDOWN"}
+                      </span>
+                    </div>
+                    <p className="text-[11px] sm:text-xs text-neutral-300 m-0 mt-0.5">
+                      {isRegistrationClosed ? (
+                        <span className="text-red-400 font-bold">
+                          Official team registrations closed on Monday, 23rd November at 12:00 PM (Noon) IST
+                        </span>
+                      ) : (
+                        <>CLOSES: <strong className="text-yellow-400">MONDAY, 23RD NOVEMBER @ 12:00 PM (NOON) IST</strong> · NO TEAM CAP</>
+                      )}
+                    </p>
+                  </div>
+                </div>
+
+                {!isRegistrationClosed ? (
+                  <div className="flex items-center gap-2 sm:gap-3 text-center">
+                    <div className="bg-black/80 border border-red-800/80 px-3 py-2 rounded-lg min-w-[64px] sm:min-w-[72px]">
+                      <span className="text-xl sm:text-2xl font-black text-white block">
+                        {String(timeLeft.hours).padStart(2, "0")}
+                      </span>
+                      <span className="text-[9px] sm:text-[10px] text-neutral-400 uppercase tracking-wider block">
+                        HOURS
+                      </span>
+                    </div>
+                    <span className="text-red-500 font-bold text-xl sm:text-2xl animate-pulse">:</span>
+                    <div className="bg-black/80 border border-red-800/80 px-3 py-2 rounded-lg min-w-[64px] sm:min-w-[72px]">
+                      <span className="text-xl sm:text-2xl font-black text-white block">
+                        {String(timeLeft.minutes).padStart(2, "0")}
+                      </span>
+                      <span className="text-[9px] sm:text-[10px] text-neutral-400 uppercase tracking-wider block">
+                        MINS
+                      </span>
+                    </div>
+                    <span className="text-red-500 font-bold text-xl sm:text-2xl animate-pulse">:</span>
+                    <div className="bg-black/80 border border-red-800/80 px-3 py-2 rounded-lg min-w-[64px] sm:min-w-[72px]">
+                      <span className="text-xl sm:text-2xl font-black text-red-400 block">
+                        {String(timeLeft.seconds).padStart(2, "0")}
+                      </span>
+                      <span className="text-[9px] sm:text-[10px] text-neutral-400 uppercase tracking-wider block">
+                        SECS
+                      </span>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="px-4 py-2 bg-red-600/20 border border-red-500 rounded-lg text-red-400 font-bold text-xs uppercase tracking-wider flex items-center gap-2">
+                    <Lock size={14} /> REGISTRATIONS LOCKED
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* COMPETITION TRACK STATUS CARDS (SEPARATED AS 1ST AND 2ND YEARS) */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8 font-mono">
-              {/* Card 1: 1st Semester Teams */}
+              {/* Card 1: 1st Year Track (1st Semester) */}
               <div
                 className={`bg-[#080808] border rounded-xl p-5 space-y-3 shadow-lg transition-all ${
                   isFirstSemLocked
                     ? "border-red-600/70 bg-red-950/10"
-                    : isFirstSemWaitlist
-                      ? "border-yellow-500/60 bg-yellow-950/10"
-                      : "border-red-900/40"
+                    : "border-red-900/50 hover:border-red-600/60"
                 }`}
               >
                 <div className="flex items-center justify-between gap-2">
@@ -678,9 +775,7 @@ export default function RegisterClientView({
                       className={`w-2.5 h-2.5 rounded-full ${
                         isFirstSemLocked
                           ? "bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.8)]"
-                          : isFirstSemWaitlist
-                            ? "bg-yellow-400 animate-pulse shadow-[0_0_8px_rgba(250,204,21,0.8)]"
-                            : "bg-green-500 animate-pulse shadow-[0_0_8px_rgba(34,197,94,0.8)]"
+                          : "bg-green-500 animate-pulse shadow-[0_0_8px_rgba(34,197,94,0.8)]"
                       }`}
                     />
                     <span className="text-xs sm:text-sm font-black italic tracking-wider text-white uppercase">
@@ -689,11 +784,7 @@ export default function RegisterClientView({
                   </div>
                   {isFirstSemLocked ? (
                     <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded bg-red-600/20 border border-red-500/50 text-red-400 text-[10px] font-bold uppercase tracking-wider">
-                      <Lock size={11} /> LOCKED
-                    </span>
-                  ) : isFirstSemWaitlist ? (
-                    <span className="px-2.5 py-0.5 rounded bg-yellow-500/15 border border-yellow-500/40 text-yellow-300 text-[10px] font-bold uppercase tracking-wider">
-                      WAITLIST
+                      <Lock size={11} /> CLOSED
                     </span>
                   ) : (
                     <span className="px-2.5 py-0.5 rounded bg-green-500/10 border border-green-500/30 text-green-400 text-[10px] font-bold uppercase tracking-wider">
@@ -702,42 +793,26 @@ export default function RegisterClientView({
                   )}
                 </div>
 
-                <div className="flex items-baseline justify-between">
-                  <div className="text-2xl sm:text-3xl font-black text-white">
-                    {Math.min(semCounts.firstSemCount, maxLimit)}{" "}
-                    <span className="text-sm font-bold text-neutral-500">/ {maxLimit} TEAMS</span>
-                  </div>
-                  <span className="text-[11px] text-neutral-400 font-bold">
-                    {isFirstSemLocked
-                      ? `WAITLIST FULL (${firstSemWaitlistLimit}/${firstSemWaitlistLimit})`
-                      : isFirstSemWaitlist
-                        ? `WAITLIST: ${semCounts.firstSemCount - maxLimit}/${firstSemWaitlistLimit}`
-                        : `${Math.max(0, maxLimit - semCounts.firstSemCount)} SLOTS LEFT`}
+                <div className="flex items-baseline gap-2.5 pt-1">
+                  <span className="text-4xl sm:text-5xl font-black text-white italic tracking-wider">
+                    {semCounts.firstSemCount}
+                  </span>
+                  <span className="text-xs sm:text-sm font-bold text-neutral-400 uppercase tracking-widest">
+                    TEAMS REGISTERED
                   </span>
                 </div>
 
-                <div className="w-full bg-[#121212] rounded-full h-2 overflow-hidden border border-white/5">
-                  <div
-                    className={`h-full rounded-full transition-all duration-500 ${
-                      isFirstSemLocked
-                        ? "bg-red-600 shadow-[0_0_10px_rgba(239,68,68,0.8)]"
-                        : isFirstSemWaitlist
-                          ? "bg-yellow-500 shadow-[0_0_10px_rgba(234,179,8,0.8)]"
-                          : "bg-gradient-to-r from-red-600 to-orange-500 shadow-[0_0_10px_rgba(255,0,0,0.8)]"
-                    }`}
-                    style={{ width: `${Math.min((semCounts.firstSemCount / maxLimit) * 100, 100)}%` }}
-                  />
-                </div>
+                <p className="text-[11px] text-neutral-400 m-0 pt-0.5">
+                  1st Year Track (1st Semester) · Open to all engineering colleges
+                </p>
               </div>
 
-              {/* Card 2: 3rd Semester Teams */}
+              {/* Card 2: 2nd Year Track (3rd Semester) */}
               <div
                 className={`bg-[#080808] border rounded-xl p-5 space-y-3 shadow-lg transition-all ${
                   isThirdSemLocked
                     ? "border-red-600/70 bg-red-950/10"
-                    : isThirdSemWaitlist
-                      ? "border-yellow-500/60 bg-yellow-950/10"
-                      : "border-red-900/40"
+                    : "border-red-900/50 hover:border-red-600/60"
                 }`}
               >
                 <div className="flex items-center justify-between gap-2">
@@ -746,9 +821,7 @@ export default function RegisterClientView({
                       className={`w-2.5 h-2.5 rounded-full ${
                         isThirdSemLocked
                           ? "bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.8)]"
-                          : isThirdSemWaitlist
-                            ? "bg-yellow-400 animate-pulse shadow-[0_0_8px_rgba(250,204,21,0.8)]"
-                            : "bg-green-500 animate-pulse shadow-[0_0_8px_rgba(34,197,94,0.8)]"
+                          : "bg-green-500 animate-pulse shadow-[0_0_8px_rgba(34,197,94,0.8)]"
                       }`}
                     />
                     <span className="text-xs sm:text-sm font-black italic tracking-wider text-white uppercase">
@@ -757,11 +830,7 @@ export default function RegisterClientView({
                   </div>
                   {isThirdSemLocked ? (
                     <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded bg-red-600/20 border border-red-500/50 text-red-400 text-[10px] font-bold uppercase tracking-wider">
-                      <Lock size={11} /> LOCKED
-                    </span>
-                  ) : isThirdSemWaitlist ? (
-                    <span className="px-2.5 py-0.5 rounded bg-yellow-500/15 border border-yellow-500/40 text-yellow-300 text-[10px] font-bold uppercase tracking-wider">
-                      WAITLIST
+                      <Lock size={11} /> CLOSED
                     </span>
                   ) : (
                     <span className="px-2.5 py-0.5 rounded bg-green-500/10 border border-green-500/30 text-green-400 text-[10px] font-bold uppercase tracking-wider">
@@ -770,32 +839,18 @@ export default function RegisterClientView({
                   )}
                 </div>
 
-                <div className="flex items-baseline justify-between">
-                  <div className="text-2xl sm:text-3xl font-black text-white">
-                    {Math.min(semCounts.thirdSemCount, maxLimit)}{" "}
-                    <span className="text-sm font-bold text-neutral-500">/ {maxLimit} TEAMS</span>
-                  </div>
-                  <span className="text-[11px] text-neutral-400 font-bold">
-                    {isThirdSemLocked
-                      ? `WAITLIST FULL (${thirdSemWaitlistLimit}/${thirdSemWaitlistLimit})`
-                      : isThirdSemWaitlist
-                        ? `WAITLIST: ${semCounts.thirdSemCount - maxLimit}/${thirdSemWaitlistLimit}`
-                        : `${Math.max(0, maxLimit - semCounts.thirdSemCount)} SLOTS LEFT`}
+                <div className="flex items-baseline gap-2.5 pt-1">
+                  <span className="text-4xl sm:text-5xl font-black text-white italic tracking-wider">
+                    {semCounts.thirdSemCount}
+                  </span>
+                  <span className="text-xs sm:text-sm font-bold text-neutral-400 uppercase tracking-widest">
+                    TEAMS REGISTERED
                   </span>
                 </div>
 
-                <div className="w-full bg-[#121212] rounded-full h-2 overflow-hidden border border-white/5">
-                  <div
-                    className={`h-full rounded-full transition-all duration-500 ${
-                      isThirdSemLocked
-                        ? "bg-red-600 shadow-[0_0_10px_rgba(239,68,68,0.8)]"
-                        : isThirdSemWaitlist
-                          ? "bg-yellow-500 shadow-[0_0_10px_rgba(234,179,8,0.8)]"
-                          : "bg-gradient-to-r from-red-600 to-orange-500 shadow-[0_0_10px_rgba(255,0,0,0.8)]"
-                    }`}
-                    style={{ width: `${Math.min((semCounts.thirdSemCount / maxLimit) * 100, 100)}%` }}
-                  />
-                </div>
+                <p className="text-[11px] text-neutral-400 m-0 pt-0.5">
+                  2nd Year Track (3rd Semester) · Open to all engineering colleges
+                </p>
               </div>
             </div>
 
@@ -816,8 +871,41 @@ export default function RegisterClientView({
               </div>
             )}
 
-            {/* MAIN RED BORDERED FORM */}
-            <form onSubmit={handleSubmit} className="border-2 border-red-600/80 bg-[#060606] rounded-xl p-3.5 sm:p-8 md:p-10 shadow-[0_0_40px_rgba(255,0,0,0.15)] space-y-7 sm:space-y-10">
+            {isRegistrationClosed ? (
+              <div className="border-2 border-red-600/70 bg-[#080808] p-8 sm:p-14 rounded-2xl text-center space-y-6 shadow-[0_0_50px_rgba(255,0,0,0.3)] my-8 relative overflow-hidden font-mono">
+                <div className="inline-flex p-4 rounded-2xl bg-red-950/60 border border-red-600/80 text-red-500 shadow-[0_0_20px_rgba(255,0,0,0.4)]">
+                  <Lock size={44} />
+                </div>
+                <div className="space-y-2">
+                  <h2 className="text-2xl sm:text-4xl font-black italic tracking-wider text-white uppercase m-0">
+                    REGISTRATIONS ARE CLOSED
+                  </h2>
+                  <p className="text-sm sm:text-base text-neutral-300 max-w-xl mx-auto m-0 leading-relaxed">
+                    Official team registrations for the Eventra Grand Prix closed on <strong className="text-yellow-400">Monday, 23rd November at 12:00 PM (Noon) IST</strong>.
+                  </p>
+                  <p className="text-xs text-neutral-400 max-w-lg mx-auto m-0 pt-1 leading-relaxed">
+                    No further submissions, UPI payments, or squad registrations are being accepted. If your team has already submitted registration and payment, your credentials will be dispatched to the Team Leader&apos;s email upon admin verification.
+                  </p>
+                </div>
+
+                <div className="pt-6 border-t border-neutral-800/80 max-w-xl mx-auto">
+                  <p className="text-[11px] uppercase tracking-widest text-neutral-400 font-bold mb-2">
+                    For any queries contact student coordinators:
+                  </p>
+                  <div className="flex flex-wrap justify-center items-center gap-x-6 gap-y-2 text-xs">
+                    <a href="tel:+919945867010" className="text-neutral-300 hover:text-red-400 transition-colors">
+                      <span className="text-white font-bold">Preksha Dixit</span> - +91 99458 67010
+                    </a>
+                    <span className="text-neutral-700 hidden sm:inline">•</span>
+                    <a href="tel:+916361455193" className="text-neutral-300 hover:text-red-400 transition-colors">
+                      <span className="text-white font-bold">Parinitha K</span> - +91 63614 55193
+                    </a>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              /* MAIN RED BORDERED FORM */
+              <form onSubmit={handleSubmit} className="border-2 border-red-600/80 bg-[#060606] rounded-xl p-3.5 sm:p-8 md:p-10 shadow-[0_0_40px_rgba(255,0,0,0.15)] space-y-7 sm:space-y-10">
               {/* SECTION 1: CREW IDENTIFIER & CAPACITY */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6 font-mono text-xs">
                 {/* Team Capacity Dropdown */}
@@ -853,24 +941,46 @@ export default function RegisterClientView({
               <div className="p-4 sm:p-5 bg-red-950/20 border border-red-600/40 rounded-xl space-y-2 font-mono text-xs">
                 <div className="flex items-center gap-2 text-red-400 font-bold uppercase tracking-wider text-xs">
                   <ShieldAlert size={16} className="text-red-500 shrink-0" />
-                  <span>SEMESTER ELIGIBILITY &amp; TEAM COMPOSITION POLICY</span>
+                  <span>COMPETITION TRACKS &amp; SEMESTER ELIGIBILITY POLICY</span>
                 </div>
                 <p className="text-neutral-300 leading-relaxed text-[11px] sm:text-xs m-0">
-                  To ensure fair competition across all participating squads, each team must consist strictly of members from the same semester:
+                  Teams are separated into two distinct competition categories based on academic year. To ensure fair competition, each 4-member squad must consist strictly of members from the same semester:
                 </p>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
-                  <div className="p-2.5 bg-black/60 border border-neutral-800 rounded">
-                    <span className="text-white font-bold block uppercase text-[11px]">1ST YEAR TEAMS (40 SLOTS)</span>
-                    <span className="text-neutral-400 text-[10px]">All 4 members must be currently enrolled in 1st Semester.</span>
+                  <div className="p-3 bg-black/60 border border-neutral-800 rounded-lg">
+                    <div className="flex items-center justify-between">
+                      <span className="text-white font-bold block uppercase text-[11px]">1ST YEAR TRACK</span>
+                      <span className="text-[10px] text-green-400 font-bold px-1.5 py-0.5 rounded bg-green-950/40 border border-green-500/30">
+                        NO TEAM CAP
+                      </span>
+                    </div>
+                    <span className="text-neutral-400 text-[10px] mt-1 block">
+                      All 4 members must be currently enrolled in 1st Semester.
+                    </span>
                   </div>
-                  <div className="p-2.5 bg-black/60 border border-neutral-800 rounded">
-                    <span className="text-white font-bold block uppercase text-[11px]">2ND YEAR TEAMS (40 SLOTS)</span>
-                    <span className="text-neutral-400 text-[10px]">All 4 members must be currently enrolled in 3rd Semester (2nd Year).</span>
+                  <div className="p-3 bg-black/60 border border-neutral-800 rounded-lg">
+                    <div className="flex items-center justify-between">
+                      <span className="text-white font-bold block uppercase text-[11px]">2ND YEAR TRACK</span>
+                      <span className="text-[10px] text-green-400 font-bold px-1.5 py-0.5 rounded bg-green-950/40 border border-green-500/30">
+                        NO TEAM CAP
+                      </span>
+                    </div>
+                    <span className="text-neutral-400 text-[10px] mt-1 block">
+                      All 4 members must be currently enrolled in 3rd Semester (2nd Year).
+                    </span>
                   </div>
                 </div>
-                <p className="text-yellow-400 font-bold text-[10px] sm:text-[11px] m-0 pt-2 border-t border-red-900/40">
-                  ⚠ IMPORTANT: Mixed semester teams and senior-junior combinations are strictly prohibited. Selecting the Team Captain&apos;s semester automatically sets and locks the semester for all 4 team members.
-                </p>
+                <div className="pt-2 border-t border-red-900/40 space-y-1.5">
+                  <p className="text-emerald-400 font-bold text-[10px] sm:text-[11px] m-0">
+                    🎓 OPEN TO ALL COLLEGES: Students from any engineering college / university can participate!
+                  </p>
+                  <p className="text-yellow-400 font-bold text-[10px] sm:text-[11px] m-0">
+                    ⚠ TEAM RULE: Mixed semester teams and senior-junior combinations are strictly prohibited. Selecting the Team Captain&apos;s semester automatically sets and locks the semester for all 4 team members.
+                  </p>
+                  <p className="text-cyan-400 font-bold text-[10px] sm:text-[11px] m-0">
+                    ⏰ REGISTRATION DEADLINE: Registrations officially close on <strong>Monday, 23rd November at 12:00 PM (Noon) IST</strong>. No new teams will be accepted after this deadline.
+                  </p>
+                </div>
               </div>
 
               {/* SECTION 2: DRIVER 1 (CAPTAIN) */}
@@ -964,24 +1074,15 @@ export default function RegisterClientView({
                       className="w-full bg-[#0a0a0a] border border-neutral-800 focus:border-red-500 text-white p-3 rounded outline-none text-xs"
                     >
                       {SEMESTERS.map((s) => {
-                        const isSemWaitlist =
-                          (s.includes("1st") && isFirstSemWaitlist) ||
-                          (s.includes("3rd") && isThirdSemWaitlist);
-                        const isSemLocked =
-                          (s.includes("1st") && isFirstSemLocked) ||
-                          (s.includes("3rd") && isThirdSemLocked);
+                        const trackName = s.includes("1st") ? "1st Year Track" : "2nd Year Track";
                         return (
                           <option
                             key={s}
                             value={s}
-                            disabled={isSemLocked}
+                            disabled={isRegistrationClosed}
                             className="bg-black text-white disabled:text-neutral-600"
                           >
-                            {isSemLocked
-                              ? `${s} (LOCKED - FULL)`
-                              : isSemWaitlist
-                                ? `${s} (WAITLIST OPEN)`
-                                : s}
+                            {isRegistrationClosed ? `${s} (${trackName} - CLOSED)` : `${s} (${trackName})`}
                           </option>
                         );
                       })}
@@ -989,18 +1090,16 @@ export default function RegisterClientView({
                   </div>
 
                   <div className="sm:col-span-2 space-y-1.5">
-                    <label className="flex items-center justify-between text-red-500 uppercase text-[11px] font-bold">
-                      <span>COLLEGE / INSTITUTION <span className="text-red-500">*</span></span>
-                      <span className="inline-flex items-center gap-1 text-[10px] text-neutral-400 font-normal">
-                        <Lock size={10} className="text-red-500" /> VVCE EXCLUSIVE
-                      </span>
+                    <label className="block text-red-500 uppercase text-[11px] font-bold">
+                      COLLEGE / INSTITUTION <span className="text-red-500">*</span>
                     </label>
                     <input
                       type="text"
                       required
-                      readOnly
-                      value="Vidya Vardhaka College Of Engineering"
-                      className="w-full bg-[#050505] border border-neutral-800/80 text-neutral-300 font-bold p-3 rounded outline-none text-xs cursor-not-allowed select-none"
+                      placeholder="ENTER COLLEGE / INSTITUTION NAME"
+                      value={driver1.college}
+                      onChange={(e) => handleCaptainCollegeChange(e.target.value)}
+                      className="w-full bg-[#0a0a0a] border border-neutral-800 focus:border-red-500 text-white p-3 rounded outline-none text-xs placeholder:text-neutral-600"
                     />
                   </div>
                 </div>
@@ -1104,18 +1203,16 @@ export default function RegisterClientView({
                   </div>
 
                   <div className="sm:col-span-2 space-y-1.5">
-                    <label className="flex items-center justify-between text-red-500 uppercase text-[11px] font-bold">
-                      <span>COLLEGE_2 <span className="text-red-500">*</span></span>
-                      <span className="inline-flex items-center gap-1 text-[10px] text-neutral-400 font-normal">
-                        <Lock size={10} className="text-red-500" /> VVCE EXCLUSIVE
-                      </span>
+                    <label className="block text-red-500 uppercase text-[11px] font-bold">
+                      COLLEGE_2 <span className="text-red-500">*</span>
                     </label>
                     <input
                       type="text"
                       required
-                      readOnly
-                      value="Vidya Vardhaka College Of Engineering"
-                      className="w-full bg-[#050505] border border-neutral-800/80 text-neutral-300 font-bold p-3 rounded outline-none text-xs cursor-not-allowed select-none"
+                      placeholder="ENTER COLLEGE / INSTITUTION NAME"
+                      value={driver2.college}
+                      onChange={(e) => setDriver2({ ...driver2, college: e.target.value })}
+                      className="w-full bg-[#0a0a0a] border border-neutral-800 focus:border-red-500 text-white p-3 rounded outline-none text-xs placeholder:text-neutral-600"
                     />
                   </div>
                 </div>
@@ -1219,18 +1316,16 @@ export default function RegisterClientView({
                   </div>
 
                   <div className="sm:col-span-2 space-y-1.5">
-                    <label className="flex items-center justify-between text-red-500 uppercase text-[11px] font-bold">
-                      <span>COLLEGE_3 <span className="text-red-500">*</span></span>
-                      <span className="inline-flex items-center gap-1 text-[10px] text-neutral-400 font-normal">
-                        <Lock size={10} className="text-red-500" /> VVCE EXCLUSIVE
-                      </span>
+                    <label className="block text-red-500 uppercase text-[11px] font-bold">
+                      COLLEGE_3 <span className="text-red-500">*</span>
                     </label>
                     <input
                       type="text"
                       required
-                      readOnly
-                      value="Vidya Vardhaka College Of Engineering"
-                      className="w-full bg-[#050505] border border-neutral-800/80 text-neutral-300 font-bold p-3 rounded outline-none text-xs cursor-not-allowed select-none"
+                      placeholder="ENTER COLLEGE / INSTITUTION NAME"
+                      value={driver3.college}
+                      onChange={(e) => setDriver3({ ...driver3, college: e.target.value })}
+                      className="w-full bg-[#0a0a0a] border border-neutral-800 focus:border-red-500 text-white p-3 rounded outline-none text-xs placeholder:text-neutral-600"
                     />
                   </div>
                 </div>
@@ -1334,47 +1429,36 @@ export default function RegisterClientView({
                   </div>
 
                   <div className="sm:col-span-2 space-y-1.5">
-                    <label className="flex items-center justify-between text-red-500 uppercase text-[11px] font-bold">
-                      <span>COLLEGE_4 <span className="text-red-500">*</span></span>
-                      <span className="inline-flex items-center gap-1 text-[10px] text-neutral-400 font-normal">
-                        <Lock size={10} className="text-red-500" /> VVCE EXCLUSIVE
-                      </span>
+                    <label className="block text-red-500 uppercase text-[11px] font-bold">
+                      COLLEGE_4 <span className="text-red-500">*</span>
                     </label>
                     <input
                       type="text"
                       required
-                      readOnly
-                      value="Vidya Vardhaka College Of Engineering"
-                      className="w-full bg-[#050505] border border-neutral-800/80 text-neutral-300 font-bold p-3 rounded outline-none text-xs cursor-not-allowed select-none"
+                      placeholder="ENTER COLLEGE / INSTITUTION NAME"
+                      value={driver4.college}
+                      onChange={(e) => setDriver4({ ...driver4, college: e.target.value })}
+                      className="w-full bg-[#0a0a0a] border border-neutral-800 focus:border-red-500 text-white p-3 rounded outline-none text-xs placeholder:text-neutral-600"
                     />
                   </div>
                 </div>
               </div>
 
-              {/* SECTION 6: GRAND PRIX ENTRY FEE & PAYMENT VERIFICATION (OR WAITING LIST NOTICE) */}
-              {isSelectedSemWaitlist ? (
-                <div className="space-y-4 pt-6 border-t-2 border-yellow-500/60 bg-yellow-950/15 p-6 sm:p-8 rounded-xl border border-yellow-500/40 font-mono">
-                  <div className="flex items-start gap-3 border-b border-yellow-500/20 pb-3">
-                    <AlertCircle className="text-yellow-400 mt-0.5 shrink-0" size={22} />
-                    <div>
-                      <h3 className="font-heading text-lg sm:text-xl text-yellow-400 uppercase m-0 tracking-wide">
-                        WAITING LIST REGISTRATION ({driver1.sem.toUpperCase()})
-                      </h3>
-                      <p className="text-xs text-yellow-200/80 m-0 mt-1">
-                        Waitlist Slot:{" "}
-                        <strong className="text-white">
-                          #{(isDriver1FirstSem ? semCounts.firstSemCount : semCounts.thirdSemCount) - maxLimit + 1} of {selectedSemWaitlistLimit}
-                        </strong>{" "}
-                        — Payment is NOT required right now
-                      </p>
-                    </div>
+              {/* SECTION 6: GRAND PRIX ENTRY FEE & PAYMENT VERIFICATION */}
+              {isRegistrationClosed ? (
+                <div className="space-y-4 pt-6 border-t-2 border-red-600/60 bg-red-950/20 p-6 sm:p-8 rounded-xl border border-red-900/40 font-mono text-center">
+                  <div className="flex flex-col items-center justify-center gap-3">
+                    <Lock size={32} className="text-red-500" />
+                    <h3 className="font-heading text-lg sm:text-xl text-white uppercase m-0 tracking-wide">
+                      REGISTRATION IS OFFICIALLY CLOSED
+                    </h3>
+                    <p className="text-xs sm:text-sm text-neutral-300 max-w-lg m-0">
+                      The official registration window closed on <strong>Monday, 23rd November at 12:00 PM (Noon) IST</strong>. New entries and payments are no longer accepted.
+                    </p>
                   </div>
-                  <p className="text-xs sm:text-sm text-neutral-200 leading-relaxed m-0">
-                    <strong className="text-yellow-400">Please note that registering on the waiting list does not guarantee a slot for participation.</strong> 40 team slots are full, but you can register your team where you will be placed on the waiting list. If any of the confirmed slots team is unable to participate, waiting list teams will be contacted for the payment procedure and participation.
-                  </p>
                 </div>
-              ) : isSelectedSemLocked ? null : (
-              <div className="space-y-5 pt-6 border-t-2 border-red-600/60 bg-[#080808]/90 p-4 sm:p-6 rounded-xl border border-red-900/40">
+              ) : (
+                <div className="space-y-5 pt-6 border-t-2 border-red-600/60 bg-[#080808]/90 p-4 sm:p-6 rounded-xl border border-red-900/40">
                 <div className="flex items-start gap-3 border-b border-red-950/60 pb-3">
                   <CreditCard className="text-red-500 mt-1 shrink-0" size={20} />
                   <div>
@@ -1561,7 +1645,7 @@ export default function RegisterClientView({
 
               {/* SECTION 7: BOTTOM GRAND PRIX ENTRY SUMMARY & SUBMIT */}
               <div className="pt-6 border-t border-red-950/60 text-center space-y-4">
-                {!isSelectedSemWaitlist && !isSelectedSemLocked && (
+                {!isRegistrationClosed && (
                   <div className="space-y-1">
                     <p className="font-mono text-xs uppercase tracking-[3px] text-neutral-400 m-0">
                       GRAND PRIX ENTRY FEE
@@ -1574,36 +1658,25 @@ export default function RegisterClientView({
 
                 <button
                   type="submit"
-                  disabled={submitting || isSelectedSemLocked}
-                  className={`w-full py-4 sm:py-5 disabled:bg-neutral-800 disabled:text-neutral-500 disabled:shadow-none disabled:cursor-not-allowed text-white font-black italic uppercase tracking-widest text-base sm:text-lg rounded transition-all cursor-pointer flex items-center justify-center gap-3 ${
-                    isSelectedSemWaitlist
-                      ? "bg-yellow-600 hover:bg-yellow-500 text-black shadow-[0_0_30px_rgba(234,179,8,0.4)]"
-                      : "bg-red-600 hover:bg-red-500 shadow-[0_0_30px_rgba(255,0,0,0.5)]"
-                  }`}
+                  disabled={submitting || isRegistrationClosed}
+                  className="w-full py-4 sm:py-5 disabled:bg-neutral-800 disabled:text-neutral-500 disabled:shadow-none disabled:cursor-not-allowed text-white font-black italic uppercase tracking-widest text-base sm:text-lg rounded transition-all cursor-pointer flex items-center justify-center gap-3 bg-red-600 hover:bg-red-500 shadow-[0_0_30px_rgba(255,0,0,0.5)]"
                 >
                   {submitting ? (
                     <>
                       <span className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                      <span>{isSelectedSemWaitlist ? "JOINING WAITING LIST..." : "LOCKING IN GRID POSITION..."}</span>
+                      <span>LOCKING IN GRID POSITION...</span>
                     </>
-                  ) : isAllLocked ? (
+                  ) : isRegistrationClosed ? (
                     <>
                       <Lock size={20} />
-                      <span>REGISTRATION LOCKED — ALL SLOTS FULL</span>
+                      <span>REGISTRATION CLOSED — DEADLINE PASSED</span>
                     </>
-                  ) : isSelectedSemLocked ? (
-                    <>
-                      <Lock size={20} />
-                      <span>{driver1.sem.toUpperCase()} SLOTS FULL (LOCKED)</span>
-                    </>
-                  ) : isSelectedSemWaitlist ? (
-                    <span>JOIN WAITING LIST &gt;&gt;</span>
                   ) : (
                     <span>LOCK IN GRID POSITION &gt;&gt;</span>
                   )}
                 </button>
 
-                {!isSelectedSemLocked && (
+                {!isRegistrationClosed && (
                   <p className="text-center font-mono text-[11px] sm:text-xs text-neutral-400 m-0 pt-1">
                     <span className="text-red-500 font-bold">⚠ PLEASE NOTE:</span> Registration fee is <strong className="text-red-400 uppercase tracking-wider font-bold">strictly non-refundable</strong> once paid under any circumstances.
                   </p>
@@ -1612,9 +1685,7 @@ export default function RegisterClientView({
                 {/* TRANSACTION VERIFICATION & CONTACT QUERIES NOTICE */}
                 <div className="mt-8 p-5 sm:p-6 bg-[#080808] border border-red-900/50 rounded-xl space-y-3 font-mono text-center shadow-lg">
                   <p className="text-xs sm:text-sm text-yellow-400 font-bold tracking-wide m-0">
-                    {isSelectedSemWaitlist
-                      ? "Waiting list teams will be contacted for the payment procedure if any confirmed slot team is unable to participate."
-                      : "Once the Transaction is verified, the login credentials will be shared to the Team Lead's email."}
+                    Once the Transaction is verified, the login credentials will be shared to the Team Lead&apos;s email.
                   </p>
 
                   <div className="pt-3 border-t border-neutral-800/80">
@@ -1634,6 +1705,7 @@ export default function RegisterClientView({
                 </div>
               </div>
             </form>
+            )}
           </>
         )}
       </main>

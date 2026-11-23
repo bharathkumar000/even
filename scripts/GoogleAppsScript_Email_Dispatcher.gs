@@ -65,6 +65,8 @@ function onOpen() {
     .createMenu("🚀 Eventra Dispatch")
     .addItem("🔧 Fix & Realign Credentials Sheet (1-Click)", "fixCredentialsAlignment")
     .addSeparator()
+    .addItem("🖨️ Generate All Team QR Passes to Google Drive Folder & Sheet", "generateAllTeamQrPassesToDriveAndSheet")
+    .addSeparator()
     .addItem("🧹 Deduplicate & Clean All Sheets (1-Click Fix)", "deduplicateAllSheets")
     .addSeparator()
     .addItem("🔄 Update All Team Codes to IVC-RY (In Sheet)", "updateAllTeamCodesToRy")
@@ -543,6 +545,13 @@ function doPost(e) {
         .setMimeType(ContentService.MimeType.JSON);
     }
 
+    // Remote Action: Generate All Team QR Passes to Google Drive Folder & Sheet
+    if (data.action === "generate_all_qr_passes") {
+      var qrGenRes = generateAllTeamQrPassesInternal(ss);
+      return ContentService.createTextOutput(JSON.stringify({ success: !qrGenRes.error, result: qrGenRes }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
     // Remote Action: Clear Test Data
     if (data.action === "clear_all_test_data") {
       var sheetsToClear = ["Registrations", "Waiting list", "Credentials", "Approved", "Rejected"];
@@ -600,6 +609,30 @@ function doPost(e) {
         proofLink = driveFile.getUrl();
       } catch (uploadErr) {
         proofLink = "Upload error: " + uploadErr.toString();
+      }
+    }
+    
+    // Upload Team QR Code Badge directly to Google Drive folder "Eventra 2026 Official Team QR Passes"
+    var qrPassLink = data.qrPassUrl || "";
+    if (data.qrPassBase64 && data.qrPassBase64.indexOf("data:") === 0) {
+      try {
+        var qrParts = data.qrPassBase64.split(",");
+        var qrMimeMatch = qrParts[0].match(/:(.*?);/);
+        var qrMime = qrMimeMatch ? qrMimeMatch[1] : "image/png";
+        var qrBytes = Utilities.base64Decode(qrParts[1]);
+        var cleanCode = (data.teamCode || "TEAM").replace(/[^a-zA-Z0-9_-]/g, "_");
+        var cleanTeam = (data.teamName || "team").replace(/[^a-zA-Z0-9_-]/g, "_");
+        var qrFileName = cleanCode + "_" + cleanTeam + "_QR_Pass.png";
+        var qrFileBlob = Utilities.newBlob(qrBytes, qrMime, qrFileName);
+        
+        var qrFolders = DriveApp.getFoldersByName("Eventra 2026 Official Team QR Passes");
+        var qrFolder = qrFolders.hasNext() ? qrFolders.next() : DriveApp.createFolder("Eventra 2026 Official Team QR Passes");
+        qrFolder.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+        var qrDriveFile = qrFolder.createFile(qrFileBlob);
+        qrDriveFile.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+        qrPassLink = qrDriveFile.getUrl();
+      } catch (qrUploadErr) {
+        qrPassLink = "QR upload error: " + qrUploadErr.toString();
       }
     }
     
@@ -691,8 +724,13 @@ function doPost(e) {
           val = itemData.portalUrl || "";
         } else if (h.indexOf("whatsapp") !== -1) {
           val = itemData.whatsappGroup || "https://chat.whatsapp.com/LNqyZOwG0R8D2IEST6KSld";
-        } else if (h.indexOf("email dispatch status") !== -1 || h === "dispatch status") {
-          val = itemData.emailDispatchStatus || "PENDING";
+        } else if (h.indexOf("qr") !== -1 && h.indexOf("link") !== -1) {
+          val = qrPassLink || itemData.qrPassUrl || "";
+        } else if (h.indexOf("qr") !== -1 && (h.indexOf("preview") !== -1 || h.indexOf("image") !== -1)) {
+          var qrImg = qrPassLink || itemData.qrPassUrl || "";
+          val = qrImg ? '=IMAGE("' + qrImg + '")' : "";
+        } else if (h === "login username" || h === "username") {
+          val = itemData.username || itemData.loginUsername || "";
         } else if (h === "team id") {
           val = itemData.teamId || "";
         } else if (h === "one member contact info (driver 2)") {
@@ -785,13 +823,28 @@ function doPost(e) {
           "Leader Email",
           "Leader Phone",
           "Leader College",
-          "Driver 2 Name",
-          "Driver 2 Phone",
+          "Login Username",
           "Login Password",
           "WhatsApp Group",
+          "Team QR Pass (Drive Link)",
+          "Team ID",
           "Email Dispatch Status"
         ]);
-        sheet.getRange(1, 1, 1, 14).setFontWeight("bold").setBackground("#d9ead3");
+        sheet.getRange(1, 1, 1, 15).setFontWeight("bold").setBackground("#d9ead3");
+      } else {
+        // Auto-ensure QR header column exists
+        var existingHeaders = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+        var hasQrCol = false;
+        for (var hc = 0; hc < existingHeaders.length; hc++) {
+          if (String(existingHeaders[hc] || "").toLowerCase().indexOf("qr") !== -1) {
+            hasQrCol = true;
+            break;
+          }
+        }
+        if (!hasQrCol) {
+          var nextC = sheet.getLastColumn() + 1;
+          sheet.getRange(1, nextC).setValue("Team QR Pass (Drive Link)").setFontWeight("bold").setBackground("#c9daf8");
+        }
       }
       
       upsertRow(sheet, data);
@@ -1137,12 +1190,14 @@ function deduplicateAllSheetsInternal(ss) {
       }
 
       var key = "";
-      if (tName) {
-        key = "name:" + tName.toLowerCase().replace(/[^a-z0-9]/g, "");
-      } else if (tCode) {
+      if (tCode && tCode.toUpperCase().indexOf("IVC-RY-") !== -1) {
         key = "code:" + tCode.toUpperCase().trim();
       } else if (tEmail) {
         key = "email:" + tEmail.toLowerCase().trim();
+      } else if (tCode) {
+        key = "code:" + tCode.toUpperCase().trim();
+      } else if (tName) {
+        key = "name:" + tName.toLowerCase().replace(/[^a-z0-9]/g, "");
       }
 
       var score = 0;
@@ -1333,3 +1388,130 @@ function clearAllTestData() {
   });
   ui.alert("Done! Test rows cleared while preserving headers.");
 }
+
+/**
+ * 🖨️ Generate All Team QR Passes to Google Drive Folder & Sheet
+ * Reads teams from "Credentials" (or "Approved") sheet, generates official signed QR badges,
+ * uploads them into a dedicated Google Drive folder ("Eventra 2026 Official Team QR Passes"),
+ * and writes the shareable Google Drive link back into the sheet.
+ */
+function generateAllTeamQrPassesToDriveAndSheet() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var ui = SpreadsheetApp.getUi();
+  
+  var confirm = ui.alert(
+    "🖨️ Generate Team QR Passes",
+    "This will generate official QR code badges for all teams, upload them into a public Google Drive folder, and add the Drive links directly to your sheet.\n\nProceed?",
+    ui.ButtonSet.YES_NO
+  );
+  if (confirm !== ui.Button.YES) return;
+  
+  var res = generateAllTeamQrPassesInternal(ss);
+  if (res.error) {
+    ui.alert("⚠️ Error: " + res.error);
+  } else {
+    ui.alert(
+      "✅ Successfully Generated & Uploaded " + res.count + " Team QR Passes!\n\n" +
+      "📂 Google Drive Folder:\n" + res.folderUrl + "\n\n" +
+      "All links have also been populated into the 'Team QR Pass (Drive Link)' column."
+    );
+  }
+}
+
+function generateAllTeamQrPassesInternal(ss) {
+  var sheet = ss.getSheetByName("Credentials") || ss.getSheetByName("Approved");
+  if (!sheet) {
+    return { error: "Could not find 'Credentials' or 'Approved' sheet." };
+  }
+  
+  var numRows = sheet.getLastRow();
+  if (numRows <= 1) {
+    return { error: "No teams found in the sheet." };
+  }
+  
+  var headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  
+  var qrLinkCol = -1;
+  var nameCol = -1;
+  var codeCol = -1;
+  var idCol = -1;
+  
+  for (var c = 0; c < headers.length; c++) {
+    var h = String(headers[c] || "").toLowerCase().trim();
+    if (h.indexOf("qr") !== -1 && h.indexOf("link") !== -1) qrLinkCol = c + 1;
+    if (h === "team name") nameCol = c;
+    if (h === "team code") codeCol = c;
+    if (h === "team id") idCol = c;
+  }
+  
+  if (qrLinkCol === -1) {
+    qrLinkCol = sheet.getLastColumn() + 1;
+    sheet.getRange(1, qrLinkCol).setValue("Team QR Pass (Drive Link)").setFontWeight("bold").setBackground("#c9daf8");
+  }
+  
+  var folderName = "Eventra 2026 Official Team QR Passes";
+  var folders = DriveApp.getFoldersByName(folderName);
+  var folder = folders.hasNext() ? folders.next() : DriveApp.createFolder(folderName);
+  folder.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+  var folderUrl = folder.getUrl();
+  
+  function getQrSignature(teamId) {
+    if (!teamId) return "";
+    var secret = "ivc-eventra-secure-salt-2026-tamper-guard";
+    var signature = Utilities.computeHmacSha256Signature(teamId.toLowerCase().trim(), secret);
+    var hex = signature.map(function(b) {
+      var byteVal = (b < 0 ? b + 256 : b).toString(16);
+      return ("0" + byteVal).slice(-2);
+    }).join("");
+    return hex.slice(0, 8);
+  }
+  
+  var data = sheet.getRange(2, 1, numRows - 1, sheet.getLastColumn()).getValues();
+  var count = 0;
+  
+  for (var i = 0; i < data.length; i++) {
+    var rowIdx = i + 2;
+    var teamName = nameCol !== -1 ? String(data[i][nameCol] || "").trim() : "";
+    var teamCode = codeCol !== -1 ? String(data[i][codeCol] || "").trim() : "";
+    var teamId = idCol !== -1 ? String(data[i][idCol] || "").trim() : "";
+    
+    if (!teamName && !teamCode) continue;
+    
+    var existingVal = sheet.getRange(rowIdx, qrLinkCol).getValue();
+    if (existingVal && String(existingVal).indexOf("drive.google.com") !== -1) {
+      count++;
+      continue;
+    }
+    
+    var effectiveId = teamId || teamCode;
+    var sig = getQrSignature(effectiveId);
+    var qrPayload = JSON.stringify({
+      team_id: effectiveId,
+      name: teamName,
+      sig: sig,
+      v: 1
+    });
+    
+    var qrApiUrl = "https://api.qrserver.com/v1/create-qr-code/?size=600x600&margin=20&format=png&data=" + encodeURIComponent(qrPayload);
+    try {
+      var resp = UrlFetchApp.fetch(qrApiUrl, { muteHttpExceptions: true });
+      if (resp.getResponseCode() === 200) {
+        var cleanCode = (teamCode || "TEAM").replace(/[^a-zA-Z0-9_-]/g, "_");
+        var cleanName = (teamName || "Team").replace(/[^a-zA-Z0-9_-]/g, "_");
+        var fileName = cleanCode + "_" + cleanName + "_QR_Pass.png";
+        
+        var blob = resp.getBlob().setName(fileName);
+        var file = folder.createFile(blob);
+        file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+        
+        sheet.getRange(rowIdx, qrLinkCol).setValue(file.getUrl());
+        count++;
+      }
+    } catch (err) {
+      // Continue to next team
+    }
+  }
+  
+  return { count: count, folderUrl: folderUrl };
+}
+
