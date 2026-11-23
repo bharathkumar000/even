@@ -122,9 +122,27 @@ export const SCAN_PURPOSES: ScanPurposeOption[] = [
     icon: Utensils,
   },
   {
+    value: "lunch_relaython",
+    label: "Relaython Lunch",
+    description: "Record Relaython lunch distribution (routes by token type)",
+    icon: Utensils,
+  },
+  {
     value: "snacks",
     label: "Snacks / Refreshments",
     description: "Record and verify refreshment claims",
+    icon: Coffee,
+  },
+  {
+    value: "snacks_1",
+    label: "Relaython Snacks 1",
+    description: "Record Relaython first snack distribution",
+    icon: Coffee,
+  },
+  {
+    value: "snacks_2",
+    label: "Relaython Snacks 2",
+    description: "Record Relaython second snack distribution",
     icon: Coffee,
   },
   {
@@ -639,6 +657,14 @@ export default function ScannerClientView() {
               res.action_type === "lunch" ? prev.lunchClaimedCount + 1 : prev.lunchClaimedCount,
             goodiesClaimedCount:
               res.action_type === "goodies" ? prev.goodiesClaimedCount + 1 : prev.goodiesClaimedCount,
+            snacks1ClaimedCount:
+              res.action_type === "snacks_1"
+                ? prev.snacks1ClaimedCount + 1
+                : prev.snacks1ClaimedCount,
+            snacks2ClaimedCount:
+              res.action_type === "snacks_2"
+                ? prev.snacks2ClaimedCount + 1
+                : prev.snacks2ClaimedCount,
           };
         });
 
@@ -678,6 +704,29 @@ export default function ScannerClientView() {
           teamId: res.team?.id,
           participantName: res.participant?.name,
           previousClaim: res.previousClaim,
+          timestamp: new Date().toLocaleTimeString([], {
+            hour: "2-digit",
+            minute: "2-digit",
+            second: "2-digit",
+          }),
+        });
+      } else if (res.status === "limit_reached") {
+        playScanError();
+        if (typeof navigator !== "undefined" && navigator.vibrate) {
+          navigator.vibrate([200, 100, 200]);
+        }
+        lastScannedCodeRef.current = candidateId;
+        lastScannedTimeRef.current = Date.now();
+
+        setScanFeedback({
+          status: "limit_reached",
+          title: `${res.action_type.toUpperCase()} LIMIT REACHED`,
+          message: res.message,
+          actionType: res.action_type,
+          teamName: res.team?.name,
+          teamId: res.team?.id,
+          claimedCount: res.claimedCount,
+          totalMembers: res.totalMembers,
           timestamp: new Date().toLocaleTimeString([], {
             hour: "2-digit",
             minute: "2-digit",
