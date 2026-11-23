@@ -1,15 +1,14 @@
-import { createClient } from "@/lib/supabase/client";
+import { getAuthenticatedUser } from "@/lib/auth/session";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { NextResponse } from "next/server";
 
 export async function POST(req: Request) {
   try {
-    const supabase = await createClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-
-    if (authError || !user) {
+    const session = await getAuthenticatedUser();
+    if (!session.isAuthenticated || !session.user) {
       return NextResponse.json({ error: "Authentication required" }, { status: 401 });
     }
+    const user = session.user;
 
     const body = await req.json();
     const { form_id, team_id, answers, file_references } = body;
@@ -57,12 +56,11 @@ export async function POST(req: Request) {
 
 export async function GET(req: Request) {
   try {
-    const supabase = await createClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-
-    if (authError || !user) {
+    const session = await getAuthenticatedUser();
+    if (!session.isAuthenticated || !session.user) {
       return NextResponse.json({ error: "Authentication required" }, { status: 401 });
     }
+    const user = session.user;
 
     const { searchParams } = new URL(req.url);
     const formId = searchParams.get("formId");
@@ -86,7 +84,7 @@ export async function GET(req: Request) {
 
     const { data, error } = await supabaseAdmin
       .from("team_submission_drafts")
-      .select("*")
+      .select("id, form_id, team_id, answers, file_references, last_saved_by, last_saved_at, created_at, updated_at")
       .eq("form_id", formId)
       .eq("team_id", teamId)
       .maybeSingle();

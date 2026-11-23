@@ -11,23 +11,14 @@ import {
   Save,
   Send,
   ArrowLeft,
-  RotateCcw,
-  Sparkles,
   Clock,
   Megaphone,
-  Wifi,
-  WifiOff,
 } from "lucide-react";
 import Link from "next/link";
 import { saveOrSubmitEvaluation } from "@/app/actions/judge-evaluation";
 import ScoringSlider from "@/components/judge/ScoringSlider";
 import PitchTimer from "@/components/judge/PitchTimer";
 import { createClient } from "@/lib/supabase/client";
-import {
-  saveOfflineDraft,
-  getOfflineDraft,
-  deleteOfflineDraft,
-} from "@/lib/offline-storage";
 import { withCsrfToken } from "@/lib/csrf-client";
 import { HapticFeedback } from "@/lib/haptic";
 
@@ -108,16 +99,13 @@ export default function EvaluateClientView({
   const [loading, setLoading] = useState(false);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [draftRestoredMsg, setDraftRestoredMsg] = useState<string | null>(null);
   const [showTimer, setShowTimer] = useState(false);
-  const [isOnline, setIsOnline] = useState(true);
   const [pitchCalling, setPitchCalling] = useState(false);
   const [pitchCallSent, setPitchCallSent] = useState(false);
 
   const isLocked =
     existingEvaluation?.status === "locked" ||
     existingEvaluation?.status === "submitted";
-  const draftKey = `ivc_draft_${activeRound?.id || "noround"}_${teamId}`;
 
   // Check localStorage for timer toggle preference on mount
   useEffect(() => {
@@ -129,67 +117,6 @@ export default function EvaluateClientView({
       }
     } catch {}
   }, []);
-
-  // Network status detection & offline sync listener
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    setIsOnline(navigator.onLine);
-
-    const handleOnline = () => {
-      setIsOnline(true);
-      // Auto-sync draft to cloud if we have active round and scores
-      if (activeRound?.id) {
-        getOfflineDraft(draftKey).then((saved) => {
-          if (saved?.data?.scores && Object.keys(saved.data.scores).length > 0) {
-            setDraftRestoredMsg("Back online: Ready to sync scores to cloud.");
-          }
-        });
-      }
-    };
-    const handleOffline = () => setIsOnline(false);
-
-    window.addEventListener("online", handleOnline);
-    window.addEventListener("offline", handleOffline);
-    return () => {
-      window.removeEventListener("online", handleOnline);
-      window.removeEventListener("offline", handleOffline);
-    };
-  }, [activeRound?.id, draftKey]);
-
-  // Check IndexedDB + localStorage for unsaved drafts on mount if not already submitted
-  useEffect(() => {
-    if (typeof window === "undefined" || isLocked || existingEvaluation?.status === "submitted") return;
-    getOfflineDraft(draftKey).then((saved) => {
-      if (saved && saved.data) {
-        const draftContent = saved.data;
-        if (draftContent.scores && Object.keys(draftContent.scores).length > 0) {
-          setScores(draftContent.scores);
-          if (draftContent.feedback) setFeedback(draftContent.feedback);
-          const timeAgo = Math.round((Date.now() - (saved.savedAt || Date.now())) / 60000);
-          setDraftRestoredMsg(`Recovered offline draft from IndexedDB (${timeAgo < 1 ? "just now" : `${timeAgo}m ago`})`);
-        }
-      }
-    });
-  }, [draftKey, isLocked, existingEvaluation?.status]);
-
-  // Auto-save in-progress draft to IndexedDB and localStorage
-  useEffect(() => {
-    if (typeof window === "undefined" || isLocked || existingEvaluation?.status === "submitted") return;
-    const hasScores = Object.values(scores).some((val) => val > 0);
-    if (hasScores || feedback.trim().length > 0) {
-      saveOfflineDraft(draftKey, {
-        scores,
-        feedback,
-      });
-    }
-  }, [scores, feedback, draftKey, isLocked, existingEvaluation?.status]);
-
-  const clearLocalDraft = async () => {
-    await deleteOfflineDraft(draftKey);
-    setScores(initialScores);
-    setFeedback(existingEvaluation?.feedback || "");
-    setDraftRestoredMsg(null);
-  };
 
   const callTeamToPitch = async () => {
     try {
@@ -258,11 +185,6 @@ export default function EvaluateClientView({
         return;
       }
 
-      if (!isDraft) {
-        await deleteOfflineDraft(draftKey);
-        setDraftRestoredMsg(null);
-      }
-
       setSuccessMsg(
         isDraft
           ? "Draft saved successfully to cloud."
@@ -324,22 +246,6 @@ export default function EvaluateClientView({
       </div>
 
       {/* Notifications */}
-      {draftRestoredMsg && (
-        <div className="p-3 bg-accent-secondary/15 border border-accent-secondary text-accent-secondary font-tech text-xs flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2">
-            <Sparkles size={16} />
-            <span>{draftRestoredMsg}</span>
-          </div>
-          <button
-            onClick={clearLocalDraft}
-            className="flex items-center gap-1 text-[11px] uppercase underline hover:text-text-primary transition-colors"
-          >
-            <RotateCcw size={12} />
-            <span>Discard Draft</span>
-          </button>
-        </div>
-      )}
-
       {successMsg && (
         <div className="p-4 bg-status-success/15 border border-status-success text-status-success font-tech text-xs flex items-center gap-2">
           <CheckCircle2 size={18} />
@@ -366,13 +272,6 @@ export default function EvaluateClientView({
             {showTimer ? "Active" : "Hidden"}
           </span>
 
-          {/* Network State Chip */}
-          <div className={`flex items-center gap-1.5 px-2 py-0.5 rounded text-[10px] font-tech uppercase font-bold border ${
-            isOnline ? "border-status-success/40 text-status-success bg-status-success/10" : "border-status-warning/40 text-status-warning bg-status-warning/10"
-          }`}>
-            {isOnline ? <Wifi size={11} /> : <WifiOff size={11} />}
-            <span>{isOnline ? "Online (Auto-Sync)" : "Offline (IndexedDB Active)"}</span>
-          </div>
         </div>
 
         <div className="flex items-center gap-2">

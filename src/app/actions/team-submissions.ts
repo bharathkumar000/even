@@ -5,6 +5,8 @@ import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { validateCsrfToken, CSRF_CONSTANTS } from "@/lib/csrf-server";
 import { requireAdmin } from "@/lib/auth/admin";
+import { getAuthenticatedUser } from "@/lib/auth/session";
+import { validateUuid } from "@/lib/auth/uuid";
 import { z } from "zod";
 
 export interface SubmissionDraft {
@@ -93,11 +95,19 @@ export async function getActiveSubmissionForm(teamId: string): Promise<{
   errorType?: "auth" | "no_team" | "no_event" | "no_form" | "db_error" | "access_denied";
 }> {
   // Get user's team membership to find team_id if not provided
-  const supabase = await createClient();
-  const { data: { user }, error: authError } = await supabase.auth.getUser();
-
-  if (authError || !user) {
+  const session = await getAuthenticatedUser();
+  if (!session.isAuthenticated || !session.user) {
     return { form: null, sections: [], questions: [], options: {}, error: "Authentication required", errorType: "auth" };
+  }
+  const user = session.user;
+
+  // Validate teamId if provided
+  let effectiveTeamId: string | null = null;
+  if (teamId) {
+    const validId = validateUuid(teamId, "team_id");
+    if (validId) {
+      effectiveTeamId = validId;
+    }
   }
 
   // Find team membership
@@ -111,7 +121,9 @@ export async function getActiveSubmissionForm(teamId: string): Promise<{
     return { form: null, sections: [], questions: [], options: {}, error: "Failed to load team membership", errorType: "db_error" };
   }
 
-  const effectiveTeamId = teamId || membership?.team_id || null;
+  if (!effectiveTeamId) {
+    effectiveTeamId = membership?.team_id || null;
+  }
 
   if (!effectiveTeamId) {
     return { form: null, sections: [], questions: [], options: {}, error: "No team membership found. Please contact your team leader.", errorType: "no_team" };
@@ -128,7 +140,7 @@ export async function getActiveSubmissionForm(teamId: string): Promise<{
   // Get the published project submission form
   const { data: forms, error: formsError } = await supabaseAdmin
     .from("project_submission_forms")
-    .select("*")
+    .select("id, title, description, status, form_status, opens_at, submission_open_at, closes_at, submission_close_at, auto_lock_at_deadline, timezone, max_marks, round_id, form_config")
     .eq("status", "published")
     .order("created_at", { ascending: false })
     .limit(1);
@@ -259,12 +271,11 @@ export async function saveSubmissionDraft(input: {
   }>;
   [CSRF_CONSTANTS.HEADER_NAME]?: string;
 }): Promise<{ draft: SubmissionDraft }> {
-  const supabase = await createClient();
-  const { data: { user }, error: authError } = await supabase.auth.getUser();
-
-  if (authError || !user) {
+  const session = await getAuthenticatedUser();
+  if (!session.isAuthenticated || !session.user) {
     throw new Error("Authentication required");
   }
+  const user = session.user;
   await validateCsrfToken(input[CSRF_CONSTANTS.HEADER_NAME] || null);
 
   const validated = SaveDraftSchema.parse(input);
@@ -314,12 +325,11 @@ export async function getSubmissionDraft(
   formId: string,
   teamId: string
 ): Promise<{ draft: SubmissionDraft | null; error?: string }> {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-
-  if (!user) {
+  const session = await getAuthenticatedUser();
+  if (!session.isAuthenticated || !session.user) {
     return { draft: null, error: "Authentication required" };
   }
+  const user = session.user;
 
   // Verify membership
   const { data: membership } = await supabaseAdmin
@@ -335,7 +345,7 @@ export async function getSubmissionDraft(
 
   const { data, error } = await supabaseAdmin
     .from("team_submission_drafts")
-    .select("*")
+    .select("id, form_id, team_id, answers, file_references, last_saved_by, last_saved_at, created_at, updated_at")
     .eq("form_id", formId)
     .eq("team_id", teamId)
     .maybeSingle();
@@ -378,13 +388,18 @@ export async function submitFinalSubmission(input: {
   }>;
   [CSRF_CONSTANTS.HEADER_NAME]?: string;
 }): Promise<{ submission: SubmissionFinal }> {
-  const supabase = await createClient();
-  const { data: { user }, error: authError } = await supabase.auth.getUser();
-
-  if (authError || !user) {
+  const session = await getAuthenticatedUser();
+  if (!session.isAuthenticated || !session.user) {
     throw new Error("Authentication required");
   }
+  const user = session.user;
   await validateCsrfToken(input[CSRF_CONSTANTS.HEADER_NAME] || null);
+
+  // Validate team_id UUID
+  const validTeamId = validateUuid(input.team_id, "team_id");
+  if (!validTeamId) {
+    throw new Error("Invalid team ID");
+  }
 
   const validated = SubmitFinalSchema.parse(input);
 
@@ -392,7 +407,7 @@ export async function submitFinalSubmission(input: {
   const { data: membership } = await supabaseAdmin
     .from("team_members")
     .select("role")
-    .eq("team_id", validated.team_id)
+    .eq("team_id", validTeamId)
     .eq("user_id", user.id)
     .maybeSingle();
 
@@ -541,16 +556,15 @@ export async function getTeamFinalSubmission(
   formId: string,
   teamId: string
 ): Promise<{ submission: SubmissionFinal | null; error?: string }> {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-
-  if (!user) {
+  const session = await getAuthenticatedUser();
+  if (!session.isAuthenticated || !session.user) {
     return { submission: null, error: "Authentication required" };
   }
+  const user = session.user;
 
   const { data, error } = await supabaseAdmin
     .from("team_submission_final")
-    .select("*")
+    .select("id, form_id, team_id, version, status, answers, file_references, submitted_by, submitted_at, reference_number, evaluation_score, evaluation_feedback, admin_remarks, created_at, updated_at, teams(id, name, track, leader_name)")
     .eq("form_id", formId)
     .eq("team_id", teamId)
     .maybeSingle();
@@ -581,12 +595,11 @@ export async function prepareSubmissionFileUpload(input: {
   token: string;
   signedUrl: string;
 }> {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-
-  if (!user) {
+  const session = await getAuthenticatedUser();
+  if (!session.isAuthenticated || !session.user) {
     throw new Error("Authentication required");
   }
+  const user = session.user;
 
   const ext = fileExtension(input.fileName);
   if (!ALLOWED_EXTENSIONS.includes(ext)) {
@@ -681,6 +694,11 @@ export async function getSubmissionAttachments(
 }
 
 export async function getAttachmentDownloadUrl(filePath: string): Promise<{ url: string }> {
+  const session = await getAuthenticatedUser();
+  if (!session.isAuthenticated || !session.user) {
+    throw new Error("Authentication required");
+  }
+
   const { data, error } = await supabaseAdmin.storage
     .from(STORAGE_BUCKET)
     .createSignedUrl(filePath, 300);

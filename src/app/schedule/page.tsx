@@ -15,6 +15,7 @@ import {
 import CrossPortalNav from "@/components/navigation/CrossPortalNav";
 import PartnerLogosBar from "@/components/PartnerLogosBar";
 import { SITE_CONFIG, getCanonicalUrl } from "@/lib/seo-config";
+import { getCachedPublicSchedule } from "@/app/actions/cached-public";
 
 export const metadata: Metadata = {
   title: "Event Schedule & Timeline · Vice Verse 1.0 Ideathon",
@@ -31,7 +32,16 @@ export const metadata: Metadata = {
   },
 };
 
-const SCHEDULE_ITEMS = [
+interface ScheduleItem {
+  time: string;
+  title: string;
+  location: string;
+  description: string;
+  tag: string;
+  status: string;
+}
+
+const SCHEDULE_ITEMS: ScheduleItem[] = [
   {
     time: "08:30 AM",
     title: "Registration & Hardware Kit Dispatch",
@@ -106,7 +116,28 @@ const SCHEDULE_ITEMS = [
   },
 ];
 
-export default function SchedulePage() {
+export default async function SchedulePage() {
+  // Fetch schedule from cached public server action; fall back to hardcoded data
+  let scheduleItems: ScheduleItem[] = [...SCHEDULE_ITEMS];
+
+  try {
+    const { data } = await getCachedPublicSchedule(
+      "11111111-1111-1111-1111-111111111111"
+    );
+    if (data && data.length > 0) {
+      scheduleItems = data.map((r: any) => ({
+        time: "TBD",
+        title: r.title,
+        location: "Team Bays",
+        description: `Evaluation round: ${r.title}`,
+        tag: r.status,
+        status: r.status,
+      }));
+    }
+  } catch (err) {
+    console.error("Failed to load cached schedule:", err);
+  }
+
   const jsonLd = {
     "@context": "https://schema.org",
     "@type": "BreadcrumbList",
@@ -181,7 +212,7 @@ export default function SchedulePage() {
           </div>
 
           <div className="relative border-l-2 border-border-color ml-4 sm:ml-8 pl-6 sm:pl-10 space-y-8">
-            {SCHEDULE_ITEMS.map((item, idx) => (
+            {scheduleItems.map((item: ScheduleItem, idx: number) => (
               <article
                 key={idx}
                 className="relative glass-panel p-5 sm:p-6 border border-border-color hover:border-accent-primary transition-all duration-300 rounded group"

@@ -1,27 +1,44 @@
 import { Suspense } from "react";
-import { createClient } from "@/lib/supabase/server";
 import { getUsersList, getTeamsHierarchyData, UserProfileItem, TeamHierarchyItem } from "@/app/actions/admin-users";
+import { getCachedAdminUsers } from "@/app/actions/cached-admin";
 import UsersClientView from "./users-client";
 import { Loader2 } from "lucide-react";
+import { getAuthenticatedUser } from "@/lib/auth/session";
 
 export const dynamic = "force-dynamic";
 
 export default async function AdminUsersPage() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const session = await getAuthenticatedUser();
+  const user = session.user;
 
   let initialUsers: UserProfileItem[] = [];
   let initialTeamsHierarchy: TeamHierarchyItem[] = [];
 
   try {
-    const [usersRes, teamsRes] = await Promise.all([
-      getUsersList(),
-      getTeamsHierarchyData(),
-    ]);
-    initialUsers = usersRes;
-    initialTeamsHierarchy = teamsRes;
+    const { data } = await getCachedAdminUsers();
+    if (data) {
+      initialUsers = data.users.map((u) => ({
+        id: u.id,
+        email: u.email ?? null,
+        full_name: u.full_name ?? null,
+        role: (u.role as any) ?? "participant",
+        created_at: new Date().toISOString(),
+        team_name: u.team_name ?? null,
+        team_role: null,
+        username: null,
+        phone: null,
+      }));
+      initialTeamsHierarchy = data.teams.map((t) => ({
+        id: t.id,
+        name: t.name,
+        code: t.code ?? null,
+        track: t.track ?? null,
+        leader_name: t.leader_name ?? null,
+        leader: null,
+        members: [],
+        totalMembersCount: 0,
+      }));
+    }
   } catch (err) {
     console.error("Failed to load initial users/teams:", err);
   }
@@ -42,8 +59,8 @@ export default async function AdminUsersPage() {
         <UsersClientView
           initialUsers={initialUsers}
           initialTeamsHierarchy={initialTeamsHierarchy}
-          currentUserEmail={user?.email}
-          currentUserId={user?.id}
+          currentUserEmail={user?.email ?? undefined}
+          currentUserId={user?.id ?? undefined}
         />
       </Suspense>
     </div>

@@ -1,201 +1,96 @@
 "use client";
 
 /**
- * Offline-First IndexedDB Storage with localStorage Fallback
- * Guaranteed zero-loss draft persistence for Jury Scoring during network outages.
+ * offline-storage.ts
+ *
+ * Security-hardened client storage helpers.
+ *
+ * NOTE (Task 7): Persistent browser storage must NEVER contain:
+ *   - Judge evaluation drafts containing sensitive scoring information
+ *   - Unpublished results
+ *   - Admin-only datasets
+ *   - Privileged authorization decisions
+ *   - Private data belonging to other users
+ *
+ * The previous version persisted judge evaluation drafts to IndexedDB and
+ * localStorage. That is removed here because offline judge scores must never
+ * silently appear as successfully submitted (Task 8). Evaluation drafts live
+ * only in volatile client state and are written to Supabase when the user
+ * explicitly saves/submits while online.
+ *
+ * This file retains only safe, non-sensitive helpers:
+ *   - localStorage preferences (UI settings, persisted until changed)
+ *   - sessionStorage short-lived per-tab data (dismissed announcements)
+ *
+ * Both storage areas enforce size caps, expiration, and graceful fallback
+ * when storage is disabled (see persistent-storage.ts).
  */
 
-const DB_NAME = "ivc_pulse_offline_db";
-const DB_VERSION = 1;
-const DRAFTS_STORE = "judge_drafts";
-const QUEUE_STORE = "submission_queue";
+import { localPrefs, sessionPrefs } from "@/lib/cache/persistent-storage";
 
-export interface PendingEvaluationItem {
-  id: string;
-  round_id: string;
-  team_id: string;
-  scores: Array<{ criterion_id: string; score: number }>;
-  feedback?: string;
-  is_draft: boolean;
-  timestamp: number;
-}
-
-function openDB(): Promise<IDBDatabase | null> {
-  return new Promise((resolve) => {
-    if (typeof window === "undefined" || !window.indexedDB) {
-      resolve(null);
-      return;
-    }
-
-    try {
-      const request = window.indexedDB.open(DB_NAME, DB_VERSION);
-
-      request.onupgradeneeded = (event) => {
-        const db = (event.target as IDBOpenDBRequest).result;
-        if (!db.objectStoreNames.contains(DRAFTS_STORE)) {
-          db.createObjectStore(DRAFTS_STORE, { keyPath: "key" });
-        }
-        if (!db.objectStoreNames.contains(QUEUE_STORE)) {
-          db.createObjectStore(QUEUE_STORE, { keyPath: "id" });
-        }
-      };
-
-      request.onsuccess = () => resolve(request.result);
-      request.onerror = () => resolve(null);
-    } catch {
-      resolve(null);
-    }
-  });
-}
-
-export interface OfflineDraftPayload {
-  key?: string;
-  data?: {
-    scores?: Record<string, number>;
-    feedback?: string;
-    [key: string]: unknown;
-  };
-  savedAt?: number;
+/**
+ * Save a non-sensitive UI preference to localStorage.
+ * Safe for: theme, collapsed sidebars, timer visibility toggles.
+ * Unsafe for: any scoring, evaluation, or personal data.
+ */
+export function saveUiPreference(key: string, value: unknown): boolean {
+  const current = localPrefs.get(key) ?? {};
+  const next = { ...current, [key]: value };
+  return localPrefs.set(key, next);
 }
 
 /**
- * Save draft score sheet into IndexedDB + localStorage mirror
+ * Read a non-sensitive UI preference from localStorage.
  */
-export async function saveOfflineDraft(
-  key: string,
-  data: { scores?: Record<string, number>; feedback?: string; [key: string]: unknown }
-): Promise<void> {
-  const payload: OfflineDraftPayload = {
-    key,
-    data,
-    savedAt: Date.now(),
-  };
-
-  // LocalStorage immediate mirror
-  try {
-    localStorage.setItem(key, JSON.stringify(payload));
-  } catch {}
-
-  // IndexedDB persistent storage
-  const db = await openDB();
-  if (!db) return;
-
-  try {
-    const tx = db.transaction(DRAFTS_STORE, "readwrite");
-    const store = tx.objectStore(DRAFTS_STORE);
-    store.put(payload);
-  } catch (err) {
-    console.warn("IndexedDB draft save warning:", err);
-  }
+export function getUiPreference<T = unknown>(key: string): T | null {
+  const current = localPrefs.get(key) as Record<string, unknown> | null;
+  if (!current) return null;
+  return (current[key] as T) ?? null;
 }
 
 /**
- * Retrieve draft from IndexedDB or localStorage
+ * Remove a UI preference from localStorage.
  */
-export async function getOfflineDraft(key: string): Promise<OfflineDraftPayload | null> {
-  // Check IndexedDB first
-  const db = await openDB();
-  if (db) {
-    try {
-      const item = await new Promise<OfflineDraftPayload | null>((resolve) => {
-        const tx = db.transaction(DRAFTS_STORE, "readonly");
-        const store = tx.objectStore(DRAFTS_STORE);
-        const req = store.get(key);
-        req.onsuccess = () => resolve(req.result || null);
-        req.onerror = () => resolve(null);
-      });
-      if (item && item.data) return item;
-    } catch {}
-  }
-
-  // Fallback to localStorage
-  try {
-    const raw = localStorage.getItem(key);
-    if (raw) return JSON.parse(raw);
-  } catch {}
-
-  return null;
+export function removeUiPreference(key: string): void {
+  localPrefs.remove(key);
 }
 
 /**
- * Delete draft from both IndexedDB and localStorage
+ * Store short-lived, non-sensitive per-tab data (e.g. dismissed announcement
+ * IDs). Cleared automatically when the tab/session ends.
  */
-export async function deleteOfflineDraft(key: string): Promise<void> {
-  try {
-    localStorage.removeItem(key);
-  } catch {}
-
-  const db = await openDB();
-  if (!db) return;
-
-  try {
-    const tx = db.transaction(DRAFTS_STORE, "readwrite");
-    const store = tx.objectStore(DRAFTS_STORE);
-    store.delete(key);
-  } catch {}
+export function setSessionData(key: string, value: unknown): boolean {
+  return sessionPrefs.set(key, value as unknown as Record<string, unknown>);
 }
 
 /**
- * Queue an evaluation for sync when connection resumes
+ * Read short-lived per-tab data from sessionStorage.
  */
-export async function queueOfflineSubmission(item: PendingEvaluationItem): Promise<void> {
-  const db = await openDB();
-  if (!db) {
-    try {
-      const list = JSON.parse(localStorage.getItem("ivc_offline_queue") || "[]");
-      list.push(item);
-      localStorage.setItem("ivc_offline_queue", JSON.stringify(list));
-    } catch {}
-    return;
-  }
-
-  try {
-    const tx = db.transaction(QUEUE_STORE, "readwrite");
-    const store = tx.objectStore(QUEUE_STORE);
-    store.put(item);
-  } catch {}
+export function getSessionData<T = unknown>(key: string): T | null {
+  return sessionPrefs.get(key) as T | null;
 }
 
 /**
- * Retrieve all pending offline evaluations
+ * Remove short-lived per-tab data.
  */
-export async function getQueuedSubmissions(): Promise<PendingEvaluationItem[]> {
-  const db = await openDB();
-  if (db) {
-    try {
-      return await new Promise<PendingEvaluationItem[]>((resolve) => {
-        const tx = db.transaction(QUEUE_STORE, "readonly");
-        const store = tx.objectStore(QUEUE_STORE);
-        const req = store.getAll();
-        req.onsuccess = () => resolve(req.result || []);
-        req.onerror = () => resolve([]);
-      });
-    } catch {}
-  }
-
-  try {
-    return JSON.parse(localStorage.getItem("ivc_offline_queue") || "[]");
-  } catch {
-    return [];
-  }
+export function removeSessionData(key: string): void {
+  sessionPrefs.remove(key);
 }
 
 /**
- * Remove queued item after successful cloud synchronization
+ * Clear all non-sensitive app-owned browser storage (called on logout).
+ * Does not touch sensitive server-side data.
  */
-export async function removeQueuedSubmission(id: string): Promise<void> {
-  const db = await openDB();
-  if (db) {
-    try {
-      const tx = db.transaction(QUEUE_STORE, "readwrite");
-      const store = tx.objectStore(QUEUE_STORE);
-      store.delete(id);
-    } catch {}
-  }
+export function clearNonSensitiveStorage(): void {
+  localPrefs.clear();
+  sessionPrefs.clear();
+}
 
-  try {
-    const list: PendingEvaluationItem[] = JSON.parse(localStorage.getItem("ivc_offline_queue") || "[]");
-    const filtered = list.filter((i) => i.id !== id);
-    localStorage.setItem("ivc_offline_queue", JSON.stringify(filtered));
-  } catch {}
+/**
+ * Check whether browser storage is available.
+ */
+export function isBrowserStorageAvailable(): boolean {
+  return typeof window !== "undefined" && !!(
+    window.localStorage || window.sessionStorage
+  );
 }

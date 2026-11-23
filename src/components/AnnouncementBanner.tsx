@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   Bell,
   AlertTriangle,
@@ -16,6 +16,10 @@ import {
 import type { AnnouncementItem } from "@/app/actions/announcements";
 import { getActiveAnnouncements } from "@/app/actions/announcements";
 import { createClient } from "@/lib/supabase/client";
+import { useRealtimeSync } from "@/lib/realtime/use-realtime-sync";
+import { fetchWithDedupe, invalidate } from "@/lib/data/request-dedup";
+import { publicAnnouncementsKey } from "@/lib/cache/cache-keys";
+import { getPolicy, ttlFor } from "@/lib/cache/cache-policy";
 
 interface AnnouncementBannerProps {
   announcements?: AnnouncementItem[];
@@ -23,6 +27,10 @@ interface AnnouncementBannerProps {
   audience?: "all" | "teams" | "judges" | "ops" | "admin";
   showEmptyState?: boolean;
 }
+
+// Slow, configurable fallback poll used ONLY when Realtime is disconnected.
+// Defaults to the announcement cache TTL to avoid a request storm from every connected browser.
+const FALLBACK_POLL_INTERVAL_MS = 45_000;
 
 export default function AnnouncementBanner({
   announcements = [],
@@ -34,6 +42,9 @@ export default function AnnouncementBanner({
   const [isExpanded, setIsExpanded] = useState(false);
   const [dismissedIds, setDismissedIds] = useState<string[]>([]);
   const [isMounted, setIsMounted] = useState(false);
+
+  const itemsRef = useRef(items);
+  itemsRef.current = items;
 
   useEffect(() => {
     setIsMounted(true);
@@ -57,41 +68,43 @@ export default function AnnouncementBanner({
     } catch {}
   }, [audience]);
 
+  // Deduplicated fetch of active announcements for this audience.
   const refreshAnnouncements = useCallback(async () => {
     try {
-      const fresh = await getActiveAnnouncements(audience);
+      const policy = getPolicy("public:announcements");
+      const key = publicAnnouncementsKey(audience);
+      // Authorized fetch is not required for public announcements.
+      const fresh = await fetchWithDedupe<AnnouncementItem[]>(
+        key,
+        () => getActiveAnnouncements(audience),
+        {
+          staleTime: policy.ttlMs ?? 45_000,
+          retries: 2,
+          retryBaseMs: 1000,
+          maxEntryBytes: policy.maxEntryBytes,
+        }
+      );
       setItems(fresh);
     } catch (err) {
       console.warn("Failed to refresh announcements:", err);
     }
   }, [audience]);
 
-  // Subscribe to real-time broadcasts
-  useEffect(() => {
-    const supabase = createClient();
-    const channel = supabase
-      .channel(`announcements_realtime_${audience}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "announcements",
-        },
-        () => {
-          refreshAnnouncements();
-        }
-      )
-      .subscribe();
-
-    // Gentle polling fallback every 30s
-    const interval = setInterval(refreshAnnouncements, 30000);
-
-    return () => {
-      supabase.removeChannel(channel);
-      clearInterval(interval);
-    };
-  }, [audience, refreshAnnouncements]);
+  // Realtime subscription for instant updates. No 15s/30s polling loop:
+  // changes arrive via Supabase Realtime. A slow fallback poll runs only
+  // while Realtime is disconnected, and only while the tab is visible.
+  useRealtimeSync({
+    channelName: `announcements_realtime_${audience}`,
+    tables: ["announcements"],
+    onChange: () => {
+      void refreshAnnouncements();
+      invalidate(publicAnnouncementsKey(audience));
+    },
+    pollIntervalMs: FALLBACK_POLL_INTERVAL_MS,
+    pollEnabled: true,
+    focusRefresh: true,
+    throttleMs: 2_000,
+  });
 
   const handleDismiss = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();

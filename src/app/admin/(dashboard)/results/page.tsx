@@ -14,7 +14,7 @@ export default async function AdminResultsPage() {
       const [resData, teamsData, eventData] = await Promise.all([
         supabaseAdmin
           .from("event_results")
-          .select("*")
+          .select("id, team_id, team_name, rank, total_score, evaluations_count, average_score, award_title, is_published")
           .order("total_score", { ascending: false }),
         supabaseAdmin
           .from("teams")

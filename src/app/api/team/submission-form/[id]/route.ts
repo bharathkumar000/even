@@ -1,4 +1,4 @@
-import { createClient } from "@/lib/supabase/client";
+import { getAuthenticatedUser } from "@/lib/auth/session";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { NextResponse } from "next/server";
 
@@ -16,12 +16,11 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const supabase = await createClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-
-    if (authError || !user) {
+    const session = await getAuthenticatedUser();
+    if (!session.isAuthenticated || !session.user) {
       return NextResponse.json({ error: "Authentication required" }, { status: 401 });
     }
+    const user = session.user;
 
     const { id } = await params;
 
@@ -39,7 +38,7 @@ export async function GET(
     // Read the published project submission form (not the legacy submission_forms table)
     const { data: form, error: formError } = await supabaseAdmin
       .from("project_submission_forms")
-      .select("*")
+      .select("id, title, description, form_config, form_status, status, submission_state, opens_at, submission_open_at, submission_close_at, closes_at, timezone, round_id, created_at, updated_at")
       .eq("id", id)
       .eq("status", "published")
       .maybeSingle();

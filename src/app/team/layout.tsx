@@ -1,13 +1,13 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
-import { supabaseAdmin } from "@/lib/supabase/admin";
 import TeamSidebar from "@/components/team/Sidebar";
 import SessionSync from "@/components/auth/SessionSync";
 import { getTeamRegistrationByEmail } from "@/lib/googleSheet";
 import TeamMobileNav from "@/components/team/MobileNavDrawer";
 import { getAuthorizedPortalUrl } from "@/lib/auth/portal-route";
 import { isDeliverablesUnlocked } from "@/lib/event-schedule";
+import { getAuthenticatedUser } from "@/lib/auth/session";
+import { supabaseAdmin } from "@/lib/supabase/admin";
 
 export const dynamic = "force-dynamic";
 
@@ -27,44 +27,21 @@ export default async function TeamLayout({
 }: {
   children: React.ReactNode;
 }) {
-  let supabase;
-  let user;
-  try {
-    supabase = await createClient();
-    const auth = await supabase.auth.getUser();
-    user = auth.data?.user;
-  } catch (err) {
-    console.error("Failed to initialize Supabase client:", err);
+  // Single authenticated session lookup — getUser + profile in one call.
+  const session = await getAuthenticatedUser();
+
+  if (!session.isAuthenticated || !session.user) {
     redirect("/login");
   }
 
-  if (!user) {
-    redirect("/login");
-  }
-
-  let profile;
-  try {
-    const result = await supabaseAdmin
-      .from("profiles")
-      .select("role, full_name")
-      .eq("id", user.id)
-      .maybeSingle();
-    profile = result.data;
-  } catch (err) {
-    console.error("Failed to fetch profile:", err);
-    profile = null;
-  }
-
-  const userRole =
-    profile?.role ||
-    (user.user_metadata?.role as string | undefined) ||
-    (user.app_metadata?.role as string | undefined);
+  const user = session.user;
+  const userRole = session.profile?.role;
 
   const isAuthorized =
     userRole === "participant" || userRole === "leader" || userRole === "admin";
 
   if (!isAuthorized) {
-    const authorizedUrl = getAuthorizedPortalUrl(userRole);
+    const authorizedUrl = userRole ? getAuthorizedPortalUrl(userRole) : "/login";
     redirect(`${authorizedUrl}?access_denied=1&portal=team`);
   }
 

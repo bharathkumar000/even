@@ -8,6 +8,7 @@ import EvaluateClientView, {
   CriterionDetail,
   ExistingEvaluationDetail,
 } from "./evaluate-client";
+import { getAuthenticatedUser } from "@/lib/auth/session";
 
 export const dynamic = "force-dynamic";
 
@@ -51,10 +52,9 @@ export default async function EvaluateTeamPage({
   // Get the authenticated judge's user ID for evaluation isolation
   let currentJudgeId: string | null = null;
   try {
-    const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-    if (user?.id) {
-      currentJudgeId = user.id;
+    const session = await getAuthenticatedUser();
+    if (session.isAuthenticated && session.user) {
+      currentJudgeId = session.user.id;
     }
   } catch {
     // Auth errors are non-fatal here; evaluation will be empty if unauthenticated
@@ -63,10 +63,14 @@ export default async function EvaluateTeamPage({
   try {
     // 1. Fetch team, submission, and judge-specific assignment in parallel
     const [teamRes, subRes, assignmentRes] = await Promise.all([
-      supabaseAdmin.from("teams").select("*").eq("id", teamId).single(),
+      supabaseAdmin
+        .from("teams")
+        .select("id, name, code, track, leader_name, status")
+        .eq("id", teamId)
+        .single(),
       supabaseAdmin
         .from("team_submissions")
-        .select("*")
+        .select("id, team_id, form_id, submission_state, answers, file_references, submitted_by, submitted_at, created_at, updated_at")
         .eq("team_id", teamId)
         .maybeSingle(),
       currentJudgeId
@@ -92,7 +96,7 @@ export default async function EvaluateTeamPage({
     if (queryRoundId && uuidRegex.test(queryRoundId)) {
       const { data: qRound } = await supabaseAdmin
         .from("evaluation_rounds")
-        .select("*")
+        .select("id, title, status, sequence_order, event_id")
         .eq("id", queryRoundId)
         .maybeSingle();
       if (qRound) targetRound = qRound;
@@ -101,7 +105,7 @@ export default async function EvaluateTeamPage({
     if (!targetRound && assignmentRes?.data?.round_id) {
       const { data: aRound } = await supabaseAdmin
         .from("evaluation_rounds")
-        .select("*")
+        .select("id, title, status, sequence_order, event_id")
         .eq("id", assignmentRes.data.round_id)
         .maybeSingle();
       if (aRound) targetRound = aRound;
@@ -110,7 +114,7 @@ export default async function EvaluateTeamPage({
     if (!targetRound) {
       const { data: openRound } = await supabaseAdmin
         .from("evaluation_rounds")
-        .select("*")
+        .select("id, title, status, sequence_order, event_id")
         .in("status", ["open", "reopened"])
         .order("sequence_order", { ascending: true })
         .limit(1)
@@ -121,7 +125,7 @@ export default async function EvaluateTeamPage({
     if (!targetRound) {
       const { data: fallbackRound } = await supabaseAdmin
         .from("evaluation_rounds")
-        .select("*")
+        .select("id, title, status, sequence_order, event_id")
         .order("sequence_order", { ascending: true })
         .limit(1)
         .maybeSingle();
@@ -133,7 +137,7 @@ export default async function EvaluateTeamPage({
 
       let evalQuery = supabaseAdmin
         .from("evaluations")
-        .select("*")
+        .select("id, round_id, team_id, judge_id, status, total_score, scores_breakdown, feedback, created_at, updated_at")
         .eq("round_id", targetRound.id)
         .eq("team_id", teamId);
 
@@ -144,7 +148,7 @@ export default async function EvaluateTeamPage({
       const [critRes, evalRes] = await Promise.all([
         supabaseAdmin
           .from("evaluation_criteria")
-          .select("*")
+          .select("id, round_id, title, description, max_marks, weightage, is_required")
           .eq("round_id", targetRound.id)
           .order("created_at", { ascending: true }),
         evalQuery.maybeSingle(),

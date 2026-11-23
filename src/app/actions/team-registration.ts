@@ -3,6 +3,7 @@
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
+import { getAuthenticatedUser } from "@/lib/auth/session";
 import { generateQrSignature } from "@/lib/qr-signature";
 import {
   syncRegistrationToGoogleSheets,
@@ -67,11 +68,11 @@ function generateSecurePassword(): string {
 
 /** Helper: Verify admin authorization */
 async function requireAdminUser() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) {
+  const session = await getAuthenticatedUser();
+  if (!session.isAuthenticated || !session.user) {
     throw new Error("Unauthorized. Please log in as an administrator.");
   }
+  const user = session.user;
 
   const { data: profile } = await supabaseAdmin
     .from("profiles")
@@ -79,10 +80,7 @@ async function requireAdminUser() {
     .eq("id", user.id)
     .maybeSingle();
 
-  const role =
-    profile?.role ||
-    (user.user_metadata?.role as string | undefined) ||
-    (user.app_metadata?.role as string | undefined);
+  const role = profile?.role;
 
   if (role !== "admin") {
     throw new Error("Forbidden: Administrator privileges required.");

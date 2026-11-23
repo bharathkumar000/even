@@ -1,36 +1,36 @@
 import "server-only";
-import { createClient } from "@/lib/supabase/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
+import { getAuthenticatedUser } from "@/lib/auth/session";
+import { validateUuid } from "@/lib/auth/uuid";
 
 export async function requireActiveJudgeForTeam(teamId: string, roundId?: string) {
-  const supabase = await createClient();
-
-  // Use getUser() for secure server-side identity verification.
-  const { data: { user }, error } = await supabase.auth.getUser();
-  if (error || !user) {
-    throw new Error("Unauthorized: Authentication required");
+  // Validate teamId is a proper UUID before any database query.
+  const validTeamId = validateUuid(teamId, "team_id");
+  if (!validTeamId) {
+    throw new Error("FORBIDDEN: Invalid team ID");
   }
+
+  // Validate roundId if provided.
+  const validRoundId = roundId ? validateUuid(roundId, "round_id") : null;
+  if (roundId && !validRoundId) {
+    throw new Error("FORBIDDEN: Invalid round ID");
+  }
+
+  // Single authenticated session lookup — getUser + profile in one call.
+  const session = await getAuthenticatedUser();
+  if (!session.isAuthenticated || !session.user) {
+    throw new Error("UNAUTHENTICATED: Authentication required");
+  }
+
+  const user = session.user;
+  const profile = session.profile;
 
   // profiles.role is the canonical source of truth for user roles.
   // Never trust auth metadata (user_metadata.role, app_metadata.role).
-  let profile: { role?: string } | null = null;
-  try {
-    const { data: profileData } = await supabaseAdmin
-      .from("profiles")
-      .select("role")
-      .eq("id", user.id)
-      .maybeSingle();
-    profile = profileData;
-  } catch (err) {
-    throw new Error(
-      "Failed to verify judge privileges. Please contact support."
-    );
-  }
-
   const isJudge = profile?.role === "judge" || profile?.role === "admin";
 
   if (!isJudge) {
-    throw new Error("Forbidden: Judge role required");
+    throw new Error("FORBIDDEN: Judge role required");
   }
 
   // Admins can evaluate any team; judges must be assigned to this team for this round.
@@ -39,19 +39,19 @@ export async function requireActiveJudgeForTeam(teamId: string, roundId?: string
       .from("judge_assignments")
       .select("id, round_id")
       .eq("judge_id", user.id)
-      .eq("team_id", teamId);
+      .eq("team_id", validTeamId);
 
-    if (roundId) {
-      jaQuery = jaQuery.eq("round_id", roundId);
+    if (validRoundId) {
+      jaQuery = jaQuery.eq("round_id", validRoundId);
     }
 
     const { data: assignment, error: assignError } = await jaQuery.maybeSingle();
 
     if (assignError || !assignment) {
-      const detail = roundId
-        ? `You are not assigned to evaluate team ${teamId} for round ${roundId}.`
+      const detail = validRoundId
+        ? `You are not assigned to evaluate team ${validTeamId} for round ${validRoundId}.`
         : "You are not assigned to evaluate this team.";
-      throw new Error(`Forbidden: ${detail}`);
+      throw new Error(`FORBIDDEN: ${detail}`);
     }
   }
 
@@ -59,33 +59,19 @@ export async function requireActiveJudgeForTeam(teamId: string, roundId?: string
 }
 
 export async function requireJudge() {
-  const supabase = await createClient();
-
-  // Use getUser() for secure server-side identity verification.
-  const { data: { user }, error } = await supabase.auth.getUser();
-  if (error || !user) {
-    throw new Error("Unauthorized: Authentication required");
+  // Single authenticated session lookup — getUser + profile in one call.
+  const session = await getAuthenticatedUser();
+  if (!session.isAuthenticated || !session.user) {
+    throw new Error("UNAUTHENTICATED: Authentication required");
   }
+
+  const user = session.user;
+  const profile = session.profile;
 
   // profiles.role is the canonical source of truth for user roles.
   // Never trust auth metadata (user_metadata.role, app_metadata.role).
-  let profile: { role?: string } | null = null;
-  try {
-    const { data: profileData } = await supabaseAdmin
-      .from("profiles")
-      .select("role")
-      .eq("id", user.id)
-      .maybeSingle();
-    profile = profileData;
-  } catch (err) {
-    // Profile query error is distinct from authentication failure.
-    throw new Error(
-      "Failed to verify judge privileges. Please contact support."
-    );
-  }
-
   if (profile?.role !== "judge" && profile?.role !== "admin") {
-    throw new Error("Forbidden: Judge role required");
+    throw new Error("FORBIDDEN: Judge role required");
   }
 
   return { user, profile };

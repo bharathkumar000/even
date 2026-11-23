@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { LogOut } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { clearCache } from "@/lib/data/request-dedup";
+import { clearNonSensitiveStorage } from "@/lib/offline-storage";
 
 interface SignOutButtonProps {
   className?: string;
@@ -27,6 +29,10 @@ export default function SignOutButton({
     } catch (err) {
       console.warn("Sign out notice:", err);
     } finally {
+      // Clear all client-side caches and non-sensitive persistent storage
+      // so no private data survives a sign-out on a shared computer.
+      try { clearCache(); } catch {}
+      try { clearNonSensitiveStorage(); } catch {}
       // Force hard navigation to login page to wipe memory and reset all router boundaries
       setLoading(false);
       window.location.href = "/login";

@@ -90,13 +90,36 @@ export default function RegistrationsClientView({
     setRegistrations(initialRegistrations);
   }, [initialRegistrations]);
 
-  // Periodic polling every 8 seconds to automatically show newly registered teams
+  // Controlled fallback poll (60s) only while tab is visible.
+  // Replaces the previous 8-second aggressive polling loop.
   useEffect(() => {
-    const timer = setInterval(() => {
-      fetchLatestRegistrations(false);
-    }, 8000);
-    return () => clearInterval(timer);
-  }, []);
+    let regIntervalId: ReturnType<typeof setInterval> | null = null;
+    const handleRegVisibility = () => {
+      const visible =
+        typeof document !== "undefined" &&
+        document.visibilityState === "visible";
+      if (visible) {
+        if (!regIntervalId) {
+          regIntervalId = setInterval(() => {
+            void fetchLatestRegistrations(false);
+          }, 60_000);
+        }
+      } else if (regIntervalId) {
+        clearInterval(regIntervalId);
+        regIntervalId = null;
+      }
+    };
+    handleRegVisibility();
+    if (typeof document !== "undefined") {
+      document.addEventListener("visibilitychange", handleRegVisibility);
+    }
+    return () => {
+      if (regIntervalId) clearInterval(regIntervalId);
+      if (typeof document !== "undefined") {
+        document.removeEventListener("visibilitychange", handleRegVisibility);
+      }
+    };
+  }, [fetchLatestRegistrations]);
 
   // Generate local QR code base64 URL whenever modal opens
   useEffect(() => {

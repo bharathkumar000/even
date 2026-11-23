@@ -229,7 +229,7 @@ export async function getResultsData() {
   const fetchResults = async () => {
     const { data } = await supabaseAdmin
       .from("event_results")
-      .select("*")
+      .select("id, team_id, team_name, rank, total_score, average_score, evaluations_count, is_published, is_locked, created_at")
       .order("total_score", { ascending: false });
     return (data || []) as any[];
   };
@@ -274,7 +274,7 @@ export async function getComprehensiveResultsCsv(eventId?: string): Promise<Resu
     // 2. Query event_results
     const { data: results, error: resError } = await supabaseAdmin
       .from("event_results")
-      .select("*")
+      .select("id, team_id, team_name, rank, total_score, average_score, evaluations_count, is_published, is_locked, created_at")
       .eq("event_id", targetEventId)
       .order("average_score", { ascending: false });
 

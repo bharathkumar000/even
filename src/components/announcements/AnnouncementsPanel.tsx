@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { Bell, X, ExternalLink, Paperclip, Calendar, AlertTriangle, Info, AlertCircle, FileText, Star } from "lucide-react";
 import { format } from "date-fns";
+import { createClient } from "@/lib/supabase/client";
 
 export type AnnouncementCategory = "general" | "important" | "deadline" | "schedule" | "emergency";
 export type AnnouncementPriority = "normal" | "high" | "urgent";
@@ -62,7 +63,7 @@ export function AnnouncementsPanel({
   const [isOpen, setIsOpen] = useState(false);
   const [selectedAnnouncement, setSelectedAnnouncement] = useState<any | null>(null);
 
-  const fetchAnnouncements = async () => {
+  const fetchAnnouncements = useCallback(async () => {
     try {
       // Try RPC first
       const res = await fetch(`/api/announcements?audience=${audience}&limit=${maxItems}`);
@@ -82,14 +83,50 @@ export function AnnouncementsPanel({
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [audience, maxItems]);
 
   useEffect(() => {
     fetchAnnouncements();
-    // Refresh every 30 seconds
-    const interval = setInterval(fetchAnnouncements, 30000);
-    return () => clearInterval(interval);
-  }, [audience, maxItems]);
+
+    const supabase = createClient();
+    const channel = supabase
+      .channel(`announcements_panel_${audience}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "announcements" },
+        () => {
+          void fetchAnnouncements();
+        }
+      )
+      .subscribe();
+
+    // Slow fallback poll only while tab visible; cleared on unmount.
+    let intervalId: ReturnType<typeof setInterval> | null = null;
+    const handleVisibility = () => {
+      if (typeof document !== "undefined" && document.visibilityState === "visible") {
+        if (!intervalId) {
+          intervalId = setInterval(fetchAnnouncements, 5 * 60 * 1000);
+        }
+      } else {
+        if (intervalId) {
+          clearInterval(intervalId);
+          intervalId = null;
+        }
+      }
+    };
+    handleVisibility();
+    if (typeof document !== "undefined") {
+      document.addEventListener("visibilitychange", handleVisibility);
+    }
+
+    return () => {
+      supabase.removeChannel(channel);
+      if (intervalId) clearInterval(intervalId);
+      if (typeof document !== "undefined") {
+        document.removeEventListener("visibilitychange", handleVisibility);
+      }
+    };
+  }, [fetchAnnouncements, audience, maxItems]);
 
   const unreadCount = announcements.filter((a) => !a.read_at).length;
 

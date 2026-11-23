@@ -1,11 +1,11 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import AdminSidebar from "@/components/admin/Sidebar";
 import SessionSync from "@/components/auth/SessionSync";
 import { getAuthorizedPortalUrl } from "@/lib/auth/portal-route";
 import { getCsrfToken } from "@/lib/csrf-server";
+import { getAuthenticatedUser } from "@/lib/auth/session";
 
 export const dynamic = "force-dynamic";
 
@@ -25,41 +25,20 @@ export default async function AdminSubmissionFormsLayout({
 }: {
   children: React.ReactNode;
 }) {
-  // 1. Verify basic Supabase Auth & Admin Profile Role
-  let user: any = null;
-  try {
-    const supabase = await createClient();
-    const { data, error } = await supabase.auth.getUser();
-    if (error || !data?.user) {
-      redirect("/login");
-    }
-    user = data.user;
-  } catch (err: any) {
-    if (err?.message === "NEXT_REDIRECT" || err?.digest?.includes("NEXT_REDIRECT")) {
-      throw err;
-    }
+  // Single authenticated session lookup — getUser + profile in one call.
+  const session = await getAuthenticatedUser();
+
+  if (!session.isAuthenticated || !session.user) {
     redirect("/login");
   }
 
-  // Canonical: Fetch profile role from database using the authenticated user's UUID.
-  let profile: { role?: string } | null = null;
-  try {
-    const { data } = await supabaseAdmin
-      .from("profiles")
-      .select("role")
-      .eq("id", user.id)
-      .maybeSingle();
-    profile = data;
-  } catch (err) {
-    throw new Error(
-      "Failed to verify admin privileges. Please contact support."
-    );
-  }
+  const user = session.user;
+  const profile = session.profile;
 
   const isAdmin = profile?.role === "admin";
 
   if (!isAdmin) {
-    const authorizedUrl = getAuthorizedPortalUrl(profile?.role);
+    const authorizedUrl = profile?.role ? getAuthorizedPortalUrl(profile.role) : "/login";
     redirect(`${authorizedUrl}?access_denied=1&portal=admin`);
   }
 

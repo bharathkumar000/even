@@ -1,5 +1,5 @@
 'use client';
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import Link from "next/link";
 import {
   ArrowRight,
@@ -13,6 +13,10 @@ import {
 } from "lucide-react";
 import { slugify } from "@/lib/utils";
 import AnnouncementBanner from "@/components/AnnouncementBanner";
+import { useCachedData } from "@/lib/cache/useCachedData";
+import { privateDashboardKey } from "@/lib/cache/cache-keys";
+import { getPolicy } from "@/lib/cache/cache-policy";
+import { getCachedJudgeDashboard } from "@/app/actions/cached-judge";
 
 interface AssignedTeam {
   id: string;
@@ -37,28 +41,66 @@ interface JudgeEvaluation {
 }
 
 interface Props {
-  allTeams: AssignedTeam[];
-  rounds: JudgeRound[];
-  evaluations: JudgeEvaluation[];
-  announcements: any[];
-  judgeAssignedTeamIds: string[];
-  isJudgeSpecific: boolean;
+  initialTeams: AssignedTeam[];
+  initialRounds: JudgeRound[];
+  initialEvaluations: JudgeEvaluation[];
+  initialAnnouncements: any[];
+  initialJudgeAssignedTeamIds: string[];
+  initialIsJudgeSpecific: boolean;
+  userId: string;
 }
 
 export default function JudgeDashboardClient({
-  allTeams,
-  rounds,
-  evaluations,
-  announcements,
-  judgeAssignedTeamIds,
-  isJudgeSpecific,
+  initialTeams,
+  initialRounds,
+  initialEvaluations,
+  initialAnnouncements,
+  initialJudgeAssignedTeamIds,
+  initialIsJudgeSpecific,
+  userId,
 }: Props) {
+  // ── Browser cache integration ──
+  // Use useCachedData so that browser refresh / re-navigation within the
+  // same session reuses freshly cached data instead of re-fetching from
+  // Supabase. Initial server props are used as fallback when cache is empty.
+  const { data: cached, isLoading: cacheLoading, refetch: cacheRefetch } =
+    useCachedData({
+      key: privateDashboardKey(userId, "judge"),
+      fetch: () => getCachedJudgeDashboard(),
+      policy: getPolicy("private:assignments"),
+      refetchOnMount: false,
+      bypassCache: false,
+    });
+
+  // Resolve effective data: cache takes precedence on refresh/re-navigate,
+  // initial server props are used on first load when cache is empty.
+  const cacheData = cached?.data;
+  const hasCache = !!cacheData && !cacheLoading;
+  const teams: AssignedTeam[] = hasCache
+    ? (cacheData.teams || [])
+    : initialTeams;
+  const rounds: JudgeRound[] = hasCache ? (cacheData.rounds || []) : initialRounds;
+  const evaluations: JudgeEvaluation[] = hasCache
+    ? (cacheData.evaluations || [])
+    : initialEvaluations;
+  const announcements: any[] = hasCache
+    ? (cacheData.announcements || [])
+    : initialAnnouncements;
+  const judgeAssignedTeamIds: string[] = hasCache
+    ? (cacheData.judgeAssignedTeamIds || [])
+    : initialJudgeAssignedTeamIds;
+  const isJudgeSpecific: boolean = hasCache
+    ? cacheData.isJudgeSpecific
+    : initialIsJudgeSpecific;
+
   const assignedTeams = isJudgeSpecific
-    ? allTeams.filter((t) => judgeAssignedTeamIds.includes(t.id))
-    : allTeams;
+    ? teams.filter((t) => judgeAssignedTeamIds.includes(t.id))
+    : teams;
 
   const [selectedRoundId, setSelectedRoundId] = useState<string>(
-    rounds.find((r) => r.status === "open" || r.status === "reopened")?.id || rounds[0]?.id || ""
+    rounds.find((r) => r.status === "open" || r.status === "reopened")?.id ||
+      rounds[0]?.id ||
+      ""
   );
 
   const selectedRound = useMemo(
@@ -67,18 +109,36 @@ export default function JudgeDashboardClient({
   );
 
   const getEvaluationStatus = (teamId: string, roundId?: string) => {
-    if (!roundId) return { label: "Pending", style: "bg-surface-color-light text-text-secondary border-border-color" };
-    const ev = evaluations.find((e) => e.team_id === teamId && e.round_id === roundId);
+    if (!roundId)
+      return {
+        label: "Pending",
+        style: "bg-surface-color-light text-text-secondary border-border-color",
+      };
+    const ev = evaluations.find(
+      (e) => e.team_id === teamId && e.round_id === roundId
+    );
     if (!ev) {
-      return { label: "Pending", style: "bg-accent-primary/10 text-accent-primary border-accent-primary/40" };
+      return {
+        label: "Pending",
+        style: "bg-accent-primary/10 text-accent-primary border-accent-primary/40",
+      };
     }
     if (ev.status === "submitted") {
-      return { label: "Submitted", style: "bg-status-success/10 text-status-success border-status-success/40" };
+      return {
+        label: "Submitted",
+        style: "bg-status-success/10 text-status-success border-status-success/40",
+      };
     }
     if (ev.status === "locked") {
-      return { label: "Locked", style: "bg-status-error/10 text-status-error border-status-error/40" };
+      return {
+        label: "Locked",
+        style: "bg-status-error/10 text-status-error border-status-error/40",
+      };
     }
-    return { label: "Draft", style: "bg-accent-secondary/10 text-accent-secondary border-accent-secondary/40" };
+    return {
+      label: "Draft",
+      style: "bg-accent-secondary/10 text-accent-secondary border-accent-secondary/40",
+    };
   };
 
   // Stats for selected round
@@ -106,7 +166,9 @@ export default function JudgeDashboardClient({
 
       {/* Round selector */}
       <div className="flex items-center gap-2 mb-4">
-        <label className="font-tech text-xs uppercase text-text-secondary">Round:</label>
+        <label className="font-tech text-xs uppercase text-text-secondary">
+          Round:
+        </label>
         <select
           value={selectedRoundId}
           onChange={(e) => setSelectedRoundId(e.target.value)}
@@ -125,56 +187,80 @@ export default function JudgeDashboardClient({
         {/* Total Allotted */}
         <div className="glass-panel p-4 border border-border-color bg-surface-color/60 flex flex-col justify-between rounded">
           <div className="flex items-center justify-between mb-2">
-            <span className="font-tech text-[10px] uppercase tracking-wider text-text-secondary font-bold">Total Allotted</span>
+            <span className="font-tech text-[10px] uppercase tracking-wider text-text-secondary font-bold">
+              Total Allotted
+            </span>
             <div className="p-2 rounded bg-accent-primary/10 border border-accent-primary/30 text-accent-primary">
               <Users size={16} />
             </div>
           </div>
           <div>
-            <p className="font-heading text-3xl text-text-primary uppercase m-0 font-bold">{assignedTeams.length}</p>
-            <p className="font-tech text-xs text-text-secondary mt-1 m-0">Assigned Teams</p>
+            <p className="font-heading text-3xl text-text-primary uppercase m-0 font-bold">
+              {assignedTeams.length}
+            </p>
+            <p className="font-tech text-xs text-text-secondary mt-1 m-0">
+              Assigned Teams
+            </p>
           </div>
         </div>
 
         {/* Evaluated */}
         <div className="glass-panel p-4 border border-status-success/40 bg-status-success/[0.04] flex flex-col justify-between rounded shadow-[0_0_15px_rgba(34,197,94,0.05)]">
           <div className="flex items-center justify-between mb-2">
-            <span className="font-tech text-[10px] uppercase tracking-wider text-status-success font-bold">Evaluated</span>
+            <span className="font-tech text-[10px] uppercase tracking-wider text-status-success font-bold">
+              Evaluated
+            </span>
             <div className="p-2 rounded bg-status-success/15 border border-status-success/40 text-status-success">
               <CheckCircle2 size={16} />
             </div>
           </div>
           <div>
-            <p className="font-heading text-3xl text-status-success uppercase m-0 font-bold">{stats.evaluated}</p>
-            <p className="font-tech text-xs text-text-secondary mt-1 m-0">Submitted &amp; Recorded</p>
+            <p className="font-heading text-3xl text-status-success uppercase m-0 font-bold">
+              {stats.evaluated}
+            </p>
+            <p className="font-tech text-xs text-text-secondary mt-1 m-0">
+              Submitted &amp; Recorded
+            </p>
           </div>
         </div>
 
         {/* Drafted */}
         <div className="glass-panel p-4 border border-accent-secondary/40 bg-accent-secondary/[0.04] flex flex-col justify-between rounded shadow-[0_0_15px_rgba(255,0,127,0.05)]">
           <div className="flex items-center justify-between mb-2">
-            <span className="font-tech text-[10px] uppercase tracking-wider text-accent-secondary font-bold">Drafted</span>
+            <span className="font-tech text-[10px] uppercase tracking-wider text-accent-secondary font-bold">
+              Drafted
+            </span>
             <div className="p-2 rounded bg-accent-secondary/15 border border-accent-secondary/40 text-accent-secondary">
               <Clock size={16} />
             </div>
           </div>
           <div>
-            <p className="font-heading text-3xl text-accent-secondary uppercase m-0 font-bold">{stats.drafted}</p>
-            <p className="font-tech text-xs text-text-secondary mt-1 m-0">Saved Drafts</p>
+            <p className="font-heading text-3xl text-accent-secondary uppercase m-0 font-bold">
+              {stats.drafted}
+            </p>
+            <p className="font-tech text-xs text-text-secondary mt-1 m-0">
+              Saved Drafts
+            </p>
           </div>
         </div>
 
         {/* Pending */}
         <div className="glass-panel p-4 border border-accent-tertiary/40 bg-accent-tertiary/[0.04] flex flex-col justify-between rounded shadow-[0_0_15px_rgba(255,200,0,0.05)]">
           <div className="flex items-center justify-between mb-2">
-            <span className="font-tech text-[10px] uppercase tracking-wider text-accent-tertiary font-bold">Pending</span>
+            <span className="font-tech text-[10px] uppercase tracking-wider text-accent-tertiary font-bold">
+              Pending
+            </span>
             <div className="p-2 rounded bg-accent-tertiary/15 border border-accent-tertiary/40 text-accent-tertiary">
               <AlertCircle size={16} />
             </div>
           </div>
           <div>
-            <p className="font-heading text-3xl text-accent-tertiary uppercase m-0 font-bold">{stats.pending}</p>
-            <p className="font-tech text-xs text-text-secondary mt-1 m-0">Awaiting Evaluation</p>
+            <p className="font-heading text-3xl text-accent-tertiary uppercase m-0 font-bold">
+              {stats.pending}
+            </p>
+            <p className="font-tech text-xs text-text-secondary mt-1 m-0">
+              Awaiting Evaluation
+            </p>
           </div>
         </div>
       </div>
@@ -182,18 +268,28 @@ export default function JudgeDashboardClient({
       {/* Team Cards Grid – show pending teams first */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {assignedTeams.length === 0 ? (
-          <div className="col-span-full glass-panel p-10 text-center text-text-secondary font-tech">No teams currently assigned for evaluation.</div>
+          <div className="col-span-full glass-panel p-10 text-center text-text-secondary font-tech">
+            No teams currently assigned for evaluation.
+          </div>
         ) : (
           assignedTeams.map((team) => {
-            const statusInfo = getEvaluationStatus(team.id, selectedRound?.id);
+            const statusInfo = getEvaluationStatus(
+              team.id,
+              selectedRound?.id
+            );
             return (
-              <div key={team.id} className="glass-panel border border-border-color hover:border-accent-primary/50 transition-all p-6 flex flex-col justify-between">
+              <div
+                key={team.id}
+                className="glass-panel border border-border-color hover:border-accent-primary/50 transition-all p-6 flex flex-col justify-between"
+              >
                 <div>
                   <div className="flex items-center justify-between gap-2 mb-3">
                     <span className="font-tech text-[10px] text-accent-secondary font-bold uppercase tracking-wider">
                       {team.track || "GENERAL INNOVATION"}
                     </span>
-                    <span className={`font-tech text-[10px] font-bold px-2 py-0.5 border uppercase ${statusInfo.style}`}>
+                    <span
+                      className={`font-tech text-[10px] font-bold px-2 py-0.5 border uppercase ${statusInfo.style}`}
+                    >
                       {statusInfo.label}
                     </span>
                   </div>
@@ -209,7 +305,10 @@ export default function JudgeDashboardClient({
                     <FileCheck size={15} />
                     <span>Evaluation</span>
                   </div>
-                  <Link href={`/judge/evaluate/${team.name ? slugify(team.name) : team.id}${selectedRound?.id ? `?round=${selectedRound.id}` : ""}`} className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-accent-primary hover:bg-accent-primary/80 text-black font-tech font-bold uppercase text-xs transition-colors">
+                  <Link
+                    href={`/judge/evaluate/${team.name ? slugify(team.name) : team.id}${selectedRound?.id ? `?round=${selectedRound.id}` : ""}`}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-accent-primary hover:bg-accent-primary/80 text-black font-tech font-bold uppercase text-xs transition-colors"
+                  >
                     <span>Evaluate</span>
                     <ArrowRight size={14} />
                   </Link>

@@ -58,7 +58,6 @@ export default function SubmissionFormsClient({
       const updated = await publishProjectSubmissionForm(formId);
       setForms((prev) => prev.map((f) => (f.id === formId ? updated : f)));
       showNotification("success", "Submission form published live.");
-      router.refresh();
     } catch (err) {
       showNotification(
         "error",
@@ -75,7 +74,6 @@ export default function SubmissionFormsClient({
       const updated = await unpublishProjectSubmissionForm(formId);
       setForms((prev) => prev.map((f) => (f.id === formId ? updated : f)));
       showNotification("success", "Form reverted to draft (unpublished).");
-      router.refresh();
     } catch (err) {
       showNotification(
         "error",
@@ -92,7 +90,6 @@ export default function SubmissionFormsClient({
       const updated = await archiveProjectSubmissionForm(formId);
       setForms((prev) => prev.map((f) => (f.id === formId ? updated : f)));
       showNotification("success", "Form archived.");
-      router.refresh();
     } catch (err) {
       showNotification(
         "error",
@@ -110,7 +107,6 @@ export default function SubmissionFormsClient({
       setForms((prev) => prev.filter((f) => f.id !== formId));
       setConfirmDeleteId(null);
       showNotification("success", "Submission form permanently deleted.");
-      router.refresh();
     } catch (err) {
       showNotification(
         "error",

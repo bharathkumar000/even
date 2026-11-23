@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { clearCache } from "@/lib/data/request-dedup";
+import { clearNonSensitiveStorage } from "@/lib/offline-storage";
 import {
   Zap,
   Users,
@@ -108,6 +110,10 @@ export default function PortalQuickSwitcher({
     try {
       // Sign out current session first to ensure clean state
       await supabase.auth.signOut().catch(() => {});
+      // Clear client caches so the previous user's data cannot leak into the
+      // next user's session on the same browser.
+      try { clearCache(); } catch {}
+      try { clearNonSensitiveStorage(); } catch {}
 
       // Try primary email with password first
       const primaryEmail = account.email;

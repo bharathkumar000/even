@@ -24,7 +24,7 @@ export async function getAuditLogsData(): Promise<AuditLogItem[]> {
   const fetchLogs = async () => {
     const { data } = await supabaseAdmin
       .from("audit_logs")
-      .select("*")
+      .select("id, action, entity_type, entity_id, admin_id, details, created_at")
       .order("created_at", { ascending: false })
       .limit(100);
     return (data || []) as AuditLogItem[];

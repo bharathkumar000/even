@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
 import { Check, Loader2 } from "lucide-react";
 import { selectProblemStatement } from "@/app/actions/team-problem-statement-selection";
 import { withCsrfToken, CSRF_HEADER_NAME } from "@/lib/csrf-client";
@@ -19,7 +18,6 @@ export default function SelectStatementButton({
   disabled = false,
   isSelected = false,
 }: SelectStatementButtonProps) {
-  const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
@@ -35,7 +33,6 @@ export default function SelectStatementButton({
           return;
         }
         setSuccess(true);
-        router.refresh();
       } catch (err: unknown) {
         setError(
           err instanceof Error ? err.message : "Failed to select problem statement."

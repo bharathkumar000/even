@@ -1,4 +1,3 @@
-import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
 const PROTECTED_PREFIXES = [
@@ -33,22 +32,17 @@ export async function middleware(request: NextRequest) {
     });
   }
 
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-
-  if (!supabaseUrl || !supabaseAnonKey) {
-    throw new Error("Missing env var: NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY.");
-  }
-
-  // Determine if this is a protected portal path
-  const isProtectedPortal = PROTECTED_PREFIXES.some((p) => pathname.startsWith(p));
-
   const allCookies = request.cookies.getAll();
   const hasAuthCookie = allCookies.some(
     (c) => c.name.includes("-auth-token") || c.name.startsWith("sb-")
   );
 
-  // Immediate 0ms redirect for unauthenticated users accessing protected portals
+  // Determine if this is a protected portal path
+  const isProtectedPortal = PROTECTED_PREFIXES.some((p) => pathname.startsWith(p));
+
+  // Immediate redirect for unauthenticated users accessing protected portals.
+  // No Supabase getUser() call here — layout/server components verify identity.
+  // This prevents a round-trip to /auth/v1/user on every single request.
   if (isProtectedPortal && !hasAuthCookie) {
     return NextResponse.redirect(new URL("/login", request.url));
   }
@@ -56,50 +50,6 @@ export async function middleware(request: NextRequest) {
   // Handle direct /ops root path navigation cleanly
   if (pathname === "/ops") {
     return NextResponse.redirect(new URL("/ops/scanner", request.url));
-  }
-
-  // Refresh auth session only when session cookies exist, with a strict 3-second timeout
-  if (hasAuthCookie) {
-    try {
-      const supabase = createServerClient(supabaseUrl, supabaseAnonKey, {
-        cookies: {
-          getAll() {
-            return request.cookies.getAll();
-          },
-          setAll(cookiesToSet: Array<{ name: string; value: string; options: CookieOptions }>) {
-            cookiesToSet.forEach(({ name, value }) => {
-              request.cookies.set(name, value);
-            });
-            cookiesToSet.forEach(({ name, value, options }) => {
-              response.cookies.set(name, value, {
-                ...options,
-                httpOnly: true,
-                secure: process.env.NODE_ENV === "production",
-                sameSite: "lax",
-                path: "/",
-              });
-            });
-          },
-        },
-        global: {
-          fetch: (url: RequestInfo | URL, options?: RequestInit) => {
-            const timeoutSignal = AbortSignal.timeout(2500);
-            const signal = options?.signal
-              ? AbortSignal.any([options.signal, timeoutSignal])
-              : timeoutSignal;
-            return fetch(url, { ...options, signal });
-          },
-        },
-      });
-
-      // Quick non-blocking session touch
-      await Promise.race([
-        supabase.auth.getUser(),
-        new Promise((_, reject) => setTimeout(() => reject(new Error("Auth timeout")), 2500)),
-      ]);
-    } catch {
-      // Non-blocking: page layouts and server components verify authentication directly
-    }
   }
 
   // Port-specific isolation and auto-routing (Local Development only)

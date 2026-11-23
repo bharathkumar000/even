@@ -217,7 +217,7 @@ export async function getAnnouncementsForPortal(
 
     let query = supabaseAdmin
       .from("announcements")
-      .select("*")
+      .select("id, title, message, priority, priority_level, category, target_audience, target_audiences, status, is_active, is_pinned, pin_to_top, scheduled_at, published_at, expires_at, attachment_url, attachment_name, resource_links, attachments, created_at")
       .eq("is_active", true)
       .or("status.eq.published,status.is.null")
       .or(`expires_at.is.null,expires_at.gt.${nowIso}`);
@@ -243,7 +243,7 @@ export async function getAnnouncementsForPortal(
       console.warn("Retrying announcements query fallback:", error.message);
       const fallbackQuery = await supabaseAdmin
         .from("announcements")
-        .select("*")
+        .select("id, title, message, priority, priority_level, category, target_audience, target_audiences, status, is_active, is_pinned, pin_to_top, scheduled_at, published_at, expires_at, attachment_url, attachment_name, resource_links, attachments, created_at")
         .eq("is_active", true)
         .order("created_at", { ascending: false })
         .limit(limit);

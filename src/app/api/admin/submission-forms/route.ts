@@ -31,7 +31,7 @@ export async function GET() {
 
     const { data, error } = await supabaseAdmin
       .from("submission_forms")
-      .select("*")
+      .select("id, title, description, round_id, form_status, submission_state, timezone, allow_early_view, allow_draft_before_open, allow_edit_after_submit, allow_resubmission, resubmission_policy, auto_lock_at_deadline, allow_member_submit, max_marks, view_available_at, submission_open_at, submission_close_at, created_by, updated_by, created_at, updated_at")
       .order("created_at", { ascending: false });
 
     if (error) {

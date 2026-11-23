@@ -1,11 +1,11 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import OpsSidebar from "@/components/ops/Sidebar";
 import SessionSync from "@/components/auth/SessionSync";
 import OpsMobileNav from "@/components/ops/MobileNavDrawer";
 import { getAuthorizedPortalUrl } from "@/lib/auth/portal-route";
+import { getAuthenticatedUser } from "@/lib/auth/session";
 
 export const dynamic = "force-dynamic";
 
@@ -25,38 +25,15 @@ export default async function OpsLayout({
 }: {
   children: React.ReactNode;
 }) {
-  let supabase;
-  let user;
-  try {
-    supabase = await createClient();
-    const auth = await supabase.auth.getUser();
-    user = auth.data?.user;
-  } catch (err) {
-    console.error("Failed to initialize Supabase client:", err);
+  // Single authenticated session lookup — getUser + profile in one call.
+  const session = await getAuthenticatedUser();
+
+  if (!session.isAuthenticated || !session.user) {
     redirect("/login");
   }
 
-  if (!user) {
-    redirect("/login");
-  }
-
-  let profile;
-  try {
-    const result = await supabaseAdmin
-      .from("profiles")
-      .select("role, full_name")
-      .eq("id", user.id)
-      .maybeSingle();
-    profile = result.data;
-  } catch (err) {
-    console.error("Failed to fetch profile:", err);
-    profile = null;
-  }
-
-  const role =
-    profile?.role ||
-    (user.user_metadata?.role as string | undefined) ||
-    (user.app_metadata?.role as string | undefined);
+  const user = session.user;
+  const role = session.profile?.role;
 
   const isAuthorized =
     role === "staff" ||
@@ -65,7 +42,7 @@ export default async function OpsLayout({
     role === "spoc";
 
   if (!isAuthorized) {
-    const authorizedUrl = getAuthorizedPortalUrl(role);
+    const authorizedUrl = role ? getAuthorizedPortalUrl(role) : "/login";
     redirect(`${authorizedUrl}?access_denied=1&portal=ops`);
   }
 

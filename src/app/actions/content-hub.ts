@@ -1,6 +1,7 @@
 "use server";
 
 import { requireAdmin } from "@/lib/auth/admin";
+import { getAuthenticatedUser } from "@/lib/auth/session";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
@@ -223,15 +224,16 @@ export async function getContentForPortal(audience?: string, contentType?: strin
   timedOut?: boolean;
 }> {
   // Derive the authenticated user from the session — never trust a client-supplied audience
-  const supabase = await createClient();
-  const { data: { user }, error: authError } = await supabase.auth.getUser();
-  if (authError || !user) {
-    console.error("Failed to load content for portal:", authError?.message || "Unauthenticated");
+  const session = await getAuthenticatedUser();
+  if (!session.isAuthenticated || !session.user) {
+    console.error("Failed to load content for portal: Unauthenticated");
     return {
       items: [],
       error: "Authentication required.",
     };
   }
+  const user = session.user;
+  const supabase = await createClient();
 
   // Timeout wrapper to prevent upstream request timeout
   const RPC_TIMEOUT_MS = 8000;

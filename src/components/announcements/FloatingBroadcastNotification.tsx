@@ -86,6 +86,7 @@ export default function FloatingBroadcastNotification() {
   const [hasNewAlert, setHasNewAlert] = useState(false);
   const mounted = useSyncExternalStore(() => () => {}, () => true, () => false);
   const knownIdsRef = useRef<Set<string>>(new Set());
+  const lastFocusTime = useRef(0);
 
   // Determine current audience target from pathname
   const getAudienceForPortal = useCallback((): "all" | "teams" | "judges" | "ops" | "admin" => {
@@ -156,20 +157,42 @@ export default function FloatingBroadcastNotification() {
     }
   }, [audience, soundEnabled]);
 
-  // Initial load and periodic refresh
+  // Initial load and Realtime-driven updates. No 25s polling loop:
+  // changes arrive via Supabase Realtime. A slow fallback poll runs only
+  // while Realtime is disconnected and the tab is visible.
   useEffect(() => {
     if (!mounted) return;
-    const initialTimer = setTimeout(() => {
-      void fetchAnnouncements(false);
-    }, 0);
+    void fetchAnnouncements(false);
 
-    const interval = setInterval(() => {
-      void fetchAnnouncements(false);
-    }, 25000);
+    const handleVisibility = () => {
+      if (typeof document === "undefined" || document.visibilityState !== "visible") return;
+      // Single refresh when returning to the tab if it has been a while.
+      const now = Date.now();
+      if (now - lastFocusTime.current > 30_000) {
+        lastFocusTime.current = now;
+        void fetchAnnouncements(false);
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibility);
+    window.addEventListener("focus", handleVisibility);
+
+    // Slow recovery poll (~5 min) only while realtime is unhealthy and visible.
+    let recoveryTimer: ReturnType<typeof setTimeout> | null = null;
+    const scheduleRecovery = () => {
+      if (recoveryTimer) clearTimeout(recoveryTimer);
+      recoveryTimer = setTimeout(() => {
+        if (typeof document !== "undefined" && document.visibilityState === "visible") {
+          void fetchAnnouncements(false);
+        }
+        scheduleRecovery();
+      }, 5 * 60 * 1000);
+    };
+    scheduleRecovery();
 
     return () => {
-      clearTimeout(initialTimer);
-      clearInterval(interval);
+      if (recoveryTimer) clearTimeout(recoveryTimer);
+      document.removeEventListener("visibilitychange", handleVisibility);
+      window.removeEventListener("focus", handleVisibility);
     };
   }, [mounted, fetchAnnouncements]);
 

@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
 import { RefreshCw, Globe, Lock, ShieldCheck, CheckCircle2, AlertCircle, Download } from "lucide-react";
 import { triggerResultsEngine, getComprehensiveResultsCsv } from "@/app/actions/admin-results";
 import { withCsrfToken } from "@/lib/csrf-client";
@@ -29,7 +28,6 @@ export default function ResultsClientView({
   initialIsPublished: boolean;
   initialIsLocked: boolean;
 }) {
-  const router = useRouter();
   const [results, setResults] = useState(initialResults);
   const [isPublished, setIsPublished] = useState(initialIsPublished);
   const [isLocked, setIsLocked] = useState(initialIsLocked);
@@ -175,9 +173,7 @@ export default function ResultsClientView({
             : "Results recalculated across active evaluations."
         );
       }
-      router.refresh();
     } catch (err: unknown) {
-      setFeedback(err instanceof Error ? err.message : "Failed to trigger results action");
       setFeedbackType("error");
     } finally {
       setLoadingAction(null);

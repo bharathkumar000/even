@@ -1,15 +1,14 @@
-import { createClient } from "@/lib/supabase/client";
+import { getAuthenticatedUser } from "@/lib/auth/session";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { NextResponse } from "next/server";
 
 export async function POST(req: Request) {
   try {
-    const supabase = await createClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-
-    if (authError || !user) {
+    const session = await getAuthenticatedUser();
+    if (!session.isAuthenticated || !session.user) {
       return NextResponse.json({ error: "Authentication required" }, { status: 401 });
     }
+    const user = session.user;
 
     const body = await req.json();
     const { draftId, submissionId, questionId, fileName, filePath, mimeType, size } = body;

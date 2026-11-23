@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
@@ -10,18 +10,44 @@ interface TeamActivitySyncListenerProps {
 
 /**
  * Listens for real-time claim status changes and reverts for this specific team.
- * Automatically refreshes the team dashboard (distribution counters, member claims, progress bars)
- * instantly when an admin reverts or records an activity log in Supabase.
+ * All three channels (postgres_changes + two broadcast channels) funnel through
+ * a single throttled, single-flight, visibility-gated refresh handler.
+ *
+ * Removed: 60s polling interval, per-event router.refresh() on each channel,
+ * and visibilitychange/focus full-page refreshes.
  */
 export default function TeamActivitySyncListener({ teamId }: TeamActivitySyncListenerProps) {
   const router = useRouter();
+  const refreshRef = useRef(router.refresh);
+  refreshRef.current = router.refresh;
+
+  const lastChangeTime = useRef(0);
+  const isRefreshing = useRef(false);
+  const channelsRef = useRef<any[]>([]);
+
+  // Throttled, single-flight, visibility-gated refresh shared across channels.
+  const handleChange = useCallback(() => {
+    const now = Date.now();
+    if (now - lastChangeTime.current < 2_000) return;
+    lastChangeTime.current = now;
+
+    if (isRefreshing.current) return;
+    if (typeof document === "undefined" || document.visibilityState !== "visible") {
+      return;
+    }
+
+    isRefreshing.current = true;
+    try {
+      void refreshRef.current();
+    } finally {
+      isRefreshing.current = false;
+    }
+  }, []);
 
   useEffect(() => {
-    if (!teamId) return;
-
     const supabase = createClient();
 
-    // 1. Listen for PostgreSQL changes on event_activity_logs filtered to this team
+    // 1. Postgres changes on event_activity_logs for this team
     const pgChannel = supabase
       .channel(`team-dashboard-db-${teamId}`)
       .on(
@@ -32,67 +58,35 @@ export default function TeamActivitySyncListener({ teamId }: TeamActivitySyncLis
           table: "event_activity_logs",
           filter: `team_id=eq.${teamId}`,
         },
-        () => {
-          router.refresh();
-        }
+        handleChange
       )
       .subscribe();
 
-    // 2. Listen for broadcast revert/scan notifications targeted to this team
+    // 2. Broadcast revert/scan notifications on team-live channel
     const broadcastChannel = supabase
       .channel(`team-live-${teamId}`)
-      .on("broadcast", { event: "scan_action_reverted" }, (payload) => {
-        if (!payload?.payload?.team_id || payload.payload.team_id === teamId) {
-          router.refresh();
-        }
-      })
-      .on("broadcast", { event: "scan_action_recorded" }, (payload) => {
-        if (!payload?.payload?.team_id || payload.payload.team_id === teamId) {
-          router.refresh();
-        }
-      })
+      .on("broadcast", { event: "scan_action_reverted" }, handleChange)
+      .on("broadcast", { event: "scan_action_recorded" }, handleChange)
       .subscribe();
 
-    // Also listen to the QR live channel for this team
+    // 3. Broadcast revert/scan notifications on team-qr-live channel
     const qrBroadcastChannel = supabase
       .channel(`team-qr-live-${teamId}`)
-      .on("broadcast", { event: "scan_action_reverted" }, (payload) => {
-        if (!payload?.payload?.team_id || payload.payload.team_id === teamId) {
-          router.refresh();
-        }
-      })
-      .on("broadcast", { event: "scan_action_recorded" }, (payload) => {
-        if (!payload?.payload?.team_id || payload.payload.team_id === teamId) {
-          router.refresh();
-        }
-      })
+      .on("broadcast", { event: "scan_action_reverted" }, handleChange)
+      .on("broadcast", { event: "scan_action_recorded" }, handleChange)
       .subscribe();
 
-    // 3. Refresh on tab focus or phone unlock
-    const handleVisibility = () => {
-      if (typeof document !== "undefined" && document.visibilityState === "visible") {
-        router.refresh();
-      }
-    };
-    window.addEventListener("visibilitychange", handleVisibility);
-    window.addEventListener("focus", handleVisibility);
-
-    // 4. Gentle 60s fallback interval (replacing aggressive 5s polling) to prevent serverless overload
-    const pollInterval = setInterval(() => {
-      if (typeof document !== "undefined" && document.visibilityState === "visible") {
-        router.refresh();
-      }
-    }, 60000);
+    channelsRef.current = [pgChannel, broadcastChannel, qrBroadcastChannel];
 
     return () => {
-      supabase.removeChannel(pgChannel);
-      supabase.removeChannel(broadcastChannel);
-      supabase.removeChannel(qrBroadcastChannel);
-      window.removeEventListener("visibilitychange", handleVisibility);
-      window.removeEventListener("focus", handleVisibility);
-      clearInterval(pollInterval);
+      channelsRef.current.forEach((ch) => {
+        try {
+          supabase.removeChannel(ch);
+        } catch {}
+      });
+      channelsRef.current = [];
     };
-  }, [teamId, router]);
+  }, [teamId, handleChange]);
 
   return null;
 }

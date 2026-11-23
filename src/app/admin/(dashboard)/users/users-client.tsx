@@ -432,7 +432,6 @@ export default function UsersClientView({
       setSelectedRecordIndexes(new Set());
       setEditingIndex(null);
       setEditRowData(null);
-      router.refresh();
     } catch (err: unknown) {
       setImportError(err instanceof Error ? err.message : "Failed to import users.");
     } finally {
@@ -515,7 +514,6 @@ export default function UsersClientView({
           prev.map((u) => (u.id === userId ? { ...u, role: newRole } : u))
         );
         setNotification({ type: "success", message: res.message });
-        router.refresh();
       } catch (err: unknown) {
         setNotification({
           type: "error",
@@ -561,8 +559,7 @@ await createUser({
           phone: "",
           password: "",
           role: "participant",
-        });
-       router.refresh();
+         });
     } catch (err: unknown) {
       setNotification({
         type: "error",
@@ -588,7 +585,6 @@ await createUser({
           type: "success",
           message: `User ${target.email || target.full_name} deleted successfully.`,
         });
-        router.refresh();
       } catch (err: unknown) {
         setNotification({
           type: "error",
@@ -1009,7 +1005,6 @@ await createUser({
                                       type: "success",
                                       message: `Phone updated for ${user.full_name || user.email}`,
                                     });
-                                    router.refresh();
                                   } catch (err: unknown) {
                                     setNotification({
                                       type: "error",

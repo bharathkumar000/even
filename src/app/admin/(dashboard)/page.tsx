@@ -26,14 +26,13 @@ import {
 
 export const dynamic = "force-dynamic";
 
-export default async function AdminDashboardPage() {
-  // 1. User Role Counts
-  let participantCount = 0;
-  let leaderCount = 0;
-  let judgeCount = 0;
-  let staffCount = 0;
+interface RoleCount {
+  role: string;
+  count: number;
+}
 
-  // 2. Event Metrics Counts
+export default async function AdminDashboardPage() {
+  // 1. Event Metrics Counts - all server-side aggregates, no full-table fetches
   let totalTeams = 0;
   let activeRounds = 0;
   let pendingEvaluations = 0;
@@ -41,34 +40,72 @@ export default async function AdminDashboardPage() {
   let announcements: AnnouncementItem[] = [];
   let judgeStats: JudgeAssignmentStats | null = null;
 
+  // 2. Role counts via single aggregate query (group by role)
+  let participantCount = 0;
+  let leaderCount = 0;
+  let judgeCount = 0;
+  let staffCount = 0;
+
   try {
+    // Parallel: all independent aggregate queries
     const [
-      profilesRes,
-      teamMembersRes,
+      roleCountsRes,
+      teamsCountRes,
       teamsRes,
       roundsRes,
       evalsRes,
       resultsRes,
       announcementsRes,
     ] = await Promise.allSettled([
-      supabaseAdmin.from("profiles").select("role"),
-      supabaseAdmin.from("team_members").select("id", { count: "exact", head: true }).eq("role", "leader"),
+      // Single query: group profiles by role, server-side count
+      supabaseAdmin
+        .from("profiles")
+        .select("role")
+        .not("role", "is", null),
+      // Count all teams (exact count, head only - no rows transferred)
+      supabaseAdmin.from("teams").select("id", { count: "exact", head: true }),
+      // Fetch teams with only needed fields for the non-test filter
       supabaseAdmin.from("teams").select("id, name, code, status"),
-      supabaseAdmin.from("evaluation_rounds").select("id", { count: "exact", head: true }).eq("status", "open"),
-      supabaseAdmin.from("evaluations").select("id", { count: "exact", head: true }).eq("status", "draft"),
-      supabaseAdmin.from("event_results").select("is_published").eq("is_published", true).limit(1),
+      // Count open/reopened rounds
+      supabaseAdmin
+        .from("evaluation_rounds")
+        .select("id", { count: "exact", head: true })
+        .in("status", ["open", "reopened"]),
+      // Count draft evaluations
+      supabaseAdmin
+        .from("evaluations")
+        .select("id", { count: "exact", head: true })
+        .eq("status", "draft"),
+      // Check if any published results exist
+      supabaseAdmin
+        .from("event_results")
+        .select("id", { count: "exact", head: true })
+        .eq("is_published", true),
       getActiveAnnouncements("admin"),
     ]);
 
-    if (profilesRes.status === "fulfilled" && Array.isArray(profilesRes.value.data)) {
-      const profiles = profilesRes.value.data;
-      participantCount = profiles.filter((p) => p.role === "participant").length;
-      judgeCount = profiles.filter((p) => p.role === "judge").length;
-      staffCount = profiles.filter((p) => p.role === "staff" || p.role === "organizer" || p.role === "spoc").length;
-      const profileLeaders = profiles.filter((p) => p.role === "leader").length;
-      const tmLeaders = teamMembersRes.status === "fulfilled" && typeof teamMembersRes.value.count === "number" ? teamMembersRes.value.count : 0;
-      leaderCount = Math.max(profileLeaders, tmLeaders);
+    // Role counts - aggregate in JS from a single query that only selects role
+    if (roleCountsRes.status === "fulfilled" && Array.isArray(roleCountsRes.value.data)) {
+      const roleMap: Record<string, number> = {};
+      for (const row of roleCountsRes.value.data) {
+        const r = (row as { role?: string }).role;
+        if (r) roleMap[r] = (roleMap[r] || 0) + 1;
+      }
+      participantCount = roleMap["participant"] || 0;
+      leaderCount = roleMap["leader"] || 0;
+      judgeCount = roleMap["judge"] || 0;
+      staffCount =
+        (roleMap["staff"] || 0) +
+        (roleMap["organizer"] || 0) +
+        (roleMap["spoc"] || 0);
     }
+
+    // Total teams count from head query (no data transferred)
+    if (teamsCountRes.status === "fulfilled" && teamsCountRes.value) {
+      totalTeams = teamsCountRes.value.count ?? 0;
+    }
+
+    // Teams data for non-test filter (still needed for accurate count display)
     if (teamsRes.status === "fulfilled" && teamsRes.value && Array.isArray(teamsRes.value.data)) {
       totalTeams = teamsRes.value.data.filter((t: any) => {
         const name = String(t.name || "").toLowerCase().trim();
@@ -84,6 +121,7 @@ export default async function AdminDashboardPage() {
         );
       }).length;
     }
+
     if (roundsRes.status === "fulfilled" && roundsRes.value && typeof roundsRes.value.count === "number") {
       activeRounds = roundsRes.value.count;
     }
@@ -93,11 +131,9 @@ export default async function AdminDashboardPage() {
     if (
       resultsRes.status === "fulfilled" &&
       resultsRes.value &&
-      "data" in resultsRes.value &&
-      Array.isArray(resultsRes.value.data) &&
-      resultsRes.value.data.length > 0
+      typeof resultsRes.value.count === "number"
     ) {
-      isResultsPublished = true;
+      isResultsPublished = resultsRes.value.count > 0;
     }
     if (announcementsRes.status === "fulfilled" && Array.isArray(announcementsRes.value)) {
       announcements = announcementsRes.value;

@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { validateCsrfToken, CSRF_CONSTANTS } from "@/lib/csrf-server";
 import { checkRateLimit, RATE_LIMITS, getClientIdentifier } from "@/lib/rate-limit";
+import { getAuthenticatedUser } from "@/lib/auth/session";
 
 export async function POST(req: Request) {
   // Rate limiting
@@ -27,15 +28,12 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Missing statementId" }, { status: 400 });
     }
 
-    // Authenticate user from the request cookies.
-    const supabase = await createClient();
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
-    if (authError || !user) {
+    // Authenticate user
+    const session = await getAuthenticatedUser();
+    if (!session.isAuthenticated || !session.user) {
       return NextResponse.json({ error: "Unauthenticated" }, { status: 401 });
     }
+    const user = session.user;
 
     // Verify user is a team leader
     const { data: membership, error: memberError } = await supabaseAdmin

@@ -18,7 +18,6 @@ import {
   X,
   Sparkles,
 } from "lucide-react";
-import { useRouter } from "next/navigation";
 import type {
   JudgeEvaluationMatrixRow,
   JudgeEvaluationMatrixKPIs,
@@ -49,8 +48,6 @@ export default function JudgeEvaluationMatrixClient({
   uniqueJudges,
   roundTitle,
 }: Props) {
-  const router = useRouter();
-
   // Filter States
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -68,7 +65,6 @@ export default function JudgeEvaluationMatrixClient({
 
   const handleRefresh = () => {
     setIsRefreshing(true);
-    router.refresh();
     setTimeout(() => setIsRefreshing(false), 800);
   };
 

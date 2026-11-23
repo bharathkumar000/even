@@ -178,15 +178,36 @@ export default function AuditLogsClientView({
       })
       .subscribe();
 
-    // Gentle polling interval every 8 seconds
-    const interval = setInterval(() => {
-      void fetchOperationsLogs(true, page);
-    }, 8000);
+    // Slow fallback poll (60s) only while tab is visible. Realtime is the
+    // primary update mechanism; this prevents a request storm from idle tabs.
+    let intervalId: ReturnType<typeof setInterval> | null = null;
+    const handleVisibility = () => {
+      const visible =
+        typeof document !== "undefined" &&
+        document.visibilityState === "visible";
+      if (visible) {
+        if (!intervalId) {
+          intervalId = setInterval(() => {
+            void fetchOperationsLogs(true, page);
+          }, 60_000);
+        }
+      } else if (intervalId) {
+        clearInterval(intervalId);
+        intervalId = null;
+      }
+    };
+    handleVisibility();
+    if (typeof document !== "undefined") {
+      document.addEventListener("visibilitychange", handleVisibility);
+    }
 
     return () => {
       mountedRef.current = false;
       supabase.removeChannel(channel);
-      clearInterval(interval);
+      if (intervalId) clearInterval(intervalId);
+      if (typeof document !== "undefined") {
+        document.removeEventListener("visibilitychange", handleVisibility);
+      }
     };
   }, [fetchOperationsLogs, page]);
 

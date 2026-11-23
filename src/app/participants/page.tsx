@@ -1,23 +1,15 @@
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
-import { getActiveAnnouncements } from "@/app/actions/announcements";
+import { getCachedPublicAnnouncements } from "@/app/actions/cached-public";
 import AnnouncementBanner from "@/components/AnnouncementBanner";
 import ParticipantsPortal from "./participants-client";
+import { getAuthenticatedUser } from "@/lib/auth/session";
 
 export const dynamic = "force-dynamic";
 
 export default async function ParticipantsPage() {
-  let supabase;
-  let user;
-  try {
-    supabase = await createClient();
-    const auth = await supabase.auth.getUser();
-    user = auth.data?.user;
-  } catch (err) {
-    console.error("Failed to initialize Supabase client:", err);
-    redirect("/login");
-  }
+  const session = await getAuthenticatedUser();
+  const user = session.user;
 
   if (!user) {
     redirect("/login");
@@ -42,7 +34,8 @@ export default async function ParticipantsPage() {
 
   let announcements: any[] = [];
   try {
-    announcements = await getActiveAnnouncements();
+    const result = await getCachedPublicAnnouncements();
+    announcements = result.data || [];
   } catch (err) {
     console.error("Failed to fetch announcements:", err);
   }

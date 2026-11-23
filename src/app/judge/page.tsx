@@ -1,5 +1,4 @@
 import { supabaseAdmin } from "@/lib/supabase/admin";
-import { createClient } from "@/lib/supabase/server";
 import Link from "next/link";
 import {
   ArrowRight,
@@ -17,6 +16,8 @@ import { getActiveAnnouncements } from "@/app/actions/announcements";
 import { getContentForPortal } from "@/app/actions/content-hub";
 import JudgeDashboardClient from "./JudgeDashboardClient";
 import { ContentActivityHub } from "@/components/content-hub";
+import { getAuthenticatedUser } from "@/lib/auth/session";
+import { validateUuid } from "@/lib/auth/uuid";
 
 export const dynamic = "force-dynamic";
 
@@ -49,6 +50,7 @@ export default async function JudgeDashboardPage() {
   let announcements: any[] = [];
   let judgeAssignedTeamIds: string[] = [];
   let isJudgeSpecific = false;
+  let userId = "";
 
   // Fetch content for judge portal
   let contentItems: any[] = [];
@@ -60,41 +62,78 @@ export default async function JudgeDashboardPage() {
   }
 
   try {
-    const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
+    const session = await getAuthenticatedUser();
+    const user = session.user;
+    userId = user?.id || "";
 
-    const [teamsRes, roundsRes, evalsRes, assignRes, announcementsData] = await Promise.all([
-      supabaseAdmin.from("teams").select("id, name, leader_name, track, status"),
+    if (!user) {
+      return (
+        <>
+          <JudgeDashboardClient
+            initialTeams={[]}
+            initialRounds={[]}
+            initialEvaluations={[]}
+            initialAnnouncements={[]}
+            initialJudgeAssignedTeamIds={[]}
+            initialIsJudgeSpecific={false}
+            userId={userId}
+          />
+          <ContentActivityHub
+            portalAudience="judge"
+            showFilters={true}
+            showSearch={true}
+            showCreateButton={false}
+            initialItems={[]}
+            emptyMessage="No judge-specific content published yet."
+            loadingMessage="Loading judge content..."
+            errorMessage="Failed to load judge content."
+          />
+        </>
+      );
+    }
+
+    // 1. Get judge's assigned team IDs first (server-side filter, no full table scan)
+    // Only fetch team_id column - minimal data transfer
+    const [assignRes, roundsRes, evalsRes, announcementsData] = await Promise.all([
+      supabaseAdmin
+        .from("judge_assignments")
+        .select("team_id, round_id")
+        .eq("judge_id", user.id),
       supabaseAdmin
         .from("evaluation_rounds")
         .select("id, title, status, sequence_order")
         .order("sequence_order", { ascending: true }),
-      user
-        ? supabaseAdmin
-            .from("evaluations")
-            .select("round_id, team_id, status, total_score")
-            .eq("judge_id", user.id)
-        : Promise.resolve({ data: [] }),
-      user
-        ? supabaseAdmin
-            .from("judge_assignments")
-            .select("team_id")
-            .eq("judge_id", user.id)
-        : Promise.resolve({ data: [] }),
+      supabaseAdmin
+        .from("evaluations")
+        .select("round_id, team_id, status, total_score")
+        .eq("judge_id", user.id),
       getActiveAnnouncements("judges").catch(() => []),
     ]);
 
-    if (teamsRes.data) allTeams = teamsRes.data;
     if (roundsRes.data) rounds = roundsRes.data;
     if (evalsRes.data) evaluations = evalsRes.data;
     if (announcementsData) announcements = announcementsData;
 
-    if (assignRes && assignRes.data && assignRes.data.length > 0) {
+    // Collect assigned team IDs
+    if (assignRes.data && assignRes.data.length > 0) {
       judgeAssignedTeamIds = assignRes.data.map((a: any) => a.team_id);
       isJudgeSpecific = true;
+
+      // 2. Fetch ONLY the teams this judge is assigned to (not all teams)
+      // Use .in() filter for server-side filtering
+      const teamsRes = await supabaseAdmin
+        .from("teams")
+        .select("id, name, leader_name, track, status")
+        .in("id", judgeAssignedTeamIds);
+
+      if (teamsRes.data) allTeams = teamsRes.data;
+    } else {
+      // Judge has no assignments - empty teams list
+      allTeams = [];
     }
+
   } catch (err) {
-    console.error("Failed to fetch assigned teams:", err);
+    console.error("Failed to fetch judge dashboard data:", err);
   }
 
   const assignedTeams = isJudgeSpecific
@@ -139,12 +178,13 @@ export default async function JudgeDashboardPage() {
 return (
     <>
       <JudgeDashboardClient
-        allTeams={allTeams}
-        rounds={rounds}
-        evaluations={evaluations}
-        announcements={announcements}
-        judgeAssignedTeamIds={judgeAssignedTeamIds}
-        isJudgeSpecific={isJudgeSpecific}
+        initialTeams={allTeams}
+        initialRounds={rounds}
+        initialEvaluations={evaluations}
+        initialAnnouncements={announcements}
+        initialJudgeAssignedTeamIds={judgeAssignedTeamIds}
+        initialIsJudgeSpecific={isJudgeSpecific}
+        userId={userId}
       />
 
       {/* Content & Activity Hub for Judges */}

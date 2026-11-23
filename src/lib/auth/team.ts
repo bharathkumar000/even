@@ -1,60 +1,52 @@
 import "server-only";
-import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
+import { getAuthenticatedUser } from "@/lib/auth/session";
+import { validateUuid } from "@/lib/auth/uuid";
 
 export async function requireTeamLeader(teamId: string) {
-  let supabase;
-  let user;
-  try {
-    supabase = await createClient();
-    const auth = await supabase.auth.getUser();
-    user = auth.data?.user;
-  } catch (err) {
-    console.error("Failed to initialize Supabase client:", err);
-    redirect("/login");
+  // Validate teamId is a proper UUID before any database query.
+  const validTeamId = validateUuid(teamId, "team_id");
+  if (!validTeamId) {
+    throw new Error("FORBIDDEN: Invalid team ID");
   }
 
-  if (!user) {
-    redirect("/login");
+  // Single authenticated session lookup.
+  const session = await getAuthenticatedUser();
+  if (!session.isAuthenticated || !session.user) {
+    throw new Error("UNAUTHENTICATED: Authentication required");
   }
+
+  const user = session.user;
 
   let member;
   try {
     const result = await supabaseAdmin
       .from("team_members")
       .select("role")
-      .eq("team_id", teamId)
+      .eq("team_id", validTeamId)
       .eq("user_id", user.id)
       .maybeSingle();
     member = result.data;
   } catch (err) {
     console.error("Failed to fetch team membership:", err);
-    redirect("/login");
+    throw new Error("FORBIDDEN: Failed to verify team membership");
   }
 
   if (!member || (member as { role?: string }).role !== "leader") {
-    throw new Error("Forbidden: Only the Team Leader can perform this action");
+    throw new Error("FORBIDDEN: Only the Team Leader can perform this action");
   }
 
   return { user, member };
 }
 
 export async function requireAuthenticatedTeamUser() {
-  let supabase;
-  let user;
-  try {
-    supabase = await createClient();
-    const auth = await supabase.auth.getUser();
-    user = auth.data?.user;
-  } catch (err) {
-    console.error("Failed to initialize Supabase client:", err);
-    redirect("/login");
+  // Single authenticated session lookup.
+  const session = await getAuthenticatedUser();
+  if (!session.isAuthenticated || !session.user) {
+    throw new Error("UNAUTHENTICATED: Authentication required");
   }
 
-  if (!user) {
-    redirect("/login");
-  }
+  const user = session.user;
 
   let membership;
   try {
@@ -67,7 +59,7 @@ export async function requireAuthenticatedTeamUser() {
     membership = result.data;
   } catch (err) {
     console.error("Failed to fetch team membership:", err);
-    redirect("/login");
+    throw new Error("UNAUTHENTICATED: Failed to verify team membership");
   }
 
   let teamId = membership?.team_id || null;
@@ -78,14 +70,17 @@ export async function requireAuthenticatedTeamUser() {
     try {
       const { data: regByLeader } = await supabaseAdmin
         .from("team_registrations")
-        .select("team_id")
+        .select("team_id, leader_email, login_email")
         .or(`leader_email.ilike.${user.email},login_email.ilike.${user.email}`)
         .limit(1)
         .maybeSingle();
 
       if (regByLeader?.team_id) {
-        teamId = regByLeader.team_id;
-        role = "leader";
+        const validId = validateUuid(regByLeader.team_id, "team_id");
+        if (validId) {
+          teamId = validId;
+          role = "leader";
+        }
       }
     } catch {
       // Ignore fallback query error

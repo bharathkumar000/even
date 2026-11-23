@@ -2,6 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
+import { getAuthenticatedUser } from "@/lib/auth/session";
 
 export interface AssignedTeamMember {
   id: string;
@@ -75,13 +76,11 @@ export interface StaffAssignedTeamsData {
 }
 
 export async function getMyAssignedTeams(): Promise<StaffAssignedTeamsData> {
-  const supabase = await createClient();
-
-  const { data: authData, error: authError } = await supabase.auth.getUser();
-  if (authError || !authData?.user) {
+  const session = await getAuthenticatedUser();
+  if (!session.isAuthenticated || !session.user) {
     return { teams: [], staff: null, error: "Unauthorized: Authentication required" };
   }
-  const user = authData.user;
+  const user = session.user;
 
   // Get staff profile
   const { data: profile, error: profileError } = await supabaseAdmin

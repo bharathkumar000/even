@@ -1,52 +1,48 @@
 "use client";
 
-import { useEffect } from "react";
+import { useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
+import { useRealtimeSync } from "@/lib/realtime/use-realtime-sync";
 
 interface RealtimeRoundsListenerProps {
   channelName?: string;
-  pollIntervalMs?: number;
 }
 
+/**
+ * Realtime-driven updates for evaluation rounds/criteria.
+ *
+ * The previous 6s unconditional router.refresh() polling loop is removed.
+ * Changes arrive via Supabase Realtime and are routed through useRealtimeSync,
+ * which throttles rapid events, prevents concurrent duplicate refreshes, and
+ * skips updates when the tab is backgrounded. Full-page refresh is therefore
+ * reserved for genuine round/criteria changes that affect judge & team
+ * dashboards.
+ */
 export default function RealtimeRoundsListener({
   channelName = "realtime-rounds-and-criteria",
-  pollIntervalMs = 6000,
 }: RealtimeRoundsListenerProps) {
   const router = useRouter();
 
-  useEffect(() => {
-    const supabase = createClient();
+  const handleChange = useCallback(() => {
+    if (
+      typeof document === "undefined" ||
+      document.visibilityState !== "visible"
+    ) {
+      return;
+    }
+    void router.refresh();
+  }, [router]);
 
-    // 1. Realtime push subscription on evaluation_rounds and evaluation_criteria
-    const channel = supabase
-      .channel(channelName)
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "evaluation_rounds" },
-        () => {
-          router.refresh();
-        }
-      )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "evaluation_criteria" },
-        () => {
-          router.refresh();
-        }
-      )
-      .subscribe();
-
-    // 2. Fallback polling interval to ensure 100% reliability across all network conditions
-    const interval = setInterval(() => {
-      router.refresh();
-    }, pollIntervalMs);
-
-    return () => {
-      supabase.removeChannel(channel);
-      clearInterval(interval);
-    };
-  }, [router, channelName, pollIntervalMs]);
+  useRealtimeSync({
+    channelName,
+    tables: ["evaluation_rounds", "evaluation_criteria"],
+    onChange: handleChange,
+    // Polling disabled: realtime is the source of truth.
+    pollIntervalMs: 60_000,
+    pollEnabled: false,
+    focusRefresh: true,
+    throttleMs: 2_000,
+  });
 
   return null;
 }
