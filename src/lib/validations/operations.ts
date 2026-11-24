@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { sanitizeText, limitedString, FIELD_LIMITS } from "@/lib/sanitize";
 
-export const ActionTypeEnum = z.enum(["registration", "goodies", "lunch", "snacks", "certificates"]);
+export const ActionTypeEnum = z.enum(["registration", "goodies", "lunch", "lunch_relaython", "snacks", "snacks_1", "snacks_2", "certificates"]);
 
 export const ScanActionSchema = z.object({
   team_id: z.string().uuid("Invalid Team ID"),

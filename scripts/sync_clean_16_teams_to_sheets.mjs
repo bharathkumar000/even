@@ -2,7 +2,7 @@ import { createClient } from "@supabase/supabase-js";
 
 const SUPABASE_URL = "https://koluhnkobgagsfvokkbz.supabase.co";
 const SERVICE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtvbHVobmtvYmdhZ3Nmdm9ra2J6Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc5MTIxNTE2NCwiZXhwIjoyMTA2NzkxMTY0fQ._9xDTVPPHr0D-ZsPRx2ial9qvGK1YfErp2T8YT7umVw";
-const WEBHOOK_URL = "https://script.google.com/macros/s/AKfycbxsBZSNVG2asXwHm7jzDUi661r9UUmaTHZFXc1HQl-Nx8Xs1RmXe8wlXuCbpR5fWCS7/exec";
+const WEBHOOK_URL = "https://script.google.com/macros/s/AKfycbwrPskwkdrHMznIxzrA2h-ug7Xz2z6HY9QJSXCs8wYBxNg80OrLMe98AW441K6ISVAQ/exec";
 
 const supabase = createClient(SUPABASE_URL, SERVICE_KEY, {
   auth: { autoRefreshToken: false, persistSession: false },

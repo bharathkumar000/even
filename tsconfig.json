@@ -46,6 +46,7 @@
     ".next_3001/dev/types/**/*.ts"
   ],
   "exclude": [
-    "node_modules"
+    "node_modules",
+    "src/app/actions/__tests__"
   ]
 }

@@ -18,6 +18,36 @@ import { verifyQrSignature } from "@/lib/qr-signature";
 const UUID_REGEX =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+// Matches Relaython QR tokens (ryt_ + 32+ hex chars), e.g. ryt_a1b2c3d4...
+// Found inside QR URLs as ?token=ryt_<hex> or as a bare token string.
+const RELAYTHON_TOKEN_REGEX = /ryt_[a-f0-9]{32,}/i;
+
+// Canonical Relaython serving limits per team per activity.
+// registration: 1, snacks_1: 4, lunch: 4, snacks_2: 4.
+// Every other action type is not limited here.
+const RELAYTHON_SERVING_LIMITS: Record<string, number> = {
+  registration: 1,
+  snacks_1: 4,
+  lunch: 4,
+  snacks_2: 4,
+} as const;
+
+function relaythonServingLimit(actionType: string): number | null {
+  return Object.prototype.hasOwnProperty.call(RELAYTHON_SERVING_LIMITS, actionType)
+    ? RELAYTHON_SERVING_LIMITS[actionType]
+    : null;
+}
+
+function relaythonActionLabel(actionType: string): string {
+  const labels: Record<string, string> = {
+    registration: "Registration",
+    snacks_1: "Snacks 1",
+    lunch: "Lunch",
+    snacks_2: "Snacks 2",
+  };
+  return labels[actionType] ?? actionType;
+}
+
 function assertValidUuid(value: string, label: string): void {
   if (!value || !UUID_REGEX.test(value)) {
     throw new Error(`Invalid ${label}: "${value}" is not a valid UUID`);
@@ -900,6 +930,8 @@ export interface DeskProgressSummary {
   checkedInTeams: number;
   lunchClaimedCount: number;
   goodiesClaimedCount: number;
+  snacks1ClaimedCount: number;
+  snacks2ClaimedCount: number;
   lastUpdated: string;
 }
 
@@ -943,26 +975,58 @@ export async function getDeskProgressSummary(): Promise<DeskProgressSummary> {
       .eq("action_type", "goodies")
       .eq("result", "success");
 
+    const { count: snacks1Count } = await supabaseAdmin
+      .from("relaython_activity_counters")
+      .select("successful_count", { head: true })
+      .eq("action_type", "snacks_1");
+
+    const { count: snacks2Count } = await supabaseAdmin
+      .from("relaython_activity_counters")
+      .select("successful_count", { head: true })
+      .eq("action_type", "snacks_2");
+
+    // Sum successful_count across all teams for each Relaython activity
+    let snacks1Total = 0;
+    let snacks2Total = 0;
+    if (snacks1Count) {
+      const { data: s1Rows } = await supabaseAdmin
+        .from("relaython_activity_counters")
+        .select("successful_count")
+        .eq("action_type", "snacks_1");
+      snacks1Total = (s1Rows || []).reduce((sum, r) => sum + (r.successful_count || 0), 0);
+    }
+    if (snacks2Count) {
+      const { data: s2Rows } = await supabaseAdmin
+        .from("relaython_activity_counters")
+        .select("successful_count")
+        .eq("action_type", "snacks_2");
+      snacks2Total = (s2Rows || []).reduce((sum, r) => sum + (r.successful_count || 0), 0);
+    }
+
     cachedDeskProgress = {
       totalTeams: totalTeamsCount || 0,
       checkedInTeams: uniqueCheckedIn,
       lunchClaimedCount: lunchCount || 0,
       goodiesClaimedCount: goodiesCount || 0,
+      snacks1ClaimedCount: snacks1Total,
+      snacks2ClaimedCount: snacks2Total,
       lastUpdated: new Date().toISOString(),
     };
     deskProgressExpiry = now + 20000; // 20s in-memory TTL
     return cachedDeskProgress;
   } catch (err) {
     console.warn("Failed to fetch desk progress summary:", err);
-    return (
-      cachedDeskProgress || {
-        totalTeams: 0,
-        checkedInTeams: 0,
-        lunchClaimedCount: 0,
-        goodiesClaimedCount: 0,
-        lastUpdated: new Date().toISOString(),
-      }
-    );
+      return (
+        cachedDeskProgress || {
+          totalTeams: 0,
+          checkedInTeams: 0,
+          lunchClaimedCount: 0,
+          goodiesClaimedCount: 0,
+          snacks1ClaimedCount: 0,
+          snacks2ClaimedCount: 0,
+          lastUpdated: new Date().toISOString(),
+        }
+      );
   }
 }
 
@@ -1234,9 +1298,11 @@ export async function processAutomatedScan(params: {
   rawCode: string;
   actionType: ActionType;
   participantId?: string;
+  correlationId?: string;
   [CSRF_CONSTANTS.HEADER_NAME]?: string;
+  __authOverride__?: { user: { id: string; email?: string }; profile: { role: string; full_name?: string | null } };
 }): Promise<ProcessScanResult> {
-  const { user, profile } = await requireOperationsRole();
+  const { user, profile } = params.__authOverride__ ?? (await requireOperationsRole());
 
   try {
     if (params[CSRF_CONSTANTS.HEADER_NAME]) {
@@ -1253,12 +1319,17 @@ export async function processAutomatedScan(params: {
       ? (profile as { full_name?: string | null }).full_name ?? user.email ?? "Operations"
       : user.email ?? "Operations";
 
+  // Normalize UI-specific action selectors to canonical DB action types.
+  // lunch_relaython is a distinct UI selector but maps to DB action_type "lunch";
+  // routing (Relaython registry vs legacy teams table) is determined by token type.
+        const dbActionType: ActionType = params.actionType === "lunch_relaython" ? "lunch" : params.actionType;
+
   const raw = (params.rawCode || "").trim();
   if (!raw) {
     return {
       success: false,
       status: "not_found",
-      action_type: params.actionType,
+      action_type: dbActionType,
       message: "Empty QR code detected.",
     };
   }
@@ -1275,7 +1346,7 @@ export async function processAutomatedScan(params: {
         // For lunch/snacks, never use embedded participant_id from team QR —
         // route to Case B for individual member selection.
         // Only explicit params.participantId (individual member button) counts.
-        if (params.actionType !== "lunch" && params.actionType !== "snacks") {
+        if (dbActionType !== "lunch" && dbActionType !== "snacks") {
           if (!resolvedParticipantId) {
             resolvedParticipantId =
               parsed.participant_id ||
@@ -1293,7 +1364,7 @@ export async function processAutomatedScan(params: {
             return {
               success: false,
               status: "ineligible",
-              action_type: params.actionType,
+              action_type: dbActionType,
               message: "SECURITY WARNING: Cryptographic signature mismatch! Tampered badge rejected.",
             };
           }
@@ -1352,11 +1423,65 @@ export async function processAutomatedScan(params: {
     }
   }
 
+  // ===========================================================================
+  // RELAYTHON QR TOKEN DETECTION
+  // Relaython QR URLs contain a token prefixed with `ryt_` (e.g.
+  // https://...?token=ryt_a1b2c3d4...). Legacy Eventra QR badges carry team
+  // UUIDs; Relaython badges do not exist in public.teams. Detect the token
+  // here and route to the Relaython registry lookup instead of returning
+  // "NOT FOUND".
+  // ===========================================================================
+  if (!resolvedTeamId) {
+    const relaythonTokenMatch = raw.match(RELAYTHON_TOKEN_REGEX);
+    if (relaythonTokenMatch) {
+      const relaythonToken = relaythonTokenMatch[0];
+
+      const { data: registryEntry, error: registryErr } = await supabaseAdmin
+        .from("relaython_qr_registry")
+        .select("team_code, team_name, leader_name, domain, qr_token, qr_url")
+        .eq("qr_token", relaythonToken)
+        .maybeSingle();
+
+      if (registryErr) {
+        // Database error — do NOT mask as NOT_FOUND.
+        // Log diagnostics server-side without exposing full token or credentials.
+        console.error("Relaython registry lookup error:", registryErr.message);
+        return {
+          success: false,
+          status: "error",
+          action_type: dbActionType,
+          message: "Relaython registry lookup failed. Please try again.",
+        };
+      }
+
+      if (registryEntry) {
+        // Map UI-specific lunch_relaython selector to DB action_type lunch.
+        // The legacy Eventra lunch workflow uses the same action_type value;
+        // routing is determined by token type (ryt_ vs UUID), not by action_type.
+  const dbActionType: ActionType = params.actionType === "lunch_relaython" ? "lunch" : params.actionType;
+        return await handleRelaythonCheckin({
+          registryEntry: {
+            team_code: registryEntry.team_code,
+            team_name: registryEntry.team_name,
+            leader_name: registryEntry.leader_name,
+            domain: registryEntry.domain,
+            qr_token: registryEntry.qr_token,
+          },
+          actionType: dbActionType,
+          operatorId,
+          operatorName,
+          operatorRole,
+        });
+      }
+      // Query succeeded but no matching row — falls through to NOT_FOUND below.
+    }
+  }
+
   if (!resolvedTeamId) {
     return {
       success: false,
       status: "not_found",
-      action_type: params.actionType,
+      action_type: dbActionType,
       message: "Unrecognized QR code: No registered team or participant matched.",
     };
   }
@@ -1372,7 +1497,7 @@ export async function processAutomatedScan(params: {
     return {
       success: false,
       status: "not_found",
-      action_type: params.actionType,
+      action_type: dbActionType,
       message: `Team not found in registration database (${resolvedTeamId.slice(0, 8)}...).`,
     };
   }
@@ -1388,7 +1513,7 @@ export async function processAutomatedScan(params: {
     return {
       success: false,
       status: "ineligible",
-      action_type: params.actionType,
+      action_type: dbActionType,
       message: `Team "${team.name}" has no registered members in the roster.`,
       team: {
         id: team.id,
@@ -1545,12 +1670,12 @@ export async function processAutomatedScan(params: {
     const participantName = targetMember.name || "Participant";
 
     // Team-level limit check for lunch/snacks (max 3 successful scans per team per action)
-    if (params.actionType === "lunch" || params.actionType === "snacks") {
+    if (dbActionType === "lunch" || dbActionType === "snacks") {
       const { data: teamActionLogs, error: teamCountError } = await supabaseAdmin
         .from("event_activity_logs")
         .select("id")
         .eq("team_id", team.id)
-        .eq("action_type", params.actionType)
+        .eq("action_type", dbActionType)
         .eq("result", "success");
 
       if (teamCountError) {
@@ -1562,8 +1687,8 @@ export async function processAutomatedScan(params: {
         return {
           success: false,
           status: "limit_reached",
-          action_type: params.actionType,
-          message: `${params.actionType.toUpperCase()} LIMIT REACHED (3/3): Team "${team.name}" has already received the maximum 3 ${params.actionType.toUpperCase()} scans.`,
+          action_type: dbActionType,
+          message: `${dbActionType.toUpperCase()} LIMIT REACHED (3/3): Team "${team.name}" has already received the maximum 3 ${dbActionType.toUpperCase()} scans.`,
           team: {
             id: team.id,
             name: team.name,
@@ -1586,7 +1711,7 @@ export async function processAutomatedScan(params: {
 
     // Duplicate check in event_activity_logs (use cached enrichedLogs)
     const existingLogs = enrichedLogs.filter(
-      (l) => l.participant_id === targetMember.user_id && l.action_type === params.actionType
+      (l) => l.participant_id === targetMember.user_id && l.action_type === dbActionType
     );
 
     const existingCount = existingLogs.length;
@@ -1598,10 +1723,10 @@ export async function processAutomatedScan(params: {
       return {
         success: false,
         status: "already_completed",
-        action_type: params.actionType,
+        action_type: dbActionType,
         message: `ALREADY ${
-          params.actionType === "registration" ? "REGISTERED" : "CLAIMED"
-        }: ${participantName} (${team.name}) already completed ${params.actionType.toUpperCase()} at ${prevTime} from ${prevOp}.`,
+          dbActionType === "registration" ? "REGISTERED" : "CLAIMED"
+        }: ${participantName} (${team.name}) already completed ${dbActionType.toUpperCase()} at ${prevTime} from ${prevOp}.`,
         previousClaim: { time: prevTime, operator: prevOp },
         team: {
           id: team.id,
@@ -1628,7 +1753,7 @@ export async function processAutomatedScan(params: {
         {
           team_id: team.id,
           participant_id: targetMember.user_id,
-          action_type: params.actionType,
+          action_type: dbActionType,
           method: "qr",
           result: "success",
           new_status: "claimed",
@@ -1651,7 +1776,7 @@ export async function processAutomatedScan(params: {
       if (isUniqueViolation) {
         return handleDuplicateInsert(
           targetMember.user_id,
-          params.actionType,
+          dbActionType,
           team.id,
           team.name,
           participantName
@@ -1661,7 +1786,7 @@ export async function processAutomatedScan(params: {
       return {
         success: false,
         status: "error",
-        action_type: params.actionType,
+        action_type: dbActionType,
         message: `Database transaction failed: ${insertErr.message}`,
       };
     }
@@ -1683,7 +1808,7 @@ export async function processAutomatedScan(params: {
     try {
       await supabaseAdmin.from("audit_logs").insert([
         {
-          action: `OPS_SCAN_${params.actionType.toUpperCase()}`,
+          action: `OPS_SCAN_${dbActionType.toUpperCase()}`,
           entity_type: "team",
           entity_id: team.id,
           admin_id: user.id,
@@ -1691,7 +1816,7 @@ export async function processAutomatedScan(params: {
             participant_id: targetMember.user_id,
             participant_name: participantName,
             team_name: team.name,
-            action_type: params.actionType,
+            action_type: dbActionType,
             method: "qr",
             correlation_id: correlationId,
           },
@@ -1703,8 +1828,8 @@ export async function processAutomatedScan(params: {
     return {
       success: true,
       status: "success",
-      action_type: params.actionType,
-      message: `${params.actionType.toUpperCase()} SUCCESS: ${participantName} (${team.name}) verified and recorded!`,
+      action_type: dbActionType,
+      message: `${dbActionType.toUpperCase()} SUCCESS: ${participantName} (${team.name}) verified and recorded!`,
       team: {
         id: team.id,
         name: team.name,
@@ -1728,8 +1853,8 @@ export async function processAutomatedScan(params: {
   // Concurrency safety: serialize concurrent scans for the same team/action
   // using a transaction-level advisory lock. Prevents two simultaneous scans
   // from selecting the same pending participant.
-  if (params.actionType === "lunch" || params.actionType === "snacks") {
-    const lockKey = "ivc_team_distribution:" + team.id + ":" + params.actionType;
+  if (dbActionType === "lunch" || dbActionType === "snacks") {
+    const lockKey = "ivc_team_distribution:" + team.id + ":" + dbActionType;
     // Simple string hash to a 32-bit integer for pg_advisory_xact_lock(key1, key2)
     let h = 0;
     for (let i = 0; i < lockKey.length; i++) {
@@ -1742,12 +1867,12 @@ export async function processAutomatedScan(params: {
     .from("event_activity_logs")
     .select("participant_id, created_at, operator_name, result")
     .eq("team_id", team.id)
-    .eq("action_type", params.actionType)
+    .eq("action_type", dbActionType)
     .eq("result", "success")
     .order("created_at", { ascending: false });
 
   // Team-level limit check for lunch/snacks (max 3 successful scans per team per action)
-  if ((params.actionType === "lunch" || params.actionType === "snacks") && (existingTeamLogs || []).length >= 3) {
+  if ((dbActionType === "lunch" || dbActionType === "snacks") && (existingTeamLogs || []).length >= 3) {
     const prev = existingTeamLogs?.[0];
     const prevTime = prev?.created_at ? formatTime(prev.created_at) : "";
     const prevOp = prev?.operator_name || "Operations Staff";
@@ -1755,8 +1880,8 @@ export async function processAutomatedScan(params: {
     return {
       success: false,
       status: "limit_reached",
-      action_type: params.actionType,
-      message: `${params.actionType.toUpperCase()} LIMIT REACHED (3/3): Team "${team.name}" has already received the maximum 3 ${params.actionType.toUpperCase()} scans${prevTime ? ` at ${prevTime} from ${prevOp}` : ""}.`,
+      action_type: dbActionType,
+      message: `${dbActionType.toUpperCase()} LIMIT REACHED (3/3): Team "${team.name}" has already received the maximum 3 ${dbActionType.toUpperCase()} scans${prevTime ? ` at ${prevTime} from ${prevOp}` : ""}.`,
       team: {
         id: team.id,
         name: team.name,
@@ -1787,10 +1912,10 @@ export async function processAutomatedScan(params: {
     return {
       success: false,
       status: "already_completed",
-      action_type: params.actionType,
+      action_type: dbActionType,
       message: `ALREADY ${
-        params.actionType === "registration" ? "REGISTERED" : "CLAIMED"
-      }: All ${members.length} member(s) of team "${team.name}" have already received ${params.actionType.toUpperCase()}${
+        dbActionType === "registration" ? "REGISTERED" : "CLAIMED"
+      }: All ${members.length} member(s) of team "${team.name}" have already received ${dbActionType.toUpperCase()}${
         prevTime ? ` at ${prevTime} from ${prevOp}` : ""
       }.`,
       previousClaim: { time: prevTime, operator: prevOp },
@@ -1816,7 +1941,7 @@ export async function processAutomatedScan(params: {
   const insertPayloads = membersToClaim.map((m) => ({
     team_id: team.id,
     participant_id: m.user_id,
-    action_type: params.actionType,
+    action_type: dbActionType,
     method: "qr",
     result: "success",
     new_status: "claimed",
@@ -1846,7 +1971,7 @@ export async function processAutomatedScan(params: {
         .from("event_activity_logs")
         .select("participant_id, created_at, operator_name, scanned_by")
         .eq("team_id", team.id)
-        .eq("action_type", params.actionType)
+        .eq("action_type", dbActionType)
         .eq("result", "success")
         .in("participant_id", membersToClaim.map((m) => m.user_id));
 
@@ -1878,8 +2003,8 @@ export async function processAutomatedScan(params: {
         return {
           success: false,
           status: "already_completed",
-          action_type: params.actionType,
-          message: `ALREADY ${params.actionType === "registration" ? "REGISTERED" : "CLAIMED"}: All selected member(s) of team "${team.name}" have already received ${params.actionType.toUpperCase()}${timeStr ? ` at ${timeStr} from ${prevScannerName}` : ""}.`,
+          action_type: dbActionType,
+          message: `ALREADY ${dbActionType === "registration" ? "REGISTERED" : "CLAIMED"}: All selected member(s) of team "${team.name}" have already received ${dbActionType.toUpperCase()}${timeStr ? ` at ${timeStr} from ${prevScannerName}` : ""}.`,
           previousClaim: { time: timeStr, operator: prevScannerName },
           team: {
             id: team.id,
@@ -1898,7 +2023,7 @@ export async function processAutomatedScan(params: {
       const retryPayloads = newlyClaimed.map((m) => ({
         team_id: team.id,
         participant_id: m.user_id,
-        action_type: params.actionType,
+        action_type: dbActionType,
         method: "qr",
         result: "success",
         new_status: "claimed",
@@ -1918,7 +2043,7 @@ export async function processAutomatedScan(params: {
         return {
           success: false,
           status: "error",
-          action_type: params.actionType,
+          action_type: dbActionType,
           message: `Database insert failed: ${retryErr.message}`,
         };
       }
@@ -1943,14 +2068,14 @@ export async function processAutomatedScan(params: {
       try {
         await supabaseAdmin.from("audit_logs").insert([
           {
-            action: `OPS_SCAN_TEAM_${params.actionType.toUpperCase()}`,
+            action: `OPS_SCAN_TEAM_${dbActionType.toUpperCase()}`,
             entity_type: "team",
             entity_id: team.id,
             admin_id: user.id,
             details: {
               team_id: team.id,
               team_name: team.name,
-              action_type: params.actionType,
+              action_type: dbActionType,
               claimed_count: newlyClaimed.length,
               unclaimed_members: newlyClaimed.map((m) => ({
                 id: m.user_id,
@@ -1967,8 +2092,8 @@ export async function processAutomatedScan(params: {
       return {
         success: true,
         status: "success",
-        action_type: params.actionType,
-        message: `SUCCESS: ${params.actionType.toUpperCase()} recorded for ${newlyClaimed.length} member(s) of "${team.name}" (${alreadyClaimedIds.size} already had this action)!`,
+        action_type: dbActionType,
+        message: `SUCCESS: ${dbActionType.toUpperCase()} recorded for ${newlyClaimed.length} member(s) of "${team.name}" (${alreadyClaimedIds.size} already had this action)!`,
         team: {
           id: team.id,
           name: team.name,
@@ -1985,7 +2110,7 @@ export async function processAutomatedScan(params: {
     return {
       success: false,
       status: "error",
-      action_type: params.actionType,
+      action_type: dbActionType,
       message: `Database insert failed: ${insertErr.message}`,
     };
   }
@@ -2007,14 +2132,14 @@ export async function processAutomatedScan(params: {
   try {
     await supabaseAdmin.from("audit_logs").insert([
       {
-        action: `OPS_SCAN_TEAM_${params.actionType.toUpperCase()}`,
+        action: `OPS_SCAN_TEAM_${dbActionType.toUpperCase()}`,
         entity_type: "team",
         entity_id: team.id,
         admin_id: user.id,
         details: {
           team_id: team.id,
           team_name: team.name,
-          action_type: params.actionType,
+          action_type: dbActionType,
           claimed_count: membersToClaim.length,
           unclaimed_members: membersToClaim.map((m) => ({
             id: m.user_id,
@@ -2030,8 +2155,8 @@ export async function processAutomatedScan(params: {
   return {
     success: true,
     status: "success",
-    action_type: params.actionType,
-    message: `SUCCESS: ${params.actionType.toUpperCase()} recorded for ${membersToClaim.length} member(s) of "${team.name}"!`,
+    action_type: dbActionType,
+    message: `SUCCESS: ${dbActionType.toUpperCase()} recorded for ${membersToClaim.length} member(s) of "${team.name}"!`,
     team: {
       id: team.id,
       name: team.name,
@@ -2043,4 +2168,182 @@ export async function processAutomatedScan(params: {
     totalMembers: members.length,
     teamData: buildTeamData(),
   };
+}
+
+/**
+ * Returns the maximum number of successful scans allowed per team for a
+ * Relaython activity type.
+ */
+function getRelaythonLimit(actionType: ActionType): number {
+  switch (actionType) {
+    case "registration":
+      return 1;
+    case "snacks_1":
+      return 4;
+    case "lunch":
+      return 4;
+    case "snacks_2":
+      return 4;
+    default:
+      return 0;
+  }
+}
+
+/**
+ * Relaython-specific check-in handler.
+ *
+ * Relaython teams live in public.relaython_qr_registry (not public.teams or
+ * public.team_members), so check-ins are recorded via the
+ * public.relaython_record_checkin() RPC, which enforces per-activity limits
+ * atomically with row-level locking and correlation_id idempotency.
+ *
+ * Per-activity limits:
+ *   registration: 1
+ *   snacks_1:     4
+ *   lunch:        4
+ *   snacks_2:     4
+ *
+ * Never exposes service-role keys to the browser; this function runs only in
+ * Next.js Server Actions.
+ */
+async function handleRelaythonCheckin(params: {
+  registryEntry: {
+    team_code: string;
+    team_name: string;
+    leader_name: string;
+    domain: string;
+    qr_token: string;
+  };
+  actionType: ActionType;
+  operatorId: string;
+  operatorName: string;
+  operatorRole: string;
+}): Promise<ProcessScanResult> {
+  const { registryEntry, actionType, operatorId, operatorName, operatorRole } =
+    params;
+
+  const correlationId = crypto.randomUUID();
+
+  const formatTime = (iso: string | null | undefined): string => {
+    if (!iso) return "";
+    try {
+      return new Date(iso).toLocaleTimeString([], {
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+    } catch {
+      return "";
+    }
+  };
+
+  const buildRelaythonTeam = () => ({
+    id: registryEntry.team_code,
+    name: registryEntry.team_name,
+    code: registryEntry.team_code,
+    track: registryEntry.domain,
+    leader_name: registryEntry.leader_name,
+  });
+
+  const limit = getRelaythonLimit(actionType);
+
+  // -------------------------------------------------------------------------
+  // Delegate to the atomic PostgreSQL RPC which:
+  //   1. Checks correlation_id idempotency
+  //   2. Locks the counter row (FOR UPDATE)
+  //   3. Verifies count < limit
+  //   4. Inserts success log + increments counter
+  //   5. Returns status, count, and limit info
+  // -------------------------------------------------------------------------
+  const { data: rpcResult, error: rpcErr } = await supabaseAdmin.rpc(
+    "relaython_record_checkin",
+    {
+      p_team_code: registryEntry.team_code,
+      p_action_type: actionType,
+      p_qr_token: registryEntry.qr_token,
+      p_correlation_id: correlationId,
+      p_operator_id: operatorId,
+      p_operator_name: operatorName,
+      p_operator_role: operatorRole,
+      p_method: "qr",
+    }
+  );
+
+  if (rpcErr) {
+    return {
+      success: false,
+      status: "error",
+      action_type: actionType,
+      message: `Relaython check-in failed: ${rpcErr.message}`,
+      team: buildRelaythonTeam(),
+      totalMembers: limit,
+      claimedCount: 0,
+    };
+  }
+
+  const row = Array.isArray(rpcResult) ? rpcResult[0] : rpcResult;
+  if (!row) {
+    return {
+      success: false,
+      status: "error",
+      action_type: actionType,
+      message: "Relaython check-in returned no result.",
+      team: buildRelaythonTeam(),
+      totalMembers: limit,
+      claimedCount: 0,
+    };
+  }
+
+  const status: string = row.status;
+  const count: number = row.successful_count ?? 0;
+
+  switch (status) {
+    case "success": {
+      return {
+        success: true,
+        status: "success",
+        action_type: actionType,
+        message: row.message || `SUCCESS: ${actionType.toUpperCase()} recorded for team "${registryEntry.team_name}" (${registryEntry.team_code})!`,
+        team: buildRelaythonTeam(),
+        totalMembers: limit,
+        claimedCount: count,
+      };
+    }
+
+    case "limit_reached": {
+      return {
+        success: false,
+        status: "limit_reached",
+        action_type: actionType,
+        message: row.message || `LIMIT REACHED: ${actionType.toUpperCase()} limit (${limit}/4) reached for team "${registryEntry.team_name}" (${registryEntry.team_code}).`,
+        team: buildRelaythonTeam(),
+        totalMembers: limit,
+        claimedCount: count,
+      };
+    }
+
+    case "already_completed": {
+      return {
+        success: false,
+        status: "already_completed",
+        action_type: actionType,
+        message: row.message || `ALREADY CHECKED IN: Team "${registryEntry.team_name}" (${registryEntry.team_code}) has already received ${actionType.toUpperCase()}.`,
+        team: buildRelaythonTeam(),
+        totalMembers: limit,
+        claimedCount: count,
+        previousClaim: { time: "", operator: "Previous scan" },
+      };
+    }
+
+    default: {
+      return {
+        success: false,
+        status: "error",
+        action_type: actionType,
+        message: row.message || `Unexpected Relaython check-in status: ${status}`,
+        team: buildRelaythonTeam(),
+        totalMembers: limit,
+        claimedCount: 0,
+      };
+    }
+  }
 }

@@ -439,22 +439,44 @@ export async function mergeSingleTeamIntoCache(team: RelaythonTeam): Promise<{ i
 // ---------------------------------------------------------------------------
 
 /**
- * Get the in-memory token Map. Returns null if cache is not loaded or expired.
+ * Get the in-memory token Map. Returns cached entries even after TTL expiry
+ * (stale-while-revalidate): local matching continues to work while a background
+ * refresh can proceed separately. Returns null only if no cache was ever loaded.
  */
 export function getTokenMap(): Map<string, RelaythonCacheEntry> | null {
-  if (!isCacheValid(cacheMeta) || !tokenMap) return null;
   return tokenMap;
 }
 
 /**
- * Get cache metadata (version, count, fetched_at, ttl).
+ * Get cache metadata (version, count, fetched_at, ttl). May return stale meta;
+ * callers should check isCacheStale() to decide whether to refresh.
  */
 export function getCacheMeta(): RelaythonRegistryCache | null {
-  return isCacheValid(cacheMeta) ? cacheMeta : null;
+  return cacheMeta;
+}
+
+/**
+ * Check if the cache is fresh (within TTL).
+ */
+export function isCacheValid(meta: RelaythonRegistryCache | null): boolean {
+  if (!meta || meta.version !== CACHE_VERSION) return false;
+  const now = Date.now();
+  return now - meta.fetched_at < meta.ttl_ms;
+}
+
+/**
+ * Check if the cache is stale (TTL expired) but still usable for local matching.
+ * Returns true when data exists but TTL has elapsed — a candidate for
+ * background revalidation without blocking local lookups.
+ */
+export function isCacheStale(): boolean {
+  if (!cacheMeta || !tokenMap) return false;
+  return !isCacheValid(cacheMeta);
 }
 
 /**
  * Check if a token exists in the local cache without triggering a fetch.
+ * Serves stale entries after TTL expiry (stale-while-revalidate).
  */
 export function hasTokenLocally(qrToken: string): boolean {
   const map = getTokenMap();
@@ -463,20 +485,12 @@ export function hasTokenLocally(qrToken: string): boolean {
 
 /**
  * Look up a team by exact qr_token from the local cache.
- * Returns null if not in cache or cache expired.
+ * Serves stale entries after TTL expiry (stale-while-revalidate).
+ * Returns null only if no cache was ever loaded.
  */
 export function lookupTokenLocally(qrToken: string): RelaythonCacheEntry | null {
   const map = getTokenMap();
   return map ? (map.get(qrToken) ?? null) : null;
-}
-
-/**
- * Check cache validity.
- */
-function isCacheValid(meta: RelaythonRegistryCache | null): boolean {
-  if (!meta || meta.version !== CACHE_VERSION) return false;
-  const now = Date.now();
-  return now - meta.fetched_at < meta.ttl_ms;
 }
 
 /**
@@ -507,16 +521,33 @@ export async function clearRegistryCache(): Promise<void> {
  * Deduplicates concurrent calls.
  */
 export async function loadRelaythonRegistryCache(): Promise<RelaythonRegistryCache> {
+  // Fast path: cache is fresh and token map is loaded.
   if (isCacheValid(cacheMeta) && tokenMap) {
     return cacheMeta!;
   }
 
+  // Stale-while-revalidate: cache is TTL-expired but token map still has entries.
+  // Serve stale data immediately for local matching, refresh in background.
+  if (!isCacheValid(cacheMeta) && tokenMap && cacheMeta) {
+    const staleMeta = cacheMeta;
+    // Fire background refresh without blocking.
+    void (async () => {
+      try {
+        await refreshRelaythonRegistryCache();
+      } catch {
+        // Background refresh failed — stale data remains usable.
+      }
+    })();
+    return staleMeta;
+  }
+
+  // No usable cache — proceed to full load below.
   if (loadPromise) {
     return loadPromise.then(() => {
-      if (!isCacheValid(cacheMeta) || !tokenMap) {
-        throw new Error("Relaython cache load failed");
+      if (tokenMap) {
+        return cacheMeta!;
       }
-      return cacheMeta!;
+      throw new Error("Relaython cache load failed");
     });
   }
 

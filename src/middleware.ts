@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { createClient } from "@/lib/supabase/server";
 
 const PROTECTED_PREFIXES = [
   "/admin",
@@ -11,6 +12,13 @@ export async function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
   const host = request.headers.get("host") || "";
   const port = request.nextUrl.port || host.split(":")[1] || "";
+
+  // Normalize double slashes and other redundant slashes so //admin cannot
+  // bypass the protected-prefix check.
+  const normalizedPath = pathname.replace(/\/\/+/g, "/");
+  if (normalizedPath !== pathname) {
+    return NextResponse.redirect(new URL(normalizedPath, request.url));
+  }
 
   const response = NextResponse.next({
     request: {
@@ -41,10 +49,30 @@ export async function middleware(request: NextRequest) {
   const isProtectedPortal = PROTECTED_PREFIXES.some((p) => pathname.startsWith(p));
 
   // Immediate redirect for unauthenticated users accessing protected portals.
-  // No Supabase getUser() call here — layout/server components verify identity.
-  // This prevents a round-trip to /auth/v1/user on every single request.
   if (isProtectedPortal && !hasAuthCookie) {
     return NextResponse.redirect(new URL("/login", request.url));
+  }
+
+  // Role-based enforcement for /admin: only users with profile.role === "admin"
+  // may access the admin portal. This is a fast middleware-level check backed
+  // by the definitive server-side role check in the admin layout component.
+  if (pathname.startsWith("/admin") && hasAuthCookie) {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+
+    if (user) {
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("role")
+        .eq("id", user.id)
+        .maybeSingle();
+
+      if (!profile || profile.role !== "admin") {
+        return NextResponse.redirect(
+          new URL(`/login?access_denied=1&portal=admin`, request.url)
+        );
+      }
+    }
   }
 
   // Handle direct /ops root path navigation cleanly

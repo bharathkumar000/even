@@ -14,7 +14,7 @@ const supabase = createClient(
 
 const WEBHOOK_URL =
   getEnv("GOOGLE_SHEETS_WEBHOOK_URL") ||
-  "https://script.google.com/macros/s/AKfycbxsBZSNVG2asXwHm7jzDUi661r9UUmaTHZFXc1HQl-Nx8Xs1RmXe8wlXuCbpR5fWCS7/exec";
+  "https://script.google.com/macros/s/AKfycbwrPskwkdrHMznIxzrA2h-ug7Xz2z6HY9QJSXCs8wYBxNg80OrLMe98AW441K6ISVAQ/exec";
 
 const FIRST_NAMES = [
   "Aarav", "Aditi", "Ananya", "Arjun", "Bhavya", "Chetan", "Deepika", "Dev",
