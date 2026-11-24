@@ -60,7 +60,7 @@ export interface ActivityLimit {
 }
 
 export const RELAYTHON_LIMITS: ActivityLimit = {
-  registration: 0, // No local limit — Google Sheets Column L is authoritative
+  registration: 1,
   snacks_1: 4,
   lunch: 4,
   snacks_2: 4,
@@ -175,7 +175,7 @@ async function withStore<T>(
     } else {
       resolve(result as T);
     }
-    tx.oncomplete = () => {};
+    tx.oncomplete = () => { };
     tx.onerror = () => reject(tx.error);
   });
 }
@@ -232,22 +232,17 @@ export async function recordLocalScan(params: {
   operatorName: string;
 }): Promise<LocalScanRecord> {
   const limit = RELAYTHON_LIMITS[params.actionType];
-  if (limit === undefined) {
+  if (!limit) {
     throw new Error(`Invalid action type: ${params.actionType}`);
   }
 
-  // Only enforce local limits when limit > 0. Registration limit is 0
-  // because Google Sheets Column L is the authoritative source.
-  let existingCount = 0;
-  if (limit > 0) {
-    // Count existing successful scans (synced + pending) for this team + action
-    existingCount = await getLocalScanCount(params.teamCode, params.actionType);
+  // Count existing successful scans (synced + pending) for this team + action
+  const existingCount = await getLocalScanCount(params.teamCode, params.actionType);
 
-    if (existingCount >= limit) {
-      throw new Error(
-        `LOCAL_LIMIT_REACHED: ${params.actionType} limit ${limit}/4 reached for team ${params.teamCode}`
-      );
-    }
+  if (existingCount >= limit) {
+    throw new Error(
+      `LOCAL_LIMIT_REACHED: ${params.actionType} limit ${limit}/4 reached for team ${params.teamCode}`
+    );
   }
 
   const scanId = crypto.randomUUID();
